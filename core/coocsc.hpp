@@ -40,6 +40,15 @@ public:
         destination.clear();
         source.clear();
     }
+
+    void init(std::vector<VertexId> &column_offset, std::vector<VertexId> &row_indices,
+              std::vector<VertexId> &source, std::vector<VertexId> &destination) {
+        this->column_offset = column_offset;
+        this->row_indices = row_indices;
+        this->source = source;
+        this->destination = destination;
+    }
+
     sampCSC(VertexId v_){
         v_size=v_;
         e_size=0;

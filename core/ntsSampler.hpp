@@ -19,6 +19,7 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 #include <cmath>
 #include <stdlib.h>
 #include "FullyRepGraph.hpp"
+
 class Sampler{
 public:
     std::vector<SampledSubgraph*> work_queue;// excepted to be single write multi read
@@ -31,6 +32,14 @@ public:
     VertexId work_range[2];
     VertexId work_offset;
     std::vector<VertexId> sample_nids;
+
+    // template<typename T>
+    // T RandInt(T lower, T upper) {
+    //     std::uniform_int_distribution<T> dist(lower, upper - 1);
+    //     return dist(rng_);
+    // }
+    // std::default_random_engine rng_;
+
     Sampler(FullyRepGraph* whole_graph_, VertexId work_start,VertexId work_end){
         whole_graph=whole_graph_;
         queue_start=-1;
@@ -151,6 +160,126 @@ public:
             //whole_graph->SyncAndLog("sample_postprocessing");
         }
         std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
+        work_queue.push_back(ssg);
+        queue_end_lock.lock();
+        queue_end++;
+        queue_end_lock.unlock();
+        if(work_queue.size()==1){
+            queue_start_lock.lock();
+            queue_start=0;
+            queue_start_lock.unlock();
+        }
+    }
+
+    void LayerUniformSample(int layers, int batch_size, std::vector<int> fanout) {
+        // construct layer
+        assert(work_offset < work_range[1]);
+        int actual_batch_size = std::min((VertexId)batch_size, work_range[1] - work_offset);
+        // VertexId* indices = whole_graph->srcList;
+        VertexId* indices = whole_graph->row_indices;
+        VertexId* indptr = whole_graph->column_offset;
+
+        // std::vector<VertexId> layer_offset;
+        std::vector<VertexId> node_mapping;
+        std::vector<VertexId> actl_layer_sizes;
+        // std::vector<float> probabilities;
+
+        std::copy(sample_nids.begin() + work_offset, sample_nids.begin() + work_offset + actual_batch_size, std::back_inserter(node_mapping));
+        // LOG_DEBUG("copy %d %d len %d", work_offset, work_offset + actual_batch_size, sample_nids.size());
+        work_offset += batch_size;
+        actl_layer_sizes.push_back(node_mapping.size());
+        VertexId curr = 0;
+        VertexId next = node_mapping.size();
+        // LOG_DEBUG("start construct layer");
+        for (int i = layers - 1; i >= 0; --i) {
+            // LOG_DEBUG("layer %d layer_size %d %d %d", i, layer_size, curr, next);
+            std::unordered_set<VertexId> candidate_set;
+            for (int j = curr; j < next; ++j) {
+                VertexId dst = node_mapping[j];
+                candidate_set.insert(indices + indptr[dst], indices + indptr[dst + 1]);
+            }
+            // LOG_DEBUG("candidate_set is done");
+            std::vector<VertexId> candidate_vector;
+            copy(candidate_set.begin(), candidate_set.end(), std::back_inserter(candidate_vector));
+            // LOG_DEBUG("candidate_vector is done");
+            int layer_size = std::min(fanout[i], (int)candidate_vector.size());
+
+            std::unordered_map<VertexId, size_t> n_occurrences;
+            size_t n_candidates = candidate_vector.size();
+            for (int j = 0; j < layer_size; ++j) {
+                // TODO(sanzo): thread safe
+                // VertexId dst = candidate_vector[RandInt(0, n_candidates)];
+                VertexId dst = candidate_vector[rand() % n_candidates];
+                if (!n_occurrences.insert(std::make_pair(dst, 1)).second) {
+                    ++n_occurrences[dst];
+                }
+            }
+            // LOG_DEBUG("layer node is done");
+            for (auto const &pair : n_occurrences) {
+                node_mapping.push_back(pair.first);
+            }
+            // LOG_DEBUG("add node to node_mapping");
+
+            actl_layer_sizes.push_back(node_mapping.size() - next);
+            curr = next;
+            next = node_mapping.size();
+        }
+
+        std::reverse(node_mapping.begin(), node_mapping.end());
+        std::reverse(actl_layer_sizes.begin(), actl_layer_sizes.end());
+        // std::vector<int64_t> layer_offset;
+        // layer_offset.push_back(0);
+        // for (auto const &size : actl_layer_sizes) {
+        //     layer_offset.push_back(layer_offset.back() + size);
+        // }
+        // LOG_DEBUG("consruct layer done");
+
+        // construct subgraph
+        SampledSubgraph* ssg=new SampledSubgraph();
+        curr = 0;
+        // LOG_DEBUG("start construct subgraph");
+        for (int i = 0; i < layers; ++i) {
+            // LOG_DEBUG("layer %d", i);
+            size_t src_size = actl_layer_sizes[i];
+            std::unordered_map<VertexId, VertexId> source_map;
+            std::vector<VertexId> sources;
+            // TODO(sanzo): redundancy copy
+            std::copy(node_mapping.begin() + curr, node_mapping.begin() + curr + src_size, std::back_inserter(sources));
+            for (int j = 0; j < src_size; ++j) {
+                source_map.insert(std::make_pair(node_mapping[curr + j], j));
+            }
+            // LOG_DEBUG("source_map is done");
+
+            std::vector<VertexId> sub_edges;
+            size_t dst_size = actl_layer_sizes[i + 1];
+            std::vector<VertexId> destination;
+            // TODO(sanzo): redundancy copy
+            std::copy(node_mapping.begin() + curr + src_size, node_mapping.begin() + curr + src_size + dst_size, std::back_inserter(destination));
+            std::vector<VertexId> column_offset;
+            column_offset.push_back(0);
+            // LOG_DEBUG("start select src node dst_size %d", dst_size);
+            for (int j = 0; j < dst_size; ++j) {
+                VertexId dst = node_mapping[curr + src_size + j];
+                // LOG_DEBUG("j %d dst %d", j, dst);
+                // std::pair<VertexId, VertexId> id_pair;
+                // std::vertex<VertexId> neighbor_indices;
+                for (int k = indptr[dst]; k < indptr[dst + 1]; ++k) {
+                    if (source_map.find(indices[k]) != source_map.end()) {
+                        // source_map.push_back(indices[k]);
+                        sub_edges.push_back(source_map[indices[k]]);
+                    }
+                }
+                // LOG_DEBUG("dst %d select done", dst);
+                column_offset.push_back(sub_edges.size());
+            }
+            // LOG_DEBUG("start select src node");
+
+            sampCSC* sample_sg = new sampCSC(dst_size, sub_edges.size());
+            sample_sg->init(column_offset, sub_edges, sources, destination);
+            ssg->sampled_sgs.push_back(sample_sg);
+            // LOG_DEBUG("subgraph is done");
+            curr += src_size;
+        }
         work_queue.push_back(ssg);
         queue_end_lock.lock();
         queue_end++;

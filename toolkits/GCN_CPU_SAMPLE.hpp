@@ -188,11 +188,19 @@ public:
   void Forward(Sampler* sampler, int type=0) {
     graph->rtminfo->forward = true;
       
+    // node sampling
     while(sampler->sample_not_finished()){
-          sampler->reservoir_sample(graph->gnnctx->layer_size.size()-1,
-                                    graph->config->batch_size,
-                                    graph->gnnctx->fanout);
+      sampler->reservoir_sample(graph->gnnctx->layer_size.size()-1,
+                                graph->config->batch_size,
+                                graph->gnnctx->fanout);
     }
+
+    // layer sampling
+    // while(sampler->sample_not_finished()){
+    //   sampler->LayerUniformSample(graph->gnnctx->layer_size.size()-1,
+    //                               graph->config->batch_size,
+    //                               graph->gnnctx->fanout);
+    // }
       SampledSubgraph *sg;
       // acc=0.0;
       correct = 0;
@@ -235,11 +243,11 @@ public:
        sampler->restart();
       acc = 1.0 * correct / sampler->work_range[1];
       if (type == 0) {
-        LOG_INFO("Train Acc: %f %d %d", acc, correct, sampler->work_range[1]);
+        printf("Train Acc: %f %d %d\n", acc, correct, sampler->work_range[1]);
       } else if (type == 1) {
-        LOG_INFO("Eval Acc: %f %d %d", acc, correct, sampler->work_range[1]);
+        printf("Eval Acc: %f %d %d\n", acc, correct, sampler->work_range[1]);
       } else if (type == 2) {
-        LOG_INFO("Test Acc: %f %d %d", acc, correct, sampler->work_range[1]);
+        printf("Test Acc: %f %d %d\n", acc, correct, sampler->work_range[1]);
       }
   }
 
@@ -267,7 +275,7 @@ public:
 
     for (int i_i = 0; i_i < iterations; i_i++) {
       graph->rtminfo->epoch = i_i;
-      LOG_INFO("epoch %d", i_i);
+      printf("########### epoch %d ###########\n", i_i);
       if (i_i != 0) {
         for (int i = 0; i < P.size(); i++) {
           P[i]->zero_grad();

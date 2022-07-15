@@ -28,7 +28,11 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 class SampledSubgraph{
 public:    
     SampledSubgraph(){
-        ;
+        sampled_sgs.clear();
+        layers = -1;
+        fanout.clear();
+        sampled_sgs.clear();
+        curr_layer = 0;
     }
     SampledSubgraph(int layers_, int batch_size_,std::vector<int>& fanout_){
         layers=layers_;
