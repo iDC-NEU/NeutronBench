@@ -150,6 +150,7 @@ public:
             ssg->sample_postprocessing();
             //whole_graph->SyncAndLog("sample_postprocessing");
         }
+        std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
         work_queue.push_back(ssg);
         queue_end_lock.lock();
         queue_end++;

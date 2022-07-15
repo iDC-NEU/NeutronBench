@@ -203,15 +203,16 @@ public:
            NtsVar d;
            X.resize(graph->gnnctx->layer_size.size(),d);
          
-           X[0]=nts::op::get_feature(sg->sampled_sgs[graph->gnnctx->layer_size.size()-2]->src(),F,graph);
-           NtsVar target_lab=nts::op::get_label(sg->sampled_sgs[0]->dst(),L_GT_C,graph);
+          //  X[0]=nts::op::get_feature(sg->sampled_sgs[graph->gnnctx->layer_size.size()-2]->src(),F,graph);
+           X[0]=nts::op::get_feature(sg->sampled_sgs[0]->src(),F,graph);
+           NtsVar target_lab=nts::op::get_label(sg->sampled_sgs.back()->dst(),L_GT_C,graph);
            for(int l=0;l<(graph->gnnctx->layer_size.size()-1);l++){//forward
                
-               int hop=(graph->gnnctx->layer_size.size()-2)-l;
+              //  int hop=(graph->gnnctx->layer_size.size()-2)-l;
                if(l!=0){
                     X[l] = drpmodel(X[l]);
                }
-               NtsVar Y_i=ctx->runGraphOp<nts::op::MiniBatchFuseOp>(sg,graph,hop,X[l]);
+               NtsVar Y_i=ctx->runGraphOp<nts::op::MiniBatchFuseOp>(sg,graph, l, X[l]);
                X[l + 1]=ctx->runVertexForward([&](NtsVar n_i){
                    if (l==(graph->gnnctx->layer_size.size()-2)) {
                         return P[l]->forward(n_i);
