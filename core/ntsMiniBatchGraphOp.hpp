@@ -79,13 +79,14 @@ public:
     this->subgraphs->compute_one_layer(
             [&](VertexId local_dst, std::vector<VertexId>&column_offset, 
                 std::vector<VertexId>&row_indices){
+                // assert(&row_indices == &subgraphs->sampled_sgs[layer]->r_i());
                 VertexId src_start=column_offset[local_dst];
                 VertexId src_end=column_offset[local_dst+1];
                 VertexId dst=subgraphs->sampled_sgs[layer]->dst()[local_dst];
                 ValueType *local_output=f_output_buffer+local_dst*feature_size;
                 for(VertexId src_offset=src_start;
                         src_offset<src_end;src_offset++){
-                    VertexId local_src=subgraphs->sampled_sgs[layer]->r_i(src_offset);
+                    VertexId local_src=row_indices[src_offset];
                     VertexId src=subgraphs->sampled_sgs[layer]->src()[local_src];
                     ValueType *local_input=f_input_buffer+local_src*feature_size;
                     nts_comp(local_output, local_input,
@@ -125,6 +126,26 @@ public:
             layer,
             12//compute thread num;
         );
+
+        // pull
+        // this->subgraphs->compute_one_layer_backward(
+        //     [&](VertexId local_src, std::vector<VertexId>&row_offset, 
+        //         std::vector<VertexId>&column_indices){
+        //         // assert(&column_indices == &subgraphs->sampled_sgs[layer]->c_i());
+        //         VertexId dst_start = row_offset[local_src];
+        //         VertexId dst_end = row_offset[local_src+1];
+        //         VertexId src = subgraphs->sampled_sgs[layer]->src()[local_src];
+        //         ValueType *local_input = f_input_grad_buffer + local_src * feature_size;
+        //         for(VertexId dst_offset = dst_start; dst_offset < dst_end; dst_offset++){
+        //             VertexId local_dst = column_indices[dst_offset];
+        //             VertexId dst = subgraphs->sampled_sgs[layer]->dst()[local_dst];
+        //             ValueType *local_output = f_output_grad_buffer + local_dst * feature_size;
+        //             nts_acc(local_input, local_output, nts_norm_degree(graph_, src, dst), feature_size);
+        //         }
+        //       },
+        //     layer,
+        //     12//compute thread num;
+        // );
        return f_input_grad;
    }
 

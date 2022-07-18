@@ -214,6 +214,7 @@ public:
           //  X[0]=nts::op::get_feature(sg->sampled_sgs[graph->gnnctx->layer_size.size()-2]->src(),F,graph);
            X[0]=nts::op::get_feature(sg->sampled_sgs[0]->src(),F,graph);
            NtsVar target_lab=nts::op::get_label(sg->sampled_sgs.back()->dst(),L_GT_C,graph);
+          //  graph->rtminfo->forward = true;
            for(int l=0;l<(graph->gnnctx->layer_size.size()-1);l++){//forward
                
               //  int hop=(graph->gnnctx->layer_size.size()-2)-l;
@@ -232,6 +233,7 @@ public:
            } 
            Loss(X[graph->gnnctx->layer_size.size()-1],target_lab);
           correct += getCorrect(X[graph->gnnctx->layer_size.size()-1], target_lab);
+          // graph->rtminfo->forward = false;
           if (ctx->training) {
             ctx->self_backward(false);
           }

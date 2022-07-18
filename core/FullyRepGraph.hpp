@@ -135,6 +135,21 @@ public:
             }
         }
     }
+
+    void compute_one_layer_backward(std::function<void(VertexId local_dst, 
+                          std::vector<VertexId>&column_offset, 
+                              std::vector<VertexId>&row_indices)>sparse_slot,VertexId layer,VertexId threads){
+        omp_set_num_threads(threads);
+        {
+#pragma omp parallel for
+            for (VertexId begin_v_i = 0;
+                begin_v_i < sampled_sgs[layer]->src().size();
+                    begin_v_i += 1) {
+                    sparse_slot(begin_v_i,sampled_sgs[layer]->r_o(),
+                        sampled_sgs[layer]->c_i());
+            }
+        }
+    }
         
     
     std::vector<sampCSC*> sampled_sgs;

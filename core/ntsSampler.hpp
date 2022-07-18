@@ -159,6 +159,10 @@ public:
             ssg->sample_postprocessing();
             //whole_graph->SyncAndLog("sample_postprocessing");
         }
+        for (auto p : ssg->sampled_sgs) {
+            p->generate_csr_from_csc();
+            // p->debug_generate_csr_from_csc();
+        }
         std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
         work_queue.push_back(ssg);
         queue_end_lock.lock();
@@ -276,6 +280,7 @@ public:
 
             sampCSC* sample_sg = new sampCSC(dst_size, sub_edges.size());
             sample_sg->init(column_offset, sub_edges, sources, destination);
+            sample_sg->generate_csr_from_csc();
             ssg->sampled_sgs.push_back(sample_sg);
             // LOG_DEBUG("subgraph is done");
             curr += src_size;
