@@ -16,6 +16,7 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 
 #include "GAT_CPU.hpp"
 #include "GCN_CPU_SAMPLE.hpp"
+#include "GCN_CPU_CLUSTER.hpp"
 #include "GCN_CPU.hpp"
 #include "GCN_CPU_EAGER.hpp"
 #include "GAT_CPU_DIST.hpp"
@@ -67,7 +68,14 @@ int main(int argc, char **argv) {
   } else if (graph->config->algorithm == std::string("GCNSAMPLESINGLE")) {
     graph->load_directed(graph->config->edge_file, graph->config->vertices);
     graph->generate_backward_structure();
-        GCN_CPU_SAMPLE_impl *ntsGCN = new GCN_CPU_SAMPLE_impl(graph, iterations);
+    GCN_CPU_SAMPLE_impl *ntsGCN = new GCN_CPU_SAMPLE_impl(graph, iterations);
+    ntsGCN->init_graph();
+    ntsGCN->init_nn();
+    ntsGCN->run();
+  } else if (graph->config->algorithm == std::string("GCNCPUCLUSTER")) {
+    graph->load_directed(graph->config->edge_file, graph->config->vertices);
+    graph->generate_backward_structure();
+    GCN_CPU_CLUSTER_impl *ntsGCN = new GCN_CPU_CLUSTER_impl(graph, iterations);
     ntsGCN->init_graph();
     ntsGCN->init_nn();
     ntsGCN->run();

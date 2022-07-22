@@ -97,10 +97,31 @@ ${CMAKE_CURRENT_SOURCE_DIR}
 ${MPI_INCLUDE_PATH}
 )
 
+# set C_FLAGS of METIS
+if(MSVC)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DIDXTYPEWIDTH=64 /DREALTYPEWIDTH=32")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /DIDXTYPEWIDTH=64 /DREALTYPEWIDTH=32")
+else(MSVC)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DIDXTYPEWIDTH=64 -DREALTYPEWIDTH=32")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DIDXTYPEWIDTH=64 -DREALTYPEWIDTH=32")
+endif(MSVC)
+
+# Compile METIS
+if(NOT MSVC)
+  set(GKLIB_PATH "${CMAKE_CURRENT_SOURCE_DIR}/third_party/METIS/GKlib")
+  include(${GKLIB_PATH}/GKlibSystem.cmake)
+  include_directories(${GKLIB_PATH})
+  include_directories("third_party/METIS/include/")
+  add_subdirectory("third_party/METIS/libmetis/")
+  list(APPEND NTS_LINKER_LIBS metis)
+endif(NOT MSVC)
+message("NTS_LINKER_LIBS ${NTS_LINKER_LIBS}")
+
 # setting debug flags
-set(CMAKE_CXX_FLAGS "-O3 -Wall -std=c++14 -g -fopenmp -march=native")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -Wall -std=c++14 -g -fopenmp -march=native")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -std=c++14 -fopenmp -march=native -O0 -fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls")
 
+message(STATUS "CMAKE_C_FLAGS: ${CMAKE_C_FLAGS}")
 message(STATUS "CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
 message(STATUS "CMAKE_CXX_FLAGS_DEBUG: ${CMAKE_CXX_FLAGS_DEBUG}")
 
@@ -119,17 +140,17 @@ set(NEUTRONSTAR_TEST_SRC_FILES
 
 add_executable(nts ${NEUTRONSTAR_SRC_FILES})
 if (CUDA_ENABLE)
-        target_link_libraries(nts  ${TORCH_LIBRARIES} ${MPI_LIBRARIES} numa ${CUDA_LIBRARIES} cuda_propagate)
+        target_link_libraries(nts  ${TORCH_LIBRARIES} ${MPI_LIBRARIES} numa ${CUDA_LIBRARIES} cuda_propagate ${NTS_LINKER_LIBS})
 else()
-        target_link_libraries(nts  ${TORCH_LIBRARIES} ${MPI_LIBRARIES} numa)
+        target_link_libraries(nts  ${TORCH_LIBRARIES} ${MPI_LIBRARIES} numa ${NTS_LINKER_LIBS})
 endif()
 
 
 add_executable(nts_test ${NEUTRONSTAR_TEST_SRC_FILES})
 if (CUDA_ENABLE)
-        target_link_libraries(nts_test  ${TORCH_LIBRARIES} ${MPI_LIBRARIES} numa ${CUDA_LIBRARIES} cuda_propagate)
+        target_link_libraries(nts_test  ${TORCH_LIBRARIES} ${MPI_LIBRARIES} numa ${CUDA_LIBRARIES} cuda_propagate ${NTS_LINKER_LIBS})
 else()
-        target_link_libraries(nts_test  ${TORCH_LIBRARIES} ${MPI_LIBRARIES} numa)
+        target_link_libraries(nts_test  ${TORCH_LIBRARIES} ${MPI_LIBRARIES} numa ${NTS_LINKER_LIBS})
 endif()
 
 

@@ -18,7 +18,9 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 #include <mutex>
 #include <cmath>
 #include <stdlib.h>
+#include <random>
 #include "FullyRepGraph.hpp"
+#include "core/MetisPartition.hpp"
 
 class Sampler{
 public:
@@ -32,6 +34,8 @@ public:
     VertexId work_range[2];
     VertexId work_offset;
     std::vector<VertexId> sample_nids;
+    std::vector<VertexId> metis_partition_offset;
+    std::vector<VertexId> metis_partition_id;
 
     // template<typename T>
     // T RandInt(T lower, T upper) {
@@ -96,6 +100,19 @@ public:
         assert(id<work_queue.size());
         return work_queue[id];
     }
+
+    void push_one(SampledSubgraph* ssg) {
+        work_queue.push_back(ssg);
+        queue_end_lock.lock();
+        queue_end++;
+        queue_end_lock.unlock();
+        if(work_queue.size()==1){
+            queue_start_lock.lock();
+            queue_start=0;
+            queue_start_lock.unlock();
+        }
+    }
+
     void clear_queue(){
         for(VertexId i=0;i<work_queue.size();i++){
             delete work_queue[i];
@@ -159,20 +176,13 @@ public:
             ssg->sample_postprocessing();
             //whole_graph->SyncAndLog("sample_postprocessing");
         }
-        for (auto p : ssg->sampled_sgs) {
-            p->generate_csr_from_csc();
+        // generate csr for backward graph
+        // for (auto p : ssg->sampled_sgs) {
+            // p->generate_csr_from_csc();
             // p->debug_generate_csr_from_csc();
-        }
+        // }
         std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
-        work_queue.push_back(ssg);
-        queue_end_lock.lock();
-        queue_end++;
-        queue_end_lock.unlock();
-        if(work_queue.size()==1){
-            queue_start_lock.lock();
-            queue_start=0;
-            queue_start_lock.unlock();
-        }
+        push_one(ssg);
     }
 
     void LayerUniformSample(int layers, int batch_size, std::vector<int> fanout) {
@@ -237,10 +247,17 @@ public:
         //     layer_offset.push_back(layer_offset.back() + size);
         // }
         // LOG_DEBUG("consruct layer done");
+        
+        SampledSubgraph* ssg = ConstructSampledSubgraph(layers, actl_layer_sizes, node_mapping);
+        push_one(ssg);
+    }
 
-        // construct subgraph
+    // construct subgraph
+    SampledSubgraph* ConstructSampledSubgraph(int layers, std::vector<VertexId>& actl_layer_sizes, std::vector<VertexId>& node_mapping) {
+        auto indptr = whole_graph->column_offset;
+        auto indices = whole_graph->row_indices;
         SampledSubgraph* ssg=new SampledSubgraph();
-        curr = 0;
+        VertexId curr = 0;
         // LOG_DEBUG("start construct subgraph");
         for (int i = 0; i < layers; ++i) {
             // LOG_DEBUG("layer %d", i);
@@ -273,27 +290,71 @@ public:
                         sub_edges.push_back(source_map[indices[k]]);
                     }
                 }
-                // LOG_DEBUG("dst %d select done", dst);
                 column_offset.push_back(sub_edges.size());
             }
-            // LOG_DEBUG("start select src node");
 
             sampCSC* sample_sg = new sampCSC(dst_size, sub_edges.size());
             sample_sg->init(column_offset, sub_edges, sources, destination);
-            sample_sg->generate_csr_from_csc();
+            // sample_sg->generate_csr_from_csc();
             ssg->sampled_sgs.push_back(sample_sg);
             // LOG_DEBUG("subgraph is done");
             curr += src_size;
         }
-        work_queue.push_back(ssg);
-        queue_end_lock.lock();
-        queue_end++;
-        queue_end_lock.unlock();
-        if(work_queue.size()==1){
-            queue_start_lock.lock();
-            queue_start=0;
-            queue_start_lock.unlock();
+        return ssg;
+    }
+
+    void ClusterGCNSample(int layers, int batch_size, int partition_num, std::string objtype = "cut") {
+        if (metis_partition_id.empty()) {
+            // (FIXME Sanzo) store metis partion result to file
+            MetisPartitionGraph(whole_graph, partition_num, objtype, metis_partition_id, metis_partition_offset);
         }
+        
+        std::vector<int> random_partition(partition_num);
+        std::iota(random_partition.begin(), random_partition.end(), 0);
+        unsigned seed = std::chrono::system_clock::now ().time_since_epoch ().count ();
+        std::shuffle (random_partition.begin(), random_partition.end(), std::default_random_engine(seed));
+        std::unordered_set<VertexId> node_set;
+        // vector<VertexId> node_ids_check;
+        auto& offset = metis_partition_offset;
+        auto& ids = metis_partition_id;
+        for (int i = 0; i < batch_size; ++i) {
+            auto select_node = random_partition[i];
+            node_set.insert(select_node);
+            node_set.insert(ids.begin() + offset[select_node], ids.begin() + offset[select_node + 1]);
+            // for (int j = offset[i]; j < offset[i + 1]; ++j) {
+            //     node_ids_check.push_back(ids[j]);
+            // }
+        }
+        // int compare_ret = std::equal(node_ids.begin(), node_ids.end(), node_ids_check.begin());
+        // assert(compare_ret);
+        // std::cout << "node_ids.size() " << node_ids.size() << std::endl;
+        vector<VertexId> node_ids(node_set.begin(), node_set.end());
+        // std::cout << "select nodes node_ids " << node_ids.size() << std::endl;
+
+        std::vector<VertexId> column_offset;
+        std::vector<VertexId> row_indices;
+        column_offset.push_back(0);
+        for (auto dst : node_ids) {
+            for (int i = whole_graph->column_offset[dst]; i < whole_graph->column_offset[dst + 1]; ++i) {
+                int src = whole_graph->row_indices[i];
+                if (node_set.find(src) == node_set.end()) continue;
+                row_indices.push_back(src);
+            }
+            column_offset.push_back(row_indices.size());
+        }
+        
+        std::vector<VertexId> actl_layer_sizes(layers + 1, node_ids.size());
+        std::vector<VertexId> node_mapping;
+        for (int i = 0; i < layers + 1; ++i)
+            std::copy(node_ids.begin(), node_ids.end(), std::back_inserter(node_mapping));
+
+        // for (int i = 0; i < layers; ++i) {
+        //     std::cout << "layer " << i << " " << actl_layer_sizes[i] << std::endl;
+        // }
+        // std::cout << "node mapping size " << node_mapping.size() << std::endl;
+
+        SampledSubgraph* ssg = ConstructSampledSubgraph(layers, actl_layer_sizes, node_mapping);
+        push_one(ssg);
     }
 };
 
