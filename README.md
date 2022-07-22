@@ -20,6 +20,18 @@ Currently NeutronStar is under refactoring. We will release all features of Neut
 
 ## Quick Start
 
+First clone the repository and initialize the submodule:
+
+```bash
+git clone https://github.com/iDC-NEU/NeutronStarLite.git
+cd NeutronStarLite
+git submodule update --init --recursive
+
+# or just use one command
+git clone --recurse-submodules https://github.com/iDC-NEU/NeutronStarLite.git
+```
+
+
 A compiler supporting **OpenMP** and **C++11** features (e.g. lambda expressions, multi-threading, etc.) is required.
 
 **cmake** >=3.14.3
