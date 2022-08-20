@@ -15,7 +15,8 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 */
 
 #include "GAT_CPU.hpp"
-#include "GCN_CPU_SAMPLE.hpp"
+#include "GCN_CPU_NEIGHBOR.hpp"
+#include "GCN_CPU_LAYER.hpp"
 #include "GCN_CPU_CLUSTER.hpp"
 #include "GCN_CPU.hpp"
 #include "GCN_CPU_EAGER.hpp"
@@ -65,14 +66,21 @@ int main(int argc, char **argv) {
     ntsGIN->init_graph();
     ntsGIN->init_nn();
     ntsGIN->run();
-  } else if (graph->config->algorithm == std::string("GCNSAMPLESINGLE")) {
+  } else if (graph->config->algorithm == std::string("GCNNEIGHBOR")) {
     graph->load_directed(graph->config->edge_file, graph->config->vertices);
     graph->generate_backward_structure();
-    GCN_CPU_SAMPLE_impl *ntsGCN = new GCN_CPU_SAMPLE_impl(graph, iterations);
+    GCN_CPU_NEIGHBOR_impl *ntsGCN = new GCN_CPU_NEIGHBOR_impl(graph, iterations);
     ntsGCN->init_graph();
     ntsGCN->init_nn();
     ntsGCN->run();
-  } else if (graph->config->algorithm == std::string("GCNCPUCLUSTER")) {
+  } else if (graph->config->algorithm == std::string("GCNLAYER")) {
+    graph->load_directed(graph->config->edge_file, graph->config->vertices);
+    graph->generate_backward_structure();
+    GCN_CPU_LAYER_impl *ntsGCN = new GCN_CPU_LAYER_impl(graph, iterations);
+    ntsGCN->init_graph();
+    ntsGCN->init_nn();
+    ntsGCN->run();
+  } else if (graph->config->algorithm == std::string("GCNCLUSTER")) {
     graph->load_directed(graph->config->edge_file, graph->config->vertices);
     graph->generate_backward_structure();
     GCN_CPU_CLUSTER_impl *ntsGCN = new GCN_CPU_CLUSTER_impl(graph, iterations);
