@@ -53,7 +53,7 @@ public:
         work_offset=work_start;
     }
     Sampler(FullyRepGraph* whole_graph_, std::vector<VertexId>& index){
-        assert(index.size() > 0);
+        // assert(index.size() > 0);
         sample_nids.assign(index.begin(), index.end());
         assert(sample_nids.size() == index.size());
         whole_graph=whole_graph_;
@@ -100,7 +100,9 @@ public:
         assert(id<work_queue.size());
         return work_queue[id];
     }
-
+    int size() {
+        return work_queue.size();
+    }
     void push_one(SampledSubgraph* ssg) {
         work_queue.push_back(ssg);
         queue_end_lock.lock();
@@ -217,6 +219,7 @@ public:
                 VertexId dst = node_mapping[j];
                 candidate_set.insert(indices + indptr[dst], indices + indptr[dst + 1]);
             }
+            // printf("layer %d layer size %d\n", i, candidate_set.size());
             // LOG_DEBUG("candidate_set is done");
             std::vector<VertexId> candidate_vector;
             copy(candidate_set.begin(), candidate_set.end(), std::back_inserter(candidate_vector));

@@ -29,9 +29,6 @@ public:
   std::vector<Parameter *> P;
   std::vector<NtsVar> X;
   nts::ctx::NtsContext* ctx;
-  // Sampler* train_sampler;
-  // Sampler* val_sampler;
-  // Sampler* test_sampler;
   FullyRepGraph* fully_rep_graph;
   
   NtsVar F;
@@ -45,7 +42,7 @@ public:
   int min_batch_num;
   torch::nn::Dropout drpmodel;
 
-  // ntsPeerRPC<ValueType, VertexId> rpc;
+  ntsPeerRPC<ValueType, VertexId> rpc;
 
   GCN_CPU_NEIGHBOR_impl(Graph<Empty> *graph_, int iterations_,
                bool process_local = false, bool process_overlap = false) {
@@ -68,27 +65,29 @@ public:
     graph->rtminfo->lock_free = graph->config->lock_free;
   }
   void init_graph() {
-    
-      fully_rep_graph=new FullyRepGraph(graph);
-      fully_rep_graph->GenerateAll();
-      fully_rep_graph->SyncAndLog("read_finish");
-      // sampler=new Sampler(fully_rep_graph,0,graph->vertices);
-       VertexId max_vertex = 0;
-        VertexId min_vertex = std::numeric_limits<VertexId>::max();
-        for(int i = 0; i < graph->partitions; i++){
-            max_vertex = std::max(graph->partition_offset[i+1] - graph->partition_offset[i], max_vertex);
-            min_vertex = std::min(graph->partition_offset[i+1] - graph->partition_offset[i], min_vertex);
-        }
-        max_batch_num = max_vertex / graph->config->batch_size;
-        min_batch_num = min_vertex / graph->config->batch_size;
-        if(max_vertex % graph->config->batch_size != 0) {
-            max_batch_num++;
-        }
-        if(min_vertex % graph->config->batch_size != 0) {
-            min_batch_num++;
-        }
+    fully_rep_graph=new FullyRepGraph(graph);
+    fully_rep_graph->GenerateAll();
+    fully_rep_graph->SyncAndLog("read_finish");
+       
     //cp = new nts::autodiff::ComputionPath(gt, subgraphs);
     ctx=new nts::ctx::NtsContext();
+  }
+
+  void get_batch_num() {
+    VertexId max_vertex = 0;
+    VertexId min_vertex = std::numeric_limits<VertexId>::max();
+    for(int i = 0; i < graph->partitions; i++){
+        max_vertex = std::max(graph->partition_offset[i+1] - graph->partition_offset[i], max_vertex);
+        min_vertex = std::min(graph->partition_offset[i+1] - graph->partition_offset[i], min_vertex);
+    }
+    max_batch_num = max_vertex / graph->config->batch_size;
+    min_batch_num = min_vertex / graph->config->batch_size;
+    if(max_vertex % graph->config->batch_size != 0) {
+        max_batch_num++;
+    }
+    if(min_vertex % graph->config->batch_size != 0) {
+        min_batch_num++;
+    }
   }
   void init_nn() {
 
@@ -145,22 +144,23 @@ public:
     
     X[0] = F.set_requires_grad(true);
 
-//     rpc.set_comm_num(graph->partitions - 1);
-//     rpc.register_function("get_feature", [&](std::vector<VertexId> vertexs){
-//         int start = graph->partition_offset[graph->partition_id];
-//         int feature_size = F.size(1);
-//         ValueType* ntsVarBuffer = graph->Nts->getWritableBuffer(F, torch::DeviceType::CPU);
-//         std::vector<std::vector<ValueType>> result_vector;
-//         result_vector.resize(vertexs.size());
+    rpc.set_comm_num(graph->partitions - 1);
+    rpc.register_function("get_feature", [&](std::vector<VertexId> vertexs){
+        int start = graph->partition_offset[graph->partition_id];
+        int feature_size = F.size(1);
+        ValueType* ntsVarBuffer = graph->Nts->getWritableBuffer(F, torch::DeviceType::CPU);
+        std::vector<std::vector<ValueType>> result_vector;
+        result_vector.resize(vertexs.size());
 
-// #pragma omp parallel for
-//         for(int i = 0; i < vertexs.size(); i++) {
-//             result_vector[i].resize(feature_size);
-//             memcpy(result_vector[i].data(), ntsVarBuffer + (vertexs[i] - start) * feature_size,
-//                    feature_size * sizeof(ValueType));
-//         }
-//         return result_vector;
-//     });
+        #pragma omp parallel for
+        for(int i = 0; i < vertexs.size(); i++) {
+            result_vector[i].resize(feature_size);
+            memcpy(result_vector[i].data(), ntsVarBuffer + (vertexs[i] - start) * feature_size,
+                   feature_size * sizeof(ValueType));
+        }
+        return result_vector;
+    });
+
   }
 
   long getCorrect(NtsVar &input, NtsVar &target) {
@@ -214,7 +214,11 @@ public:
   void Update() {
     for (int i = 0; i < P.size(); i++) {
       // accumulate the gradient using all_reduce
-      P[i]->all_reduce_to_gradient(P[i]->W.grad().cpu());
+      if (graph->gnnctx->l_v_num == 0) {
+        P[i]->all_reduce_to_gradient(torch::zeros_like(P[i]->W));
+      } else {
+        P[i]->all_reduce_to_gradient(P[i]->W.grad().cpu());
+      }
       // update parameters with Adam optimizer
       P[i]->learnC2C_with_decay_Adam();
       P[i]->next();
@@ -241,28 +245,14 @@ public:
                                 graph->config->batch_size,
                                 graph->gnnctx->fanout);
     }
+    // std::cout << type << " sample done" << std::endl;
+    int batch_num = sampler->size();
+    MPI_Allreduce(&batch_num, &max_batch_num, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
+    MPI_Allreduce(&batch_num, &min_batch_num, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+    // printf("batch_num %d min %d max %d\n", batch_num, min_batch_num, max_batch_num);
     // std::cout << type << " neighbor sample done" << std::endl;
 
-    // layer sampling
-    // while(sampler->sample_not_finished()){
-    //   sampler->LayerUniformSample(graph->gnnctx->layer_size.size()-1,
-    //                               graph->config->batch_size,
-    //                               graph->gnnctx->fanout);
-    // }
-
-    // graph sampling
-    // while(sampler->sample_not_finished()){
-    //   sampler->ClusterGCNSample(graph->gnnctx->layer_size.size()-1,
-    //                             graph->config->batch_size,
-    //                             10);
-    // }
-    // sampler->ClusterGCNSample(graph->gnnctx->layer_size.size()-1,
-    //                             graph->config->batch_size,
-    //                             10);
-
-    // std::cout << "sample is done" << std::endl;
-    SampledSubgraph *sg;
-    // acc=0.0;
+    SampledSubgraph *sg; 
     correct = 0;
     train_nodes = 0;
     batch=0;
@@ -278,18 +268,21 @@ public:
         X.resize(graph->gnnctx->layer_size.size(),d);
       
       //  std::cout << "get feture done" << std::endl;
-        X[0]=nts::op::get_feature(sg->sampled_sgs[0]->src(),F,graph);
-        // X[0] = nts::op::get_feature_from_global(rpc, sg->sampled_sgs[graph->gnnctx->layer_size.size()-2]->src(), F, graph);
-        NtsVar target_lab=nts::op::get_label(sg->sampled_sgs.back()->dst(),L_GT_C,graph);
+        // X[0]=nts::op::get_feature(sg->sampled_sgs[0]->src(),F,graph);
+        // rpc.keep_running();
+        X[0] = nts::op::get_feature_from_global(rpc, sg->sampled_sgs[0]->src(), F, graph);
+        // std::cout << batch_num << " "<< batch <<  " get feature done" << std::endl;
+        // rpc.stop_running();
+      //  std::cout << "get feature done" << std::endl;
+        NtsVar target_lab=nts::op::get_label(sg->sampled_sgs.back()->dst(), L_GT_C,graph);
       //  std::cout << "get label done" << std::endl;
       //  graph->rtminfo->forward = true;
         for(int l=0;l<(graph->gnnctx->layer_size.size()-1);l++){//forward
-            
           //  int hop=(graph->gnnctx->layer_size.size()-2)-l;
+        //  std::cout << "start process layer " << l << std::endl;
             if(l!=0){
                 X[l] = drpmodel(X[l]);
             }
-        //  std::cout << "start process layer " << l << std::endl;
             NtsVar Y_i=ctx->runGraphOp<nts::op::MiniBatchFuseOp>(sg,graph, l, X[l]);
             // printf("run graphop done\n");
             X[l + 1]=ctx->runVertexForward([&](NtsVar n_i){
@@ -303,32 +296,42 @@ public:
             // printf("run vertex forward done\n");
         } 
         Loss(X[graph->gnnctx->layer_size.size()-1],target_lab);
+        // std::cout << "loss done" << std::endl;
         correct += getCorrect(X[graph->gnnctx->layer_size.size()-1], target_lab);
+        // std::cout << "correct done" << std::endl;
         train_nodes += target_lab.size(0);
+
         // sg->sampled_sgs.back()->dst()
         // graph->rtminfo->forward = false;
         if (ctx->training) {
           ctx->self_backward(false);
           Update();
-        }
-        for (int i = 0; i < P.size(); i++) {
-              P[i]->zero_grad();
+          for (int i = 0; i < P.size(); i++) {
+            P[i]->zero_grad();
           }
+        }
         batch++;
         // if(batch == min_batch_num) {
         //   rpc.keep_running();
         // }
     }
-    // while(batch!=max_batch_num){
-    //   UpdateZero();
-    //   batch++;
-    // }
-      // rpc.stop_running();
+    // std::cout << "train " << ctx->training << " batch " << batch << " max_batch_num " << max_batch_num << std::endl;
+    // max_batch_num = 50;
+    while(ctx->training && batch !=max_batch_num){
+      UpdateZero();
+      // std::cout << "sync update zero " << batch << std::endl;
+      batch++;
+    }
+    rpc.stop_running();
 
     sampler->clear_queue();
     sampler->restart();
     // acc = 1.0 * correct / sampler->work_range[1];
+    // std::cout << "before " << correct << " " << train_nodes << std::endl;
+    MPI_Allreduce(MPI_IN_PLACE, &correct, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE, &train_nodes, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
     acc = 1.0 * correct / train_nodes;
+    // std::cout << "after " << correct << " " << train_nodes << std::endl;
     // printf("train_ndoes %d\n", train_nodes);
     return acc;
     // if (type == 0) {
@@ -348,13 +351,14 @@ public:
     // get train/val/test node index. (may be move this to GNNDatum)
     std::vector<VertexId> train_nids, val_nids, test_nids;
     for (int i = 0; i < graph->gnnctx->l_v_num; ++i) {
+    // for (int i = graph->partition_offset[graph->partition_id]; i < graph->partition_offset[graph->partition_id + 1]; ++i) {
       int type = gnndatum->local_mask[i];
       if (type == 0) {
-        train_nids.push_back(i);
+        train_nids.push_back(i + graph->partition_offset[graph->partition_id]);
       } else if (type == 1) {
-        val_nids.push_back(i);
+        val_nids.push_back(i + graph->partition_offset[graph->partition_id]);
       } else if (type == 2) {
-        test_nids.push_back(i);
+        test_nids.push_back(i + graph->partition_offset[graph->partition_id]);
       }
     }
       
@@ -382,6 +386,7 @@ public:
       }
     }
     delete active;
+    rpc.exit();
   }
 
 };
