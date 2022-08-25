@@ -280,15 +280,17 @@ public:
     for(int l=0;l<(graph->gnnctx->layer_size.size()-1);l++){//forward
       // printf("process layer %d\n", l);
       //  int hop=(graph->gnnctx->layer_size.size()-2)-l;
-        if(l!=0){
-            X[l] = drpmodel(X[l]);
-        }
+        // if(l!=0){
+        //     X[l] = drpmodel(X[l]);
+        // }
         NtsVar Y_i=ctx->runGraphOp<nts::op::MiniBatchFuseOp>(sg,graph, l, X[l]);
         X[l + 1]=ctx->runVertexForward([&](NtsVar n_i){
             if (l==(graph->gnnctx->layer_size.size()-2)) {
                 return P[l]->forward(n_i);
             }else{
-                return torch::relu(P[l]->forward(n_i));
+                // return torch::relu(P[l]->forward(n_i));
+                return torch::dropout(P[l]->forward(n_i), drop_rate, ctx->is_train());
+
             }
         },
         Y_i);

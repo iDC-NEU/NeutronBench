@@ -233,10 +233,12 @@ public:
                                   graph->gnnctx->fanout);
     }
     int batch_num = sampler->size();
+    // std::cout << "batch_num " << batch_num << std::endl;
     MPI_Allreduce(&batch_num, &max_batch_num, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
     MPI_Allreduce(&batch_num, &min_batch_num, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+    // printf("batch_num %d min %d max %d\n", batch_num, min_batch_num, max_batch_num);
+    sampler->isValidSampleGraph();
     
-
     // std::cout << "sample is done" << std::endl;
     SampledSubgraph *sg;
     correct = 0;
@@ -244,6 +246,11 @@ public:
     batch=0;
     while(sampler->has_rest()){
         sg=sampler->get_one();
+        // for (int i = 0; i < 2; ++i) {
+        //   printf("layer %d v_size %d e_size %d\n", i, sg->sampled_sgs[i]->v_size
+        //           ,sg->sampled_sgs[i]->e_size);
+        // }
+
         std::vector<NtsVar> X;
         NtsVar d;
         X.resize(graph->gnnctx->layer_size.size(),d);
@@ -257,15 +264,16 @@ public:
         for(int l=0;l<(graph->gnnctx->layer_size.size()-1);l++){//forward
             
           //  int hop=(graph->gnnctx->layer_size.size()-2)-l;
-            if(l!=0){
-                X[l] = drpmodel(X[l]);
-            }
+            // if(l!=0){
+            //     X[l] = drpmodel(X[l]);
+            // }
             NtsVar Y_i=ctx->runGraphOp<nts::op::MiniBatchFuseOp>(sg,graph, l, X[l]);
             X[l + 1]=ctx->runVertexForward([&](NtsVar n_i){
                 if (l==(graph->gnnctx->layer_size.size()-2)) {
                     return P[l]->forward(n_i);
                 }else{
-                    return torch::relu(P[l]->forward(n_i));
+                    // return torch::relu(P[l]->forward(n_i));
+                    return torch::dropout(P[l]->forward(n_i), drop_rate, ctx->is_train());
                 }
             },
             Y_i);
@@ -306,6 +314,7 @@ public:
     //   printf("Test Acc: %f %d %d\n", acc, correct, sampler->work_range[1]);
     // }
   }
+
 
   void run() {
     if (graph->partition_id == 0) {
