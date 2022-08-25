@@ -725,13 +725,15 @@ struct Parameter : torch::nn::Module {
     decay_epoch = decay_epoch_;
   }
   void next() {
-    if (decay_epoch != -1 &&
-        (curr_epoch != 0 && curr_epoch % decay_epoch == 0)) {
-      alpha_t *= decay_rate;
-    }
-    alpha = alpha_t * sqrt(1 - beta2) / (1 - beta1);
-    beta1 *= beta1_t;
-    beta2 *= beta2_t;
+    // if (decay_epoch != -1 &&
+    //     (curr_epoch != 0 && curr_epoch % decay_epoch == 0)) {
+    //   alpha_t *= decay_rate;
+    // }
+    // alpha = alpha_t * sqrt(1 - beta2) / (1 - beta1);
+    // beta1 *= beta1_t;
+    // beta2 *= beta2_t;
+    beta1_t *= beta1;
+    beta2_t *= beta2;
     curr_epoch++;
   }
   NtsVar forward(NtsVar x) {
@@ -740,13 +742,24 @@ struct Parameter : torch::nn::Module {
     return x1;
   }
   void learnC2C_with_decay_Adam() {
+    // std::cout << "alpha " << alpha << std::endl;
+    // NtsVar S = W.detach();
+    // W_g = W_gradient + weight_decay * S;
+    // M = beta1 * M + (1 - beta1) * W_g;
+    // V = beta2 * V + (1 - beta2) * W_g * W_g;
+    // // NtsVar a = W - alpha*M/(torch::sqrt(V)+epsilon);
+    // W.set_data(W - alpha * M / (torch::sqrt(V) + epsilon));
+
     NtsVar S = W.detach();
     W_g = W_gradient + weight_decay * S;
     M = beta1 * M + (1 - beta1) * W_g;
-    V = beta2 * V + (1 - beta2) * W_g * W_g;
-    // NtsVar a = W - alpha*M/(torch::sqrt(V)+epsilon);
-    W.set_data(W - alpha * M / (torch::sqrt(V) + epsilon));
+    V = beta2 * V + (1 - beta2) * torch::square(W_g);
+    NtsVar M_t = M / (1 - beta1_t);
+    NtsVar V_t = V / (1 - beta2_t);
+    NtsVar g_t = alpha * M_t / (torch::sqrt(V_t) + epsilon);
+    W.set_data(W - g_t);
   }
+
   void learnC2C_with_decay_SGD(ValueType learning_rate,
                                ValueType weight_decay) {
     NtsVar tmp = W_gradient;
