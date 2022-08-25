@@ -394,6 +394,10 @@ template <typename NOPT>
     this->training = false;
   }
 
+  bool is_train() {
+    return this->training;
+  }
+
 //private:
   std::stack<OpType> op;
   std::stack<NtsVar> output;

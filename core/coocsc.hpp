@@ -247,7 +247,7 @@ public:
         assert(false);
     }
     
-private:
+// private:
 std::vector<VertexId> column_offset;//local offset    
 std::vector<VertexId> row_offset;
 std::vector<VertexId> row_indices;//local id

@@ -129,7 +129,7 @@ public:
         queue_start=-1;
         queue_end=0;
     }
-    void reservoir_sample(int layers_, int batch_size_,std::vector<int> fanout_){
+    void reservoir_sample(int layers_, int batch_size_,std::vector<int> fanout_, int type = 0){
         // LOG_DEBUG("layers %d batch_size %d fanout %d-%d", layers_, batch_size_, fanout_[0], fanout_[1]);
         assert(work_offset<work_range[1]);
         int actl_batch_size=std::min((VertexId)batch_size_,work_range[1]-work_offset);
@@ -144,9 +144,18 @@ public:
               ssg->sample_load_destination([&](std::vector<VertexId>& destination){
                   for(int j=0;j<actl_batch_size;j++){
                     //   destination.push_back(work_offset++);
-                    destination.push_back(sample_nids[work_offset++]);
+                    if (type == 0) {
+                        destination.push_back(sample_nids[work_offset++]);
+                    } else {
+                        unsigned seed = std::chrono::system_clock::now ().time_since_epoch ().count();
+                        std::shuffle (sample_nids.begin(), sample_nids.end(), std::default_random_engine(seed));
+                        destination.push_back(sample_nids[work_offset++]);
+                    }
                   }
               },i);
+            //   for (auto &v : ssg->sampled_sgs[0]->dst()) {
+            //     printf("%d ", v);
+            //   }printf("\n");
               //whole_graph->SyncAndLog("sample_load_destination");
             }else{
                ssg->sample_load_destination(i); 
@@ -228,10 +237,14 @@ public:
 
             std::unordered_map<VertexId, size_t> n_occurrences;
             size_t n_candidates = candidate_vector.size();
+            unsigned seed = std::chrono::system_clock::now ().time_since_epoch ().count();
+            std::shuffle (candidate_vector.begin(), candidate_vector.end(), std::default_random_engine(seed));
+
             for (int j = 0; j < layer_size; ++j) {
                 // TODO(sanzo): thread safe
                 // VertexId dst = candidate_vector[RandInt(0, n_candidates)];
-                VertexId dst = candidate_vector[rand() % n_candidates];
+                // VertexId dst = candidate_vector[rand() % n_candidates];
+                VertexId dst = candidate_vector[j];
                 if (!n_occurrences.insert(std::make_pair(dst, 1)).second) {
                     ++n_occurrences[dst];
                 }
@@ -270,6 +283,7 @@ public:
         // LOG_DEBUG("start construct subgraph");
         for (int i = 0; i < layers; ++i) {
             // LOG_DEBUG("layer %d", i);
+            // size_t src_size = layer_sizes[i];
             size_t src_size = layer_sizes[i];
             std::unordered_map<VertexId, VertexId> source_map;
             std::vector<VertexId> sources;
@@ -280,6 +294,7 @@ public:
             for (int j = 0; j < src_size; ++j) {
                 source_map.insert(std::make_pair(node_mapping[curr + j], j));
             }
+            // printf("source_map size %d\n", source_map.size());
             // LOG_DEBUG("source_map is done");
 
             std::vector<VertexId> sub_edges;
@@ -292,20 +307,26 @@ public:
             std::vector<VertexId> column_offset;
             column_offset.push_back(0);
             // LOG_DEBUG("start select src node dst_size %d", dst_size);
+            // printf("layer %d src_size %d dst_size %d\n", i, src_size, dst_size);
+            int tmp_cnt = 0;
             for (int j = 0; j < dst_size; ++j) {
                 VertexId dst = node_mapping[curr + src_size + j];
                 // LOG_DEBUG("j %d dst %d", j, dst);
                 // std::pair<VertexId, VertexId> id_pair;
                 // std::vertex<VertexId> neighbor_indices;
                 for (int k = indptr[dst]; k < indptr[dst + 1]; ++k) {
+                    tmp_cnt++;
                     if (source_map.find(indices[k]) != source_map.end()) {
                         // source_map.push_back(indices[k]);
                         sub_edges.push_back(source_map[indices[k]]);
+                    // } else {
+                    //     printf("layer %d %d is not in source_map\n", i, indices[k]);
                     }
                 }
                 // printf("sub_edges.size = %d\n", sub_edges.size());
                 column_offset.push_back(sub_edges.size());
             }
+            // printf("sub_edges  size %d tmp_cnt %d\n", sub_edges.size(), tmp_cnt);
 
             sampCSC* sample_sg = new sampCSC(dst_size, sub_edges.size());
             sample_sg->init(column_offset, sub_edges, sources, destination);
@@ -376,6 +397,59 @@ public:
         SampledSubgraph* ssg = ConstructSampledSubgraph(layers, layer_sizes, node_mapping);
         // std::cout << "end const graph " << std::endl;
         push_one(ssg);
+    }
+
+    void isValidSampleGraph() {
+        // set batch size to whole graph vertices num, thus sample graph equal to full graph
+        // auto sample_graph = work_queue.front();
+        // unordered_set<int> nodes(sample_nids.begin(), sample_nids.end());
+        // for (int i = 1; i >= 0; --i) { // default two layer
+        //     auto layer_graph = sample_graph->sampled_sgs[i];
+        //     auto src_nodes = layer_graph->source;
+        //     auto dst_nodes = layer_graph->destination;
+        //     auto column_offset = layer_graph->column_offset;
+        //     auto row_indices = layer_graph->row_indices;
+        //     for (int i = 0; i < dst_nodes.size(); ++i) {
+        //         auto dst = dst_nodes[i];
+        //         std::cout << dst << " " << std::endl;
+        //         assert(nodes.find(dst) != nodes.end());
+        //         int sample_edges_num = column_offset[i + 1] - column_offset[i];
+        //         int actl_edges_num = whole_graph->column_offset[dst + 1] - whole_graph->column_offset[dst];
+        //         printf("edges %d %d\n", sample_edges_num, actl_edges_num);
+        //         assert(sample_edges_num == actl_edges_num);
+        //     }
+
+        //     nodes.clear();
+        //     for (auto& dst : dst_nodes) {
+        //         nodes.insert(&row_indices[column_offset[dst]], &row_indices[column_offset[dst + 1]]);
+        //     }
+        //     printf("next layer node size %d\n", nodes.size());
+        // }
+        auto sample_graph = work_queue.front();
+        unordered_set<int> nodes[2];
+        nodes[1].insert(sample_nids.begin(), sample_nids.end());
+        vector<int> edge_cnt(2, 0);
+        for (int i = 1; i >= 0; --i) {
+            for (auto& dst : nodes[i]) {
+                // printf("dst %d\n", dst);
+                int start = whole_graph->column_offset[dst];
+                int end = whole_graph->column_offset[dst + 1];
+                // printf("%d start %d end %d\n", dst, start, end);
+                edge_cnt[i] += end - start;
+                if (i > 0) {
+                    nodes[i - 1].insert(&whole_graph->row_indices[start], &whole_graph->row_indices[end]);
+                }
+                // printf("insert done!\n");
+            }
+            // printf("check layer %d nodes %d edges %d\n", i, nodes[i].size(), edge_cnt[i]);
+            // assert(nodes[i].size() == sample_graph->sampled_sgs[i]->destination);
+            // printf("layer %d sample (%d %d), actl (%d %d)\n", i, sample_graph->sampled_sgs[i]->v_size
+            //       , sample_graph->sampled_sgs[i]->e_size, nodes[i].size(), edge_cnt[i]);
+            assert(nodes[i].size() == sample_graph->sampled_sgs[i]->v_size);
+            assert(edge_cnt[i] == sample_graph->sampled_sgs[i]->e_size);
+
+            // printf("next layer nodes sizse %d\n", nodes[i - 1].size());
+        }
     }
 };
 

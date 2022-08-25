@@ -173,6 +173,7 @@ public:
   ValueType decay_rate;
   ValueType decay_epoch;
   ValueType drop_rate;
+  int batch_type;
 
   void readFromCfgFile(std::string config_file);
   void print();

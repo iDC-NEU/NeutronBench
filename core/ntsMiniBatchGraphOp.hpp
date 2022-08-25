@@ -26,6 +26,7 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 
 #include "core/graph.hpp"
 #include "core/ntsBaseOp.hpp"
+#include "core/ntsPeerRPC.hpp"
 #include "ntsSampler.hpp"
 
 namespace nts {
@@ -37,11 +38,24 @@ NtsVar get_label(std::vector<VertexId>& dst, NtsVar &whole, Graph<Empty> *graph)
     NtsVar f_output=graph->Nts->NewLeafKLongTensor({dst.size()});
 #pragma omp parallel for
     for(int i=0;i<dst.size();i++){
+      // printf("offset %d %d, dst %d local %d\n", graph->partition_offset[graph->partition_id],
+      //         graph->partition_offset[graph->partition_id + 1], dst[i], dst[i] - graph->partition_offset[graph->partition_id]);
+          f_output[i]=whole[dst[i] - graph->partition_offset[graph->partition_id]];
+      }
+    return f_output;
+  }
+
+NtsVar get_label_from_global(std::vector<VertexId>& dst, NtsVar &whole, Graph<Empty> *graph){
+    NtsVar f_output=graph->Nts->NewLeafKLongTensor({dst.size()});
+#pragma omp parallel for
+    for(int i=0;i<dst.size();i++){
+      // printf("offset %d %d, dst %d local %d\n", graph->partition_offset[graph->partition_id],
+      //         graph->partition_offset[graph->partition_id + 1], dst[i], dst[i] - graph->partition_offset[graph->partition_id]);
           f_output[i]=whole[dst[i]];
       }
     return f_output;
   }
-    
+
 NtsVar get_feature(std::vector<VertexId>& src, NtsVar &whole, Graph<Empty> *graph){
     int feature_size = whole.size(1);
     NtsVar f_output=graph->Nts->NewKeyTensor({src.size(), 
@@ -58,6 +72,60 @@ NtsVar get_feature(std::vector<VertexId>& src, NtsVar &whole, Graph<Empty> *grap
       }
     return f_output;
   }
+  
+NtsVar get_feature_from_global(ntsPeerRPC<ValueType, VertexId>&rpc, std::vector<VertexId>& src, NtsVar& X, Graph<Empty>* graph){
+    int feature_size = X.size(1);
+    NtsVar f_output = graph->Nts->NewKeyTensor({static_cast<long>(src.size()), feature_size}, torch::DeviceType::CPU);
+    ValueType * f_output_buffer = graph->Nts->getWritableBuffer(f_output, torch::DeviceType::CPU);
+    std::vector<std::vector<VertexId>> partition_ids;
+
+    // 将节点按照partition分类
+    partition_ids.resize(graph->partitions);
+    for(auto id : src){
+        partition_ids[graph->get_partition_id(id)].push_back(id);
+    }
+    std::vector<std::vector<std::vector<ValueType>>> resultVector;
+    resultVector.resize(graph->partitions);
+    for(int i = 0; i < partition_ids.size(); i++) {
+        int target = (i + graph->partition_id) % graph->partitions;
+        if (partition_ids[target].empty()) continue;
+        resultVector[target] = rpc.call_function("get_feature", partition_ids[target], target);
+
+    }
+    std::vector<int> partition_index(graph->partitions, 0);
+
+    for(int i = 0; i < src.size(); i++) {
+
+        int partition_id = graph->get_partition_id(src[i]);
+//        int feature_index = __sync_fetch_and_add(&partition_index[partition_id], 1);
+        int feature_index = partition_index[partition_id]++;
+        assert(feature_index < resultVector[partition_id].size());
+        memcpy(f_output_buffer+i*feature_size, resultVector[partition_id][feature_index].data(),
+               feature_size*sizeof(ValueType));
+
+//        float sum = 0.0;
+//        for(int j = 0; j < resultVector[partition_id][feature_index].size(); j++) {
+//            sum += resultVector[partition_id][feature_index][j];
+//        }
+//        std::printf("%u sum %f\n", src[i], sum);
+    }
+//    for(int i = 0; i < resultVector.size(); i++) {
+//        assert(partition_index[i] == resultVector[i].size());
+//    }
+//    for(int i = 0; i < src.size(); i++) {
+//        if(graph->get_partition_id(src[i]) == graph->partition_id) {
+//            continue;
+//        }
+//        auto sum = f_output[i].sum().item<float>();
+//        std::printf("%u sum %f\n", src[i], sum);
+//    }
+//    if(graph->vertices != 0) {
+//        MPI_Barrier(MPI_COMM_WORLD);
+//        exit(3);
+//    }
+    return f_output;
+
+  }  
 class MiniBatchFuseOp : public ntsGraphOp{
 public:
   SampledSubgraph* subgraphs;

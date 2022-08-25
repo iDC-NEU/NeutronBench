@@ -282,6 +282,8 @@ void InputInfo::readFromCfgFile(std::string config_file) {
       this->optim_kernel_enable = true;
       if (1 == std::atoi(cfg_v.c_str()))
         this->optim_kernel_enable = true;
+    } else if (0 == cfg_k.compare("BATCH_TYPE")) {
+      this->batch_type = std::atoi(cfg_v.c_str());
     }
 
     else {
@@ -299,6 +301,7 @@ void InputInfo::print() {
   std::cout << "layers\t\t:\t" << layer_string << std::endl;
   std::cout << "fanout\t\t:\t" << fanout_string << std::endl;
   std::cout << "batch_size\t\t:\t" << batch_size << std::endl;
+  std::cout << "batch_type\t\t:\t" << batch_type << std::endl;
   std::cout << "edge_file\t:\t" << edge_file << std::endl;
   std::cout << "feature_file\t:\t" << feature_file << std::endl;
   std::cout << "label_file\t:\t" << label_file << std::endl;

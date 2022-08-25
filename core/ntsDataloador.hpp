@@ -32,7 +32,9 @@ public:
   Graph<Empty> *graph;
   ValueType *local_feature; // features of local partition
   long *local_label;        // labels of local partition
+  long *global_label;        // labels of global partition
   int *local_mask; // mask(indicate whether data is for train, eval or test) of
+  int *global_mask; // mask(indicate whether data is for train, eval or test) of
                    // local partition
 
   // GNN datum world
@@ -51,7 +53,11 @@ GNNDatum(GNNContext *_gnnctx, Graph<Empty> *graph_) {
   gnnctx = _gnnctx;
   local_feature = new ValueType[gnnctx->l_v_num * gnnctx->layer_size[0]];
   local_label = new long[gnnctx->l_v_num];
+  global_label = new long[graph_->partition_offset[graph_->partitions]];
   local_mask = new int[gnnctx->l_v_num];
+  global_mask = new int[graph_->partition_offset[graph_->partitions]];
+  // std::cout << "fuck " << graph->partitions << std::endl;
+  // std::cout << "parts " << graph_->partitions<< " " << graph_->partition_offset[graph_->partitions] << std::endl;
   memset(local_mask, 1, sizeof(int) * gnnctx->l_v_num);
   graph = graph_;
 }
@@ -80,6 +86,13 @@ void registLabel(NtsVar &target) {
   // torch::from_blob(local_label, gnnctx->l_v_num, torch::kLong);
 }
 
+void registGlobalLabel(NtsVar &target) {
+  target = graph->Nts->NewLeafKLongTensor(global_label, {graph->partition_offset[graph->partitions]});
+  // torch::from_blob(local_label, gnnctx->l_v_num, torch::kLong);
+}
+
+
+
 /**
  * @brief
  * Create tensor corresponding to local mask
@@ -89,6 +102,13 @@ void registMask(NtsVar &mask) {
   mask = graph->Nts->NewLeafKIntTensor(local_mask, {gnnctx->l_v_num, 1});
   // torch::from_blob(local_mask, {gnnctx->l_v_num,1}, torch::kInt32);
 }
+
+void registGlobalMask(NtsVar &mask) {
+  // std::cout << graph->partition_offset[graph->partitions] << std::endl;
+  mask = graph->Nts->NewLeafKIntTensor(global_mask, {graph->partition_offset[graph->partitions]});
+  // torch::from_blob(local_mask, {gnnctx->l_v_num,1}, torch::kInt32);
+}
+
 
 /**
  * @brief
@@ -217,7 +237,36 @@ void readFeature_Label_Mask(std::string inputF, std::string inputL,
   }
   delete[] con_tmp;
   input_ftr.close();
+  // std::cout << "here1" << std::endl;
+  // read global label
+  input_lbl.seekg (0, input_lbl.beg);
+  while (input_lbl >> id) {
+    input_lbl >> global_label[id];
+  }
+  // std::cout << "read label" << std::endl;
+
+  input_msk.seekg (0, input_msk.beg);
+  while (input_msk >> id) {
+    // if ((gnnctx->p_v_s <= id) && (gnnctx->p_v_e > id)) {
+      std::string msk;
+      input_msk >> msk;
+      // std::cout << id << " " << msk << std::endl;
+      if (msk.compare("train") == 0) {
+        global_mask[id] = 0;
+      } else if (msk.compare("eval") == 0 || msk.compare("val") == 0) {
+        global_mask[id] = 1;
+      } else if (msk.compare("test") == 0) {
+        global_mask[id] = 2;
+      } else {
+        global_mask[id] = 3;
+      }
+    // }
+  }
+  // std::cout << "read mask" << std::endl;
+  // std::cout << global_label << std::endl << global_mask << std::endl;
+  input_msk.close();
   input_lbl.close();
+  // std::cout << "read all done" << std::endl;
 }
 
 void readFeature_Label_Mask_OGB(std::string inputF, std::string inputL,

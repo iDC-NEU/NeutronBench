@@ -179,14 +179,14 @@ private:
                 // 唤醒后如果是退出了则打破循环
                 if(server_state.load() == Exit) {
                     lock.unlock();
-                    std::cout << host_id << " exit 1" << std::endl;
+                    // std::cout << host_id << " exit 1" << std::endl;
                     break;
                 }
             }
             // std::cout << host_id << " loop2" << std::endl;
             lock.unlock();
             if(server_state == Exit && flight_messages.size() == 0) {
-                    std::cout << host_id << " exit 2" << std::endl;
+                    // std::cout << host_id << " exit 2" << std::endl;
                 break;
             }
 
@@ -423,7 +423,7 @@ public:
         lock.unlock();
         stop_condition.notify_all();
         server_thread.join();
-        std::cout << "exit call " << std::endl;
+        // std::cout << "exit call " << std::endl;
     }
 };
 
