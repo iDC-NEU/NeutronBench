@@ -129,7 +129,15 @@ public:
         queue_start=-1;
         queue_end=0;
     }
-    void reservoir_sample(int layers_, int batch_size_,std::vector<int> fanout_, int type = 0){
+    
+    int random_uniform_int(const int min = 0, const int max = 1) {
+        thread_local std::default_random_engine generator;
+        std::uniform_int_distribution<int> distribution(min, max);
+        return distribution(generator);
+    }
+
+    void reservoir_sample(int layers_, int batch_size_, const std::vector<int>& fanout_, int type = 0){
+    // void reservoir_sample(int layers_, int batch_size_, const std::vector<int>& fanout_, int type = 0){
         // LOG_DEBUG("layers %d batch_size %d fanout %d-%d", layers_, batch_size_, fanout_[0], fanout_[1]);
         assert(work_offset<work_range[1]);
         int actl_batch_size=std::min((VertexId)batch_size_,work_range[1]-work_offset);
@@ -137,10 +145,17 @@ public:
         SampledSubgraph* ssg=new SampledSubgraph(layers_,fanout_);  
         
         for(int i=0;i<layers_;i++){
+            double layer_time = -get_time();
             // LOG_DEBUG("sample layer %d", i);
+            double sample_pre_time = -get_time();
             ssg->sample_preprocessing(i);
+            sample_pre_time += get_time();
+            // printf("sample_pre_time %.3f\n", sample_pre_time);
             //whole_graph->SyncAndLog("preprocessing");
+            double sample_load_dst = -get_time();
+            
             if(i==0){
+                // double sample_load_dst = -get_time();
               ssg->sample_load_destination([&](std::vector<VertexId>& destination){
                   for(int j=0;j<actl_batch_size;j++){
                     //   destination.push_back(work_offset++);
@@ -153,6 +168,8 @@ public:
                     }
                   }
               },i);
+                // sample_pre_time += get_time();
+                // printf("sample_pre_time %.3f\n", sample_pre_time);
             //   for (auto &v : ssg->sampled_sgs[0]->dst()) {
             //     printf("%d ", v);
             //   }printf("\n");
@@ -161,6 +178,10 @@ public:
                ssg->sample_load_destination(i); 
               //whole_graph->SyncAndLog("sample_load_destination2");
             }
+            sample_load_dst += get_time();
+            // printf("sample_load_dst %.3f\n", sample_load_dst);
+            
+            double sample_init_co = -get_time();
             ssg->init_co([&](VertexId dst){
                 VertexId nbrs=whole_graph->column_offset[dst+1]
                                  -whole_graph->column_offset[dst];
@@ -170,6 +191,7 @@ public:
                     VertexId dst,
                     std::vector<VertexId> &column_offset,
                         std::vector<VertexId> &row_indices,VertexId id){
+                    // unsigned seeds[33];
                 for(VertexId src_idx=whole_graph->column_offset[dst];
                         src_idx<whole_graph->column_offset[dst+1];src_idx++){
                     //ReservoirSampling
@@ -178,7 +200,9 @@ public:
                         write_pos+=column_offset[id];
                         row_indices[write_pos]=whole_graph->row_indices[src_idx];
                     }else{
-                        VertexId random=rand()%write_pos;
+                        // VertexId random=rand()%write_pos;
+                        // VertexId random=rand_r(&seeds[omp_get_thread_num()])%write_pos;
+                        VertexId random=random_uniform_int(0, write_pos-1);
                         if(random<fanout_i){
                           row_indices[random+column_offset[id]]=  
                                   whole_graph->row_indices[src_idx];
@@ -187,8 +211,14 @@ public:
                 }
             });
             //whole_graph->SyncAndLog("sample_processing");
+             double sample_post = -get_time();
             ssg->sample_postprocessing();
+            sample_post += get_time();
+            // printf("sample_post %.3f\n", sample_post);
+            
             //whole_graph->SyncAndLog("sample_postprocessing");
+            layer_time += get_time();
+            // printf("sample layer time %.3f\n", layer_time);
         }
         // generate csr for backward graph
         // for (auto p : ssg->sampled_sgs) {

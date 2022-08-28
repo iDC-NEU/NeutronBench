@@ -33,21 +33,31 @@ public:
         fanout.clear();
         sampled_sgs.clear();
         curr_layer = 0;
+        threads = numa_num_configured_cpus() - 1;
+        threads = std::max(1, threads);
+        seeds = new unsigned[threads];
     }
-    SampledSubgraph(int layers_, int batch_size_,std::vector<int>& fanout_){
+    SampledSubgraph(int layers_, int batch_size_, const std::vector<int>& fanout_){
         layers=layers_;
         batch_size=batch_size_;
         fanout=fanout_;
         sampled_sgs.clear();
         curr_layer=0;
         curr_dst_size=batch_size;
+        threads = numa_num_configured_cpus() - 1;
+        threads = std::max(1, threads);
+        seeds = new unsigned[threads];
     }
     
-    SampledSubgraph(int layers_,std::vector<int>& fanout_){
+    SampledSubgraph(int layers_, const std::vector<int>& fanout_){
         layers=layers_;
         fanout=fanout_;
         sampled_sgs.clear();
         curr_layer=0;
+        threads = numa_num_configured_cpus() - 1;
+        threads = std::max(1, threads);
+        seeds = new unsigned[threads];
+        // printf("numa_threads %d omp_threads %d\n", threads, omp_get_max_threads());
     }
     
     ~SampledSubgraph(){
@@ -56,6 +66,12 @@ public:
             delete sampled_sgs[i];
         }
         sampled_sgs.clear();
+    }
+
+    void random_gen_seed() {
+        for (int i = 0; i < threads; ++i) {
+            seeds[i] = rand();
+        }
     }
     
     void sample_preprocessing(VertexId layer){
@@ -96,12 +112,19 @@ public:
             sampled_sgs[layer]->dst()[i_id]=sampled_sgs[layer-1]->src()[i_id];
         }
     }
+    // int random_uniform_int(const int min = 0, const int max = 1) {
+    //     thread_local std::default_random_engine generator;
+    //     std::uniform_int_distribution<int> distribution(min, max);
+    //     return distribution(generator);
+    // }
     void sample_processing(std::function<void(VertexId fanout_i,
                 VertexId dst,
                     std::vector<VertexId> &column_offset,
                         std::vector<VertexId> &row_indices,VertexId id)> vertex_sample){
         {
-#pragma omp parallel for
+            // random_gen_seed();
+            // threads=30;
+#pragma omp parallel for num_threads(threads)
             for (VertexId begin_v_i = 0;begin_v_i < curr_dst_size;begin_v_i += 1) {
             // for every vertex, apply the sparse_slot at the partition
             // corresponding to the step
@@ -123,32 +146,27 @@ public:
     
     void compute_one_layer(std::function<void(VertexId local_dst, 
                           std::vector<VertexId>&column_offset, 
-                              std::vector<VertexId>&row_indices)>sparse_slot,VertexId layer,VertexId threads){
-        omp_set_num_threads(threads);
-        {
-#pragma omp parallel for
+                              std::vector<VertexId>&row_indices)>sparse_slot,VertexId layer){
+// threads = 30;
+#pragma omp parallel for num_threads(threads)
             for (VertexId begin_v_i = 0;
                 begin_v_i < sampled_sgs[layer]->dst().size();
                     begin_v_i += 1) {
                     sparse_slot(begin_v_i,sampled_sgs[layer]->c_o(),
                         sampled_sgs[layer]->r_i());
             }
-        }
     }
 
     void compute_one_layer_backward(std::function<void(VertexId local_dst, 
                           std::vector<VertexId>&column_offset, 
-                              std::vector<VertexId>&row_indices)>sparse_slot,VertexId layer,VertexId threads){
-        omp_set_num_threads(threads);
-        {
-#pragma omp parallel for
+                              std::vector<VertexId>&row_indices)>sparse_slot,VertexId layer){
+#pragma omp parallel for num_threads(threads)
             for (VertexId begin_v_i = 0;
                 begin_v_i < sampled_sgs[layer]->src().size();
                     begin_v_i += 1) {
                     sparse_slot(begin_v_i,sampled_sgs[layer]->r_o(),
                         sampled_sgs[layer]->c_i());
             }
-        }
     }
         
     
@@ -158,6 +176,8 @@ public:
     std::vector<int> fanout;
     int curr_layer;
     int curr_dst_size;
+    int threads;
+    unsigned *seeds;
     
 };
 class FullyRepGraph{

@@ -120,8 +120,7 @@ public:
           if(0xFFFFFFFF==row_indices[i_src]){
               continue;
           }
-            std::map<VertexId, VertexId>::iterator iter;
-            iter = src_index.find(row_indices[i_src]);  
+            auto iter = src_index.find(row_indices[i_src]);  
             //printf("%d\n",iter == src_index.end());
             if(iter == src_index.end()){   
             //    printf("debug %d\n",i_src);
@@ -257,7 +256,8 @@ std::vector<VertexId> row_indices_debug;//local id
 std::vector<VertexId> source;//global id
 std::vector<VertexId> destination;//global_id
 
-std::map<VertexId,VertexId> src_index;//set
+// std::map<VertexId,VertexId> src_index;//set
+std::unordered_map<VertexId,VertexId> src_index;//set
 
 VertexId v_size; //dst_size
 VertexId e_size; // edge size

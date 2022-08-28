@@ -252,16 +252,19 @@ public:
       //                           graph->config->batch_size,
       //                           graph->gnnctx->fanout);
       // printf("batch_type %d\n", graph->config->batch_type);
+      double tmp_start = -get_time();
       sampler->reservoir_sample(graph->gnnctx->layer_size.size()-1,
                                 graph->config->batch_size,
                                 graph->gnnctx->fanout, graph->config->batch_type);
+      // printf("# sample_one cost %.3f\n", tmp_start + get_time());
+      // assert(tmp_cnt++ < 3);
     }
     sample_cost += get_time();
-    // printf("sample_cost %.3f\n", sample_cost);
-    // std::cout << type << " sample done" << std::endl;
     int batch_num = sampler->size();
-    // std::cout << "batch_num " << batch_num << std::endl;
+    // printf("## sample_nodes %d batch_num %d sample_cost %.3f\n", sampler->sample_nids.size(), batch_num, sample_cost);
+  
 
+    // int batch_num = sampler->size();
     MPI_Allreduce(&batch_num, &max_batch_num, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
     MPI_Allreduce(&batch_num, &min_batch_num, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
     // printf("batch_num %d min %d max %d\n", batch_num, min_batch_num, max_batch_num);

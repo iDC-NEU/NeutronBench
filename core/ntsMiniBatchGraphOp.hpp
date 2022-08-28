@@ -162,8 +162,7 @@ public:
                     
                 }
               },
-            layer,
-            12//compute thread num;
+            layer
             );   
       return f_output;
    }
@@ -191,8 +190,7 @@ public:
 
                 }
               },
-            layer,
-            12//compute thread num;
+            layer
         );
 
         // pull

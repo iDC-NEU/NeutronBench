@@ -3,3 +3,10 @@ build/
 
 # no editor files
 .vscode/
+
+# no image
+*.png
+*.img
+
+# no log file
+*.log
