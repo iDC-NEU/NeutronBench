@@ -119,7 +119,8 @@ def plot_line(X, Y, labels, savefile=None, color=None, y_label=None):
     # print(pos)
     # print(Y[i][pos[0]], Y[i][pos[1]])
 
-    plt.plot(X[i][pos], Y[i][pos], marker='x', markersize=markersize, color=color[i], alpha=1, linewidth=linewidth)
+    plt.plot(X[i][pos], Y[i][pos], marker='x', markersize=markersize, color='red', alpha=1, linewidth=linewidth)
+    plt.plot(X[i][pos], Y[i][pos], marker='.', markersize=markersize-2, color=color[i], alpha=1, linewidth=linewidth)
 
 
   
@@ -201,7 +202,7 @@ labels = []
 datasets = ['cora', 'pubmed', 'citeseer', 'arxiv', 'reddit']
 modes = ['seq', 'shuffle', 'rand', 'low', 'upper']
 pre_path = './log/'
-host_num = 3
+host_num = 8
 
 for ds in datasets:
   for type in ['Val', 'Test']:
@@ -217,11 +218,14 @@ for ds in datasets:
       # print(time_cost)
       # TIME(2) sample 0.236 compute_time 0.930 comm_time 1.966 mpi_comm 0.117 rpc_comm 0.812 rpc_wait_time 0.000
       # print(time_cost)
-      compute_time = [time_cost[i][1] for i in range(host_num)]
-      comm_time = [time_cost[i][2] for i in range(host_num)]
-      all_time = [time_cost[i][1] + time_cost[i][2] for i in range(host_num)]
-      T.append(compute_time)
-      T1.append(comm_time)
+      # print(ds, ms)
+      if ds in ['arxiv', 'reddit']:
+        # print(time_cost)
+        compute_time = [time_cost[i][1] for i in range(host_num)]
+        comm_time = [time_cost[i][2] for i in range(host_num)]
+        all_time = [time_cost[i][1] + time_cost[i][2] for i in range(host_num)]
+        T.append(compute_time)
+        T1.append(comm_time)
       # print(compute_time)
       ret = get_time_acc(acc_list[idx], time_list[0], max(acc_list[idx]), False)
       X.append(ret[0])
@@ -229,9 +233,10 @@ for ds in datasets:
       labels.append(ds + '-' +ms)
       print(ds+'_'+ms+'_'+type, max(ret[1]))
     plot_line(X, Y, labels, pre_path+ds+'-'+type+'.pdf', y_label= type,)
-    
-    plot_bar([f'host {i}' for i in range(host_num)], 'Compute Time (s)', T, labels, pre_path+ds+'-compute'+'.pdf')
-    plot_bar([f'host {i}' for i in range(host_num)], 'Comm Time (s)', T1, labels, pre_path+ds+'-comm'+'.pdf')
+
+    if ds in ['arxiv', 'reddit']:
+      plot_bar([f'host {i}' for i in range(host_num)], 'Compute Time (s)', T, labels, pre_path+ds+'-compute'+'.pdf')
+      plot_bar([f'host {i}' for i in range(host_num)], 'Comm Time (s)', T1, labels, pre_path+ds+'-comm'+'.pdf')
 
 
 # x_name = ['cora', 'citeseer', 'pubmed', 'arxiv', 'reddit', 'orkut', 'wiki']

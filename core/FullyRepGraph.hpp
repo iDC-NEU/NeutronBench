@@ -124,6 +124,7 @@ public:
         {
             // random_gen_seed();
             // threads=30;
+omp_set_num_threads(threads);            
 #pragma omp parallel for num_threads(threads)
             for (VertexId begin_v_i = 0;begin_v_i < curr_dst_size;begin_v_i += 1) {
             // for every vertex, apply the sparse_slot at the partition
@@ -148,6 +149,7 @@ public:
                           std::vector<VertexId>&column_offset, 
                               std::vector<VertexId>&row_indices)>sparse_slot,VertexId layer){
 // threads = 30;
+omp_set_num_threads(threads);
 #pragma omp parallel for num_threads(threads)
             for (VertexId begin_v_i = 0;
                 begin_v_i < sampled_sgs[layer]->dst().size();
@@ -160,6 +162,7 @@ public:
     void compute_one_layer_backward(std::function<void(VertexId local_dst, 
                           std::vector<VertexId>&column_offset, 
                               std::vector<VertexId>&row_indices)>sparse_slot,VertexId layer){
+omp_set_num_threads(threads);
 #pragma omp parallel for num_threads(threads)
             for (VertexId begin_v_i = 0;
                 begin_v_i < sampled_sgs[layer]->src().size();

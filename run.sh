@@ -9,19 +9,28 @@ done < hostfile
 
 # sync func (filename, dest_dir)
 host_num=${#hosts[@]}
+echo "host_num ${host_num}"
 sync(){
   for((i=1;i<${host_num};i++));  
   do   
-    # echo "scp -r $1  ${USER}@${hosts[$i]}:$2/"
+    echo "scp -r $1  ${USER}@${hosts[$i]}:$2/"
     scp -r $1  ${USER}@${hosts[$i]}:$2/
   done
 }
 
-# sync /home/sanzo/neutron-sanzo /home/sanzo
+if [ ! -d "build" ]; then
+  mkdir build
+  cd build && cmake .. && cd ..
+fi
+
+if [ ! -d "log" ]; then
+  mkdir log
+fi
+
+# sync /root/neutron-sanzo /root
 # sync 'hostfile' $(pwd)
-# sync /home/sanzo/data /home/sanzo
-# cd build && make -j $(nproc) && cd ..
-# sync './build/nts' $(pwd)/build
+# sync data $(pwd)
+# exit
 
 new_cfg() {
   echo -e "VERTICES:$1" > tmp.cfg
@@ -43,56 +52,79 @@ new_cfg() {
 }
 
 cd build && make -j $(nproc) && cd ..
-# sync /home/sanzo/neutron-sanzo /home/sanzo
+
 # paras: vertex layer dataset algo fanout batch_size epoch batch_type lr wd dropout
+# h=1
+# ## cora
+# echo "run cora dataset..."
+# new_cfg 2708 1433-64-7 ./data/cora/cora GCNNEIGHBOR 10-25 64 200 0 0.01 0.0001 0.5
+# mpiexec -np $h ./build/nts tmp.cfg > ./log/cora_seq.log
+# new_cfg 2708 1433-64-7 ./data/cora/cora GCNNEIGHBOR 10-25 64 200 1 0.01 0.0001 0.5
+# mpiexec -np $h ./build/nts tmp.cfg > ./log/cora_shuffle.log
+# new_cfg 2708 1433-64-7 ./data/cora/cora GCNNEIGHBOR 10-25 64 200 2 0.01 0.0001 0.5
+# mpiexec -np $h ./build/nts tmp.cfg > ./log/cora_rand.log
+# new_cfg 2708 1433-64-7 ./data/cora/cora GCNNEIGHBOR 10-25 64 200 3 0.01 0.0001 0.5
+# mpiexec -np $h ./build/nts tmp.cfg > ./log/cora_low.log
+# new_cfg 2708 1433-64-7 ./data/cora/cora GCNNEIGHBOR 10-25 64 200 4 0.01 0.0001 0.5
+# mpiexec -np $h ./build/nts tmp.cfg > ./log/cora_upper.log
 
-h=3
-## cora
-new_cfg 2708 1433-64-7 ./data/cora/cora GCNNEIGHBOR 10-25 64 200 0 0.01 0.0001 0.5
-mpiexec -np $h ./build/nts tmp.cfg > ./log/cora_seq.log
-new_cfg 2708 1433-64-7 ./data/cora/cora GCNNEIGHBOR 10-25 64 200 1 0.01 0.0001 0.5
-mpiexec -np $h ./build/nts tmp.cfg > ./log/cora_shuffle.log
-new_cfg 2708 1433-64-7 ./data/cora/cora GCNNEIGHBOR 10-25 64 200 2 0.01 0.0001 0.5
-mpiexec -np $h ./build/nts tmp.cfg > ./log/cora_rand.log
-new_cfg 2708 1433-64-7 ./data/cora/cora GCNNEIGHBOR 10-25 64 200 3 0.01 0.0001 0.5
-mpiexec -np $h ./build/nts tmp.cfg > ./log/cora_low.log
-new_cfg 2708 1433-64-7 ./data/cora/cora GCNNEIGHBOR 10-25 64 200 4 0.01 0.0001 0.5
-mpiexec -np $h ./build/nts tmp.cfg > ./log/cora_upper.log
 
-exit
-
-## citeseer
-new_cfg 3327 3703-128-6 ./data/citeseer/citeseer GCNNEIGHBOR 10-25 64 200 0 0.01 0.0001 0.5
-mpiexec -np $h ./build/nts tmp.cfg > ./log/citeseer_seq.log
-new_cfg 3327 3703-128-6 ./data/citeseer/citeseer GCNNEIGHBOR 10-25 64 200 1 0.01 0.0001 0.5
-mpiexec -np $h ./build/nts tmp.cfg > ./log/citeseer_shuffle.log
-new_cfg 3327 3703-128-6 ./data/citeseer/citeseer GCNNEIGHBOR 10-25 64 200 2 0.01 0.0001 0.5
-mpiexec -np $h ./build/nts tmp.cfg > ./log/citeseer_rand.log
-new_cfg 3327 3703-128-6 ./data/citeseer/citeseer GCNNEIGHBOR 10-25 64 200 3 0.01 0.0001 0.5
-mpiexec -np $h ./build/nts tmp.cfg > ./log/citeseer_low.log
-new_cfg 3327 3703-128-6 ./data/citeseer/citeseer GCNNEIGHBOR 10-25 64 200 4 0.01 0.0001 0.5
-mpiexec -np $h ./build/nts tmp.cfg > ./log/citeseer_upper.log
+# ## citeseer
+# echo "run citeseer dataset..."
+# new_cfg 3327 3703-128-6 ./data/citeseer/citeseer GCNNEIGHBOR 10-25 64 200 0 0.01 0.0001 0.5
+# mpiexec -np $h ./build/nts tmp.cfg > ./log/citeseer_seq.log
+# new_cfg 3327 3703-128-6 ./data/citeseer/citeseer GCNNEIGHBOR 10-25 64 200 1 0.01 0.0001 0.5
+# mpiexec -np $h ./build/nts tmp.cfg > ./log/citeseer_shuffle.log
+# new_cfg 3327 3703-128-6 ./data/citeseer/citeseer GCNNEIGHBOR 10-25 64 200 2 0.01 0.0001 0.5
+# mpiexec -np $h ./build/nts tmp.cfg > ./log/citeseer_rand.log
+# new_cfg 3327 3703-128-6 ./data/citeseer/citeseer GCNNEIGHBOR 10-25 64 200 3 0.01 0.0001 0.5
+# mpiexec -np $h ./build/nts tmp.cfg > ./log/citeseer_low.log
+# new_cfg 3327 3703-128-6 ./data/citeseer/citeseer GCNNEIGHBOR 10-25 64 200 4 0.01 0.0001 0.5
+# mpiexec -np $h ./build/nts tmp.cfg > ./log/citeseer_upper.log
 
 
 ## pubmed
-new_cfg 19717 500-256-3 ./data/pubmed/pubmed GCNNEIGHBOR 10-25 64 200 0 0.01 0.0001 0.5
-mpiexec -np $h ./build/nts tmp.cfg > ./log/pubmed_seq.log
-new_cfg 19717 500-256-3 ./data/pubmed/pubmed GCNNEIGHBOR 10-25 64 200 1 0.01 0.0001 0.5
-mpiexec -np $h ./build/nts tmp.cfg > ./log/pubmed_shuffle.log
-new_cfg 19717 500-256-3 ./data/pubmed/pubmed GCNNEIGHBOR 10-25 64 200 2 0.01 0.0001 0.5
-mpiexec -np $h ./build/nts tmp.cfg > ./log/pubmed_rand.log
-new_cfg 19717 500-256-3 ./data/pubmed/pubmed GCNNEIGHBOR 10-25 64 200 3 0.01 0.0001 0.5
-mpiexec -np $h ./build/nts tmp.cfg > ./log/pubmed_low.log
-new_cfg 19717 500-256-3 ./data/pubmed/pubmed GCNNEIGHBOR 10-25 64 200 4 0.01 0.0001 0.5
-mpiexec -np $h ./build/nts tmp.cfg > ./log/pubmed_upper.log
+# echo "run pubmed dataset..."
+# new_cfg 19717 500-256-3 ./data/pubmed/pubmed GCNNEIGHBOR 10-25 64 200 0 0.01 0.0001 0.5
+# mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/pubmed_seq.log
+# new_cfg 19717 500-256-3 ./data/pubmed/pubmed GCNNEIGHBOR 10-25 64 200 1 0.01 0.0001 0.5
+# mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/pubmed_shuffle.log
+# new_cfg 19717 500-256-3 ./data/pubmed/pubmed GCNNEIGHBOR 10-25 64 200 2 0.01 0.0001 0.5
+# mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/pubmed_rand.log
+# new_cfg 19717 500-256-3 ./data/pubmed/pubmed GCNNEIGHBOR 10-25 64 200 3 0.01 0.0001 0.5
+# mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/pubmed_low.log
+# new_cfg 19717 500-256-3 ./data/pubmed/pubmed GCNNEIGHBOR 10-25 64 200 4 0.01 0.0001 0.5
+# mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/pubmed_upper.log
 
 h=8
+sync './build/nts' $(pwd)/build
+## reddit
+echo "run reddit dataset..."
+new_cfg 232965 602-128-41 ./data/reddit/reddit GCNNEIGHBOR 10-15-25 1024 100 0 0.01 0.0001 0.5
+sync tmp.cfg $(pwd)
+mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/reddit_seq.log 
+new_cfg 232965 602-128-41 ./data/reddit/reddit GCNNEIGHBOR 10-15-25 1024 100 1 0.01 0.0001 0.5
+sync tmp.cfg $(pwd)
+mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/reddit_shuffle.log
+new_cfg 232965 602-128-41 ./data/reddit/reddit GCNNEIGHBOR 10-15-25 1024 100 2 0.01 0.0001 0.5
+sync tmp.cfg $(pwd)
+mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/reddit_rand.log 
+new_cfg 232965 602-128-41 ./data/reddit/reddit GCNNEIGHBOR 10-15-25 1024 100 3 0.01 0.0001 0.5
+sync tmp.cfg $(pwd)
+mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/reddit_low.log
+new_cfg 232965 602-128-41 ./data/reddit/reddit GCNNEIGHBOR 10-15-25 1024 100 4 0.01 0.0001 0.5
+sync tmp.cfg $(pwd)
+mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/reddit_upper.log 
+
 exit
 
+h=8
+sync './build/nts' $(pwd)/build
 ## arxiv
+echo "run arxiv dataset..."
 new_cfg 169343 128-256-256-40 ./data/ogbn-arxiv/ogbn-arxiv GCNNEIGHBOR 10-15-25 1024 100 0 0.01 0.0001 0.5
 sync tmp.cfg $(pwd)
-mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/arxiv_sep.log 
+mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/arxiv_seq.log 
 new_cfg 169343 128-256-256-40 ./data/ogbn-arxiv/ogbn-arxiv GCNNEIGHBOR 10-15-25 1024 100 1 0.01 0.0001 0.5
 sync tmp.cfg $(pwd)
 mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/arxiv_shuffle.log
@@ -103,24 +135,6 @@ new_cfg 169343 128-256-256-40 ./data/ogbn-arxiv/ogbn-arxiv GCNNEIGHBOR 10-15-25 
 sync tmp.cfg $(pwd)
 mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/arxiv_low.log
 new_cfg 169343 128-256-256-40 ./data/ogbn-arxiv/ogbn-arxiv GCNNEIGHBOR 10-15-25 1024 100 4 0.01 0.0001 0.5
-sync tmp.cfg $(pwd)
-mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/arxiv_upper.log 
-
-
-## reddit
-new_cfg 232965 602-128-41 ./data/reddit/reddit GCNNEIGHBOR 10-15-25 1024 100 0 0.01 0.0001 0.5
-sync tmp.cfg $(pwd)
-mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/arxiv_sep.log 
-new_cfg 232965 602-128-41 ./data/reddit/reddit GCNNEIGHBOR 10-15-25 1024 100 1 0.01 0.0001 0.5
-sync tmp.cfg $(pwd)
-mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/arxiv_shuffle.log
-new_cfg 232965 602-128-41 ./data/reddit/reddit GCNNEIGHBOR 10-15-25 1024 100 2 0.01 0.0001 0.5
-sync tmp.cfg $(pwd)
-mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/arxiv_rand.log 
-new_cfg 232965 602-128-41 ./data/reddit/reddit GCNNEIGHBOR 10-15-25 1024 100 3 0.01 0.0001 0.5
-sync tmp.cfg $(pwd)
-mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/arxiv_low.log
-new_cfg 232965 602-128-41 ./data/reddit/reddit GCNNEIGHBOR 10-15-25 1024 100 4 0.01 0.0001 0.5
 sync tmp.cfg $(pwd)
 mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/arxiv_upper.log 
 
