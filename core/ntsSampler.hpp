@@ -156,21 +156,37 @@ public:
             
             if(i==0){
                 // double sample_load_dst = -get_time();
+                int len = sample_nids.size();
               ssg->sample_load_destination([&](std::vector<VertexId>& destination){
+                    std::unordered_set<VertexId> st;
+                    unsigned seed = std::chrono::system_clock::now ().time_since_epoch ().count();
+                    std::shuffle (sample_nids.begin(), sample_nids.end(), std::default_random_engine(seed));
                   for(int j=0;j<actl_batch_size;j++){
                     //   destination.push_back(work_offset++);
                     // destination.push_back(sample_nids[work_offset++]);
                     if (type < 2 || !phase) { // type = 0, 1(seq, shuffle) or val or test
                         destination.push_back(sample_nids[work_offset++]);
                     } else if (type == 2) { // type = 2, random batch
-                        unsigned seed = std::chrono::system_clock::now ().time_since_epoch ().count();
-                        std::shuffle (sample_nids.begin(), sample_nids.end(), std::default_random_engine(seed));
+                        
                         destination.push_back(sample_nids[work_offset++]);
+
+                        // while (true) {
+                        //     int select = random_uniform_int(0, len-1);
+                        //     if (st.find(select) != st.end()) {
+                        //         continue;
+                        //     }
+                        //     st.insert(select);
+                        //     destination.push_back(sample_nids[select]);
+                        //     work_offset++;
+                        //     // printf("select %d\n", select);
+                        //     break;
+                        // }
                     // } else if (type == 3) {
                     } else {
                         destination.push_back(sample_nids[work_offset++]);
                     }
                   }
+                //   printf("load dst done!\n");
               },i);
                 // sample_pre_time += get_time();
                 // printf("sample_pre_time %.3f\n", sample_pre_time);
