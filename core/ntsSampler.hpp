@@ -136,7 +136,7 @@ public:
         return distribution(generator);
     }
 
-    void reservoir_sample(int layers_, int batch_size_, const std::vector<int>& fanout_, int type = 0){
+    void reservoir_sample(int layers_, int batch_size_, const std::vector<int>& fanout_, int type = 0, bool phase=true){
     // void reservoir_sample(int layers_, int batch_size_, const std::vector<int>& fanout_, int type = 0){
         // LOG_DEBUG("layers %d batch_size %d fanout %d-%d", layers_, batch_size_, fanout_[0], fanout_[1]);
         assert(work_offset<work_range[1]);
@@ -159,11 +159,15 @@ public:
               ssg->sample_load_destination([&](std::vector<VertexId>& destination){
                   for(int j=0;j<actl_batch_size;j++){
                     //   destination.push_back(work_offset++);
-                    if (type == 0) {
+                    // destination.push_back(sample_nids[work_offset++]);
+                    if (type < 2 || !phase) { // type = 0, 1(seq, shuffle) or val or test
                         destination.push_back(sample_nids[work_offset++]);
-                    } else {
+                    } else if (type == 2) { // type = 2, random batch
                         unsigned seed = std::chrono::system_clock::now ().time_since_epoch ().count();
                         std::shuffle (sample_nids.begin(), sample_nids.end(), std::default_random_engine(seed));
+                        destination.push_back(sample_nids[work_offset++]);
+                    // } else if (type == 3) {
+                    } else {
                         destination.push_back(sample_nids[work_offset++]);
                     }
                   }

@@ -46,30 +46,84 @@ cd build && make -j $(nproc) && cd ..
 # sync /home/sanzo/neutron-sanzo /home/sanzo
 # paras: vertex layer dataset algo fanout batch_size epoch batch_type lr wd dropout
 
+h=3
+## cora
+new_cfg 2708 1433-64-7 ./data/cora/cora GCNNEIGHBOR 10-25 64 200 0 0.01 0.0001 0.5
+mpiexec -np $h ./build/nts tmp.cfg > ./log/cora_seq.log
+new_cfg 2708 1433-64-7 ./data/cora/cora GCNNEIGHBOR 10-25 64 200 1 0.01 0.0001 0.5
+mpiexec -np $h ./build/nts tmp.cfg > ./log/cora_shuffle.log
+new_cfg 2708 1433-64-7 ./data/cora/cora GCNNEIGHBOR 10-25 64 200 2 0.01 0.0001 0.5
+mpiexec -np $h ./build/nts tmp.cfg > ./log/cora_rand.log
+new_cfg 2708 1433-64-7 ./data/cora/cora GCNNEIGHBOR 10-25 64 200 3 0.01 0.0001 0.5
+mpiexec -np $h ./build/nts tmp.cfg > ./log/cora_low.log
+new_cfg 2708 1433-64-7 ./data/cora/cora GCNNEIGHBOR 10-25 64 200 4 0.01 0.0001 0.5
+mpiexec -np $h ./build/nts tmp.cfg > ./log/cora_upper.log
+
+exit
+
+## citeseer
+new_cfg 3327 3703-128-6 ./data/citeseer/citeseer GCNNEIGHBOR 10-25 64 200 0 0.01 0.0001 0.5
+mpiexec -np $h ./build/nts tmp.cfg > ./log/citeseer_seq.log
+new_cfg 3327 3703-128-6 ./data/citeseer/citeseer GCNNEIGHBOR 10-25 64 200 1 0.01 0.0001 0.5
+mpiexec -np $h ./build/nts tmp.cfg > ./log/citeseer_shuffle.log
+new_cfg 3327 3703-128-6 ./data/citeseer/citeseer GCNNEIGHBOR 10-25 64 200 2 0.01 0.0001 0.5
+mpiexec -np $h ./build/nts tmp.cfg > ./log/citeseer_rand.log
+new_cfg 3327 3703-128-6 ./data/citeseer/citeseer GCNNEIGHBOR 10-25 64 200 3 0.01 0.0001 0.5
+mpiexec -np $h ./build/nts tmp.cfg > ./log/citeseer_low.log
+new_cfg 3327 3703-128-6 ./data/citeseer/citeseer GCNNEIGHBOR 10-25 64 200 4 0.01 0.0001 0.5
+mpiexec -np $h ./build/nts tmp.cfg > ./log/citeseer_upper.log
+
+
 ## pubmed
-# new_cfg 19717 500-256-3 ./data/pubmed/pubmed GCNNEIGHBOR 10-25 64 200 0 0.01 0.0001 0.5
-# mpiexec -np 1 ./build/nts tmp.cfg > pubmed_seq.log
+new_cfg 19717 500-256-3 ./data/pubmed/pubmed GCNNEIGHBOR 10-25 64 200 0 0.01 0.0001 0.5
+mpiexec -np $h ./build/nts tmp.cfg > ./log/pubmed_seq.log
+new_cfg 19717 500-256-3 ./data/pubmed/pubmed GCNNEIGHBOR 10-25 64 200 1 0.01 0.0001 0.5
+mpiexec -np $h ./build/nts tmp.cfg > ./log/pubmed_shuffle.log
+new_cfg 19717 500-256-3 ./data/pubmed/pubmed GCNNEIGHBOR 10-25 64 200 2 0.01 0.0001 0.5
+mpiexec -np $h ./build/nts tmp.cfg > ./log/pubmed_rand.log
+new_cfg 19717 500-256-3 ./data/pubmed/pubmed GCNNEIGHBOR 10-25 64 200 3 0.01 0.0001 0.5
+mpiexec -np $h ./build/nts tmp.cfg > ./log/pubmed_low.log
+new_cfg 19717 500-256-3 ./data/pubmed/pubmed GCNNEIGHBOR 10-25 64 200 4 0.01 0.0001 0.5
+mpiexec -np $h ./build/nts tmp.cfg > ./log/pubmed_upper.log
 
-# new_cfg 19717 500-256-3 ./data/pubmed/pubmed GCNNEIGHBOR 10-25 64 200 1 0.01 0.0001 0.5
-# mpiexec -np 1 ./build/nts tmp.cfg > pubmed_rand.log
-
-## reddit
-# new_cfg 232965 602-128-41 ./data/reddit/reddit GCNNEIGHBOR 10-25 1024 100 0 0.01 0.0001 0.5
-# mpiexec -np 1 ./build/nts tmp.cfg > reddit_seq.log
-
-# new_cfg 232965 602-128-41 ./data/reddit/reddit GCNNEIGHBOR 10-25 1024 100 1 0.01 0.0001 0.5
-# mpiexec -np 1 ./build/nts tmp.cfg > reddit_rand.log
+h=8
+exit
 
 ## arxiv
-new_cfg 169343 128-256-256-40 /home/sanzo/data/ogbn-arxiv/ogbn-arxiv GCNNEIGHBOR 100000-150000-250000 169343 100 0 0.01 0.0001 0.5
+new_cfg 169343 128-256-256-40 ./data/ogbn-arxiv/ogbn-arxiv GCNNEIGHBOR 10-15-25 1024 100 0 0.01 0.0001 0.5
 sync tmp.cfg $(pwd)
-# mpiexec -np 1 ./build/nts tmp.cfg > ogbn-arxiv_seq.log
-mpiexec -hostfile hostfile -np 2 ./build/nts tmp.cfg 
+mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/arxiv_sep.log 
+new_cfg 169343 128-256-256-40 ./data/ogbn-arxiv/ogbn-arxiv GCNNEIGHBOR 10-15-25 1024 100 1 0.01 0.0001 0.5
+sync tmp.cfg $(pwd)
+mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/arxiv_shuffle.log
+new_cfg 169343 128-256-256-40 ./data/ogbn-arxiv/ogbn-arxiv GCNNEIGHBOR 10-15-25 1024 100 2 0.01 0.0001 0.5
+sync tmp.cfg $(pwd)
+mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/arxiv_rand.log 
+new_cfg 169343 128-256-256-40 ./data/ogbn-arxiv/ogbn-arxiv GCNNEIGHBOR 10-15-25 1024 100 3 0.01 0.0001 0.5
+sync tmp.cfg $(pwd)
+mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/arxiv_low.log
+new_cfg 169343 128-256-256-40 ./data/ogbn-arxiv/ogbn-arxiv GCNNEIGHBOR 10-15-25 1024 100 4 0.01 0.0001 0.5
+sync tmp.cfg $(pwd)
+mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/arxiv_upper.log 
 
-new_cfg 169343 128-256-256-40 /home/sanzo/data/ogbn-arxiv/ogbn-arxiv GCNNEIGHBOR 10-15-25 1024 100 1 0.01 0.0001 0.5
+
+## reddit
+new_cfg 232965 602-128-41 ./data/reddit/reddit GCNNEIGHBOR 10-15-25 1024 100 0 0.01 0.0001 0.5
 sync tmp.cfg $(pwd)
-# mpiexec -np 1 ./build/nts tmp.cfg > ogbn-arxiv_rand.log
-mpiexec -hostfile hostfile -np 2 ./build/nts tmp.cfg
+mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/arxiv_sep.log 
+new_cfg 232965 602-128-41 ./data/reddit/reddit GCNNEIGHBOR 10-15-25 1024 100 1 0.01 0.0001 0.5
+sync tmp.cfg $(pwd)
+mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/arxiv_shuffle.log
+new_cfg 232965 602-128-41 ./data/reddit/reddit GCNNEIGHBOR 10-15-25 1024 100 2 0.01 0.0001 0.5
+sync tmp.cfg $(pwd)
+mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/arxiv_rand.log 
+new_cfg 232965 602-128-41 ./data/reddit/reddit GCNNEIGHBOR 10-15-25 1024 100 3 0.01 0.0001 0.5
+sync tmp.cfg $(pwd)
+mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/arxiv_low.log
+new_cfg 232965 602-128-41 ./data/reddit/reddit GCNNEIGHBOR 10-15-25 1024 100 4 0.01 0.0001 0.5
+sync tmp.cfg $(pwd)
+mpiexec -hostfile hostfile -np $h ./build/nts tmp.cfg > ./log/arxiv_upper.log 
+
 
 # python draw.py
 

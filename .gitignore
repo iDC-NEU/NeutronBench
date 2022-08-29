@@ -10,3 +10,6 @@ build/
 
 # no log file
 *.log
+*.pdf
+
+# no doc file

@@ -30,6 +30,12 @@ public:
   std::vector<NtsVar> X;
   nts::ctx::NtsContext* ctx;
   FullyRepGraph* fully_rep_graph;
+  double train_sample_time = 0;
+  double train_compute_time = 0;
+  double mpi_comm_time = 0;
+  double rpc_comm_time = 0;
+  double rpc_wait_time = 0;
+
   
   NtsVar F;
   NtsVar loss;
@@ -219,11 +225,15 @@ public:
   void Update() {
     for (int i = 0; i < P.size(); i++) {
       // accumulate the gradient using all_reduce
+    if (ctx->is_train() && graph->rtminfo->epoch >= 3)
+        mpi_comm_time -= get_time();
       if (graph->gnnctx->l_v_num == 0) {
         P[i]->all_reduce_to_gradient(torch::zeros_like(P[i]->W));
       } else {
         P[i]->all_reduce_to_gradient(P[i]->W.grad().cpu());
       }
+    if (ctx->is_train() && graph->rtminfo->epoch >= 3)
+      mpi_comm_time += get_time();
       // update parameters with Adam optimizer
       P[i]->learnC2C_with_decay_Adam();
       P[i]->next();
@@ -235,8 +245,8 @@ public:
 //          std::printf("process %d epoch %d last before\n", graph->partition_id, curr_epoch);
           P[l]->all_reduce_to_gradient(torch::zeros({P[l]->row, P[l]->col}, torch::kFloat));
 //          std::printf("process %d epoch %d last after\n", graph->partition_id, curr_epoch);
-          P[l]->learnC2C_with_decay_Adam();
-          P[l]->next();
+          // P[l]->learnC2C_with_decay_Adam();
+          // P[l]->next();
       }
   }
   
@@ -255,18 +265,25 @@ public:
       double tmp_start = -get_time();
       sampler->reservoir_sample(graph->gnnctx->layer_size.size()-1,
                                 graph->config->batch_size,
-                                graph->gnnctx->fanout, graph->config->batch_type);
+                                graph->gnnctx->fanout, graph->config->batch_type, ctx->is_train());
       // printf("# sample_one cost %.3f\n", tmp_start + get_time());
       // assert(tmp_cnt++ < 3);
     }
     sample_cost += get_time();
+    if (type ==  0 && graph->rtminfo->epoch >= 3) {
+        train_sample_time += sample_cost;
+    }
     int batch_num = sampler->size();
     // printf("## sample_nodes %d batch_num %d sample_cost %.3f\n", sampler->sample_nids.size(), batch_num, sample_cost);
   
 
     // int batch_num = sampler->size();
+    if (type == 0 && graph->rtminfo->epoch >= 3)
+      mpi_comm_time -= get_time();
     MPI_Allreduce(&batch_num, &max_batch_num, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
     MPI_Allreduce(&batch_num, &min_batch_num, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+    if (type == 0 && graph->rtminfo->epoch >= 3)
+      mpi_comm_time += get_time();
     // printf("batch_num %d min %d max %d\n", batch_num, min_batch_num, max_batch_num);
     // sampler->isValidSampleGraph();
     // std::cout << type << " neighbor sample done" << std::endl;
@@ -281,6 +298,7 @@ public:
     // std::cout << min_batch_num << " " << max_batch_num << std::endl;
     double forward_cost = 0;
     forward_cost -= get_time();
+    double tmp_time = 0;
     while(sampler->has_rest()){
       // std::cout << "process batch " << batch<< std::endl;
         sg=sampler->get_one();
@@ -295,7 +313,11 @@ public:
       //  std::cout << "get feture done" << std::endl;
         // X[0]=nts::op::get_feature(sg->sampled_sgs[0]->src(),F,graph);
         // rpc.keep_running();
+        tmp_time = -get_time();
         X[0] = nts::op::get_feature_from_global(rpc, sg->sampled_sgs[0]->src(), F, graph);
+        tmp_time += get_time();
+        if (type == 0 && graph->rtminfo->epoch >= 3)
+          rpc_comm_time += tmp_time;
         // std::cout << batch_num << " "<< batch <<  " get feature done" << std::endl;
         // rpc.stop_running();
       //  std::cout << "get feature done" << std::endl;
@@ -311,7 +333,9 @@ public:
                 if (l==(graph->gnnctx->layer_size.size()-2)) {
                   return P[l]->forward(n_i);
                 }else{
-                  n_i = this->bn1d[l](n_i); // for arxiv dataset
+                  // if (graph->config->batch_norm) {
+                    // n_i = this->bn1d[l](n_i); // for arxiv dataset
+                  // }
                   return torch::dropout(P[l]->forward(n_i), drop_rate, ctx->is_train());
                   // return torch::relu(P[l]->forward(n_i));
                 }
@@ -338,6 +362,7 @@ public:
           }
           // std::cout << "zero_grad done" << std::endl;
         }
+        
         batch++;
         // if(batch == min_batch_num) {
         //   rpc.keep_running();
@@ -345,25 +370,34 @@ public:
     }
     // std::cout << "train " << ctx->training << " batch " << batch << " max_batch_num " << max_batch_num << std::endl;
     // max_batch_num = 50;
+    if (type == 0 && graph->rtminfo->epoch >= 3)
+      rpc_wait_time -= get_time();
     while(ctx->training && batch !=max_batch_num){
       UpdateZero();
       // std::cout << "sync update zero " << batch << std::endl;
       batch++;
     }
     rpc.stop_running();
+    if (type == 0 && graph->rtminfo->epoch >= 3)
+      rpc_wait_time += get_time();
 
     sampler->clear_queue();
     sampler->restart();
     // acc = 1.0 * correct / sampler->work_range[1];
     // std::cout << "before " << correct << " " << train_nodes << std::endl;
+    if (type == 0 && graph->rtminfo->epoch >= 3)
+      mpi_comm_time -= get_time();
     MPI_Allreduce(MPI_IN_PLACE, &correct, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
     MPI_Allreduce(MPI_IN_PLACE, &train_nodes, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
+    if (type == 0 && graph->rtminfo->epoch >= 3)
+     mpi_comm_time += get_time();
     acc = 1.0 * correct / train_nodes;
     // std::cout << "after " << correct << " " << train_nodes << std::endl;
     // printf("train_ndoes %d\n", train_nodes);
     forward_cost += get_time();
-    printf("batch_num %d sample_cost %.3f forward_cost %.3f\n", 
-          batch_num, sample_cost, forward_cost);
+    if (graph->partition_id == 0)
+    printf("part %d batch_num %d sample_cost %.3f forward_cost %.3f\n", 
+          graph->partition_id, batch_num, sample_cost, forward_cost);
 
     return acc;
     // if (type == 0) {
@@ -375,6 +409,11 @@ public:
     // }
   }
 
+  void shuffle_vec(std::vector<VertexId>& vec) {
+    unsigned seed = std::chrono::system_clock::now ().time_since_epoch ().count();
+    std::shuffle (vec.begin(), vec.end(), std::default_random_engine(seed));
+  }
+
   void run() {
     double run_time = -get_time();
     if (graph->partition_id == 0) {
@@ -383,6 +422,7 @@ public:
     }
     // get train/val/test node index. (may be move this to GNNDatum)
     std::vector<VertexId> train_nids, val_nids, test_nids;
+    int batch_type = graph->config->batch_type;
     for (int i = 0; i < graph->gnnctx->l_v_num; ++i) {
     // for (int i = graph->partition_offset[graph->partition_id]; i < graph->partition_offset[graph->partition_id + 1]; ++i) {
       int type = gnndatum->local_mask[i];
@@ -394,7 +434,46 @@ public:
         test_nids.push_back(i + graph->partition_offset[graph->partition_id]);
       }
     }
-      
+    if (batch_type == 1) {
+      // std::cout << "before shuffle train " << train_nids << std::endl;
+      shuffle_vec(train_nids);
+      // std::cout << "after shuffle train " << train_nids << std::endl;
+      // assert (false);
+      shuffle_vec(val_nids);
+      shuffle_vec(test_nids);
+    }
+    // std::cout << "shuufel done" << std::endl;
+    // std::cout << "type " << batch_type  << std::endl;
+    if (batch_type == 3 || batch_type == 4) {
+      // std::cout << "start sort" << std::endl;
+      // for (auto &it : train_nids) {
+      //   std::cout << it << "-" << graph->in_degree_for_backward[it] << std::endl;
+      // }
+      // std::cout << "deg print doen " << std::endl;
+      if (batch_type == 3) {
+         std::sort(train_nids.begin(), train_nids.end(), [&](const auto& x, const auto& y) {
+          return graph->in_degree_for_backward[x] > graph->in_degree_for_backward[y];
+        });
+      } else if (batch_type == 4){
+        std::sort(train_nids.begin(), train_nids.end(), [&](const auto& x, const auto& y) {
+          return graph->in_degree_for_backward[x] < graph->in_degree_for_backward[y];
+        });
+      }
+      // std::cout << "end sort" << std::endl;
+      // for (int i = 0; i < 5; ++i) {
+      //   std::cout << graph->in_degree_for_backward[train_nids[i]] << " ";
+      // }printf("...");
+      int sz = train_nids.size();
+      // for (int i = sz-5; i < sz; ++i) {
+      //   std::cout << graph->in_degree_for_backward[train_nids[i]] << " ";
+      // }printf("\n");
+      train_nids.erase(train_nids.begin() + static_cast<int>(sz*0.8), train_nids.end());
+      // std::cout << "before sz " << sz << " after erase sz " << train_nids.size() << std::endl;
+      // std::cout << "print vec " << train_nids << std::endl; 
+      shuffle_vec(train_nids);
+      // assert (false);
+      // auto erased = std::erase_if(cnt, [](const auto& x) { return (x - '0') % 2 == 0; });
+    }
     Sampler* train_sampler = new Sampler(fully_rep_graph, train_nids);
     Sampler* eval_sampler = new Sampler(fully_rep_graph, val_nids);
     Sampler* test_sampler = new Sampler(fully_rep_graph, test_nids);
@@ -434,6 +513,12 @@ public:
               i_i, train_acc, val_acc, test_acc);
       }
     }
+    double comm_time = mpi_comm_time + rpc_comm_time + rpc_wait_time;
+    double compute_time = train_time - comm_time;
+    printf("TIME(%d) sample %.3f compute_time %.3f comm_time %.3f mpi_comm %.3f rpc_comm %.3f rpc_wait_time %.3f\n", 
+          graph->partition_id, train_sample_time, compute_time, comm_time, mpi_comm_time, rpc_comm_time, rpc_wait_time);
+
+  if (graph->partition_id == 0)
     printf("Avg epoch train_time %.3f val_time %.3f test_time %.3f\n", 
           train_time / (iterations - 3), 
           val_time / (iterations - 3), 
