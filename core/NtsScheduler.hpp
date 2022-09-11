@@ -666,12 +666,17 @@ struct Parameter : torch::nn::Module {
             ValueType beta2_, ValueType epsilon_, ValueType weight_decay_) {
     row = w;
     col = h;
-    ValueType scale = sqrt(6.0 / (w + h));
-    W = register_parameter("W",
-                           (2 * scale) * torch::rand({w, h}, torch::kFloat) -
-                               scale * torch::ones({w, h}, torch::kFloat));
+    // ValueType scale = sqrt(6.0 / (w + h));
+    // W = register_parameter("W",
+    //                        (2 * scale) * torch::rand({w, h}, torch::kFloat) -
+    //                            scale * torch::ones({w, h}, torch::kFloat));
     //	ValueType scale=sqrt(6.0/(w+h));
     //	W=(2*scale)*W-scale;
+    W = register_parameter("W", torch::ones({w, h}, torch::kFloat));
+    // std::cout << "W before---------\n" << W << std::endl;
+    torch::nn::init::xavier_uniform_(W, 1.0);
+    // std::cout << "W after---------\n" << W << std::endl;
+
     W_from = new ValueType[w * h];
     w_gradient_buffer = new ValueType[w * h];
     memset(w_gradient_buffer, 0, sizeof(ValueType) * w * h);
@@ -696,10 +701,15 @@ struct Parameter : torch::nn::Module {
     alpha = 0.0;
     row = w;
     col = h;
-    ValueType scale = sqrt(6.0 / (w + h));
-    W = register_parameter("W",
-                           (2 * scale) * torch::rand({w, h}, torch::kFloat) -
-                               scale * torch::ones({w, h}, torch::kFloat));
+    // ValueType scale = sqrt(6.0 / (w + h));
+    // W = register_parameter("W",
+    //                        (2 * scale) * torch::rand({w, h}, torch::kFloat) -
+    //                            scale * torch::ones({w, h}, torch::kFloat));
+    W = register_parameter("W", torch::ones({w, h}, torch::kFloat));
+    // std::cout << "W before---------\n" << W << std::endl;
+    torch::nn::init::xavier_uniform_(W, 1.0);
+    // std::cout << "W after---------\n" << W << std::endl;
+
     W_from = new ValueType[w * h];
     w_gradient_buffer = new ValueType[w * h];
     memset(w_gradient_buffer, 0, sizeof(ValueType) * w * h);

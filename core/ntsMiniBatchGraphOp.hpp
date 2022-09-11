@@ -35,7 +35,13 @@ namespace op {
     
 
 NtsVar get_label(std::vector<VertexId>& dst, NtsVar &whole, Graph<Empty> *graph){
-    NtsVar f_output=graph->Nts->NewLeafKLongTensor({dst.size()});
+    NtsVar f_output;
+    if (graph->config->classes > 1) {
+      f_output = graph->Nts->NewLeafKLongTensor({dst.size(), graph->config->classes});
+    } else {
+      f_output = graph->Nts->NewLeafKLongTensor({dst.size()});
+    }
+    
 #pragma omp parallel for
     for(int i=0;i<dst.size();i++){
       // printf("offset %d %d, dst %d local %d\n", graph->partition_offset[graph->partition_id],
@@ -46,7 +52,13 @@ NtsVar get_label(std::vector<VertexId>& dst, NtsVar &whole, Graph<Empty> *graph)
   }
 
 NtsVar get_label_from_global(std::vector<VertexId>& dst, NtsVar &whole, Graph<Empty> *graph){
-    NtsVar f_output=graph->Nts->NewLeafKLongTensor({dst.size()});
+    // NtsVar f_output=graph->Nts->NewLeafKLongTensor({dst.size()});
+    NtsVar f_output;
+    if (graph->config->classes > 1) {
+      f_output = graph->Nts->NewLeafKLongTensor({dst.size(), graph->config->classes});
+    } else {
+      f_output = graph->Nts->NewLeafKLongTensor({dst.size()});
+    }
 #pragma omp parallel for
     for(int i=0;i<dst.size();i++){
       // printf("offset %d %d, dst %d local %d\n", graph->partition_offset[graph->partition_id],

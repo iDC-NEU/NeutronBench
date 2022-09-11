@@ -390,8 +390,11 @@ public:
 
     void ClusterGCNSample(int layers, int batch_size, int partition_num, std::string objtype = "cut") {
         if (metis_partition_id.empty()) {
+            double metis_time = -get_time();
             // (FIXME Sanzo) store metis partion result to file
             MetisPartitionGraph(whole_graph, partition_num, objtype, metis_partition_id, metis_partition_offset);
+            metis_time += get_time();
+            printf("metis partition cost %.3f\n", metis_time);
         }
         
         std::vector<int> random_partition(partition_num);

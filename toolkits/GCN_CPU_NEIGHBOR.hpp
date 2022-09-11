@@ -110,6 +110,7 @@ public:
     epsilon = 1e-9;
     gnndatum = new GNNDatum(graph->gnnctx, graph);
     // gnndatum->random_generate();
+    // std::cout << "start nn" << std::endl;
     if (0 == graph->config->feature_file.compare("random")) {
       gnndatum->random_generate();
     } else {
@@ -117,9 +118,21 @@ public:
                                        graph->config->label_file,
                                        graph->config->mask_file);
     }
+    // std::cout << "read done" << std::endl;
 
     // creating tensor to save Label and Mask
-    gnndatum->registLabel(L_GT_C);
+    if (graph->config->classes > 1) {
+      gnndatum->registLabel(L_GT_C, gnndatum->local_label, gnndatum->gnnctx->l_v_num, graph->config->classes);
+      // std::cout << "10 " << L_GT_C[10] << std::endl;
+      // for (int i = 0; i < 121; ++i) {
+      //   std::cout << gnndatum->local_label[100 * 121 + i] << " ";
+      // }std::cout << std::endl;
+      // std::cout << "100 " << L_GT_C[100] << std::endl;
+      // assert(false);
+    } else {
+      gnndatum->registLabel(L_GT_C);
+    }
+    // std::cout << L_GT_C << std::endl;
     gnndatum->registMask(MASK);
 
     // initializeing parameter. Creating tensor with shape [layer_size[i],
@@ -175,11 +188,58 @@ public:
   }
 
   long getCorrect(NtsVar &input, NtsVar &target) {
-    // NtsVar predict = input.log_softmax(1).argmax(1);
-    NtsVar predict = input.argmax(1);
-    NtsVar output = predict.to(torch::kLong).eq(target).to(torch::kLong);
-    return output.sum(0).item<long>();
+    // auto x = torch::ones({2, 3});
+    // std::cout << "x0 " << x[0].all().item<int>() << std::endl;
+    // std::cout << "x1 " << x[1].all().item<int>() << std::endl;
+    // assert(false);
+    long ret;
+    if (graph->config->classes > 1) {
+      ret = 0;
+      // NtsVar predict = input.sigmoid();
+      // std::cout << "sigmoid " << predict << std::endl;
+      // predict = torch::where(predict > 0.5, 1, 0);
+      NtsVar predict = torch::where(torch::sigmoid(input) > 0.5, 1, 0);
+      // std::cout << predict << std::endl;
+      auto equal = predict == target;
+      for (int i = 0; i < input.size(0); ++i) {
+        ret += equal[i].all().item<int>();
+      }
+      // for (int i = 0; i < input.size(0); ++i) {
+      //   auto tmp = predict[i].to(torch::kLong).eq(target[i]).to(torch::kLong);
+      //   ret += tmp.all().item<int>();
+      // }
+    } else {
+      NtsVar predict = input.argmax(1);
+      NtsVar output = predict.to(torch::kLong).eq(target).to(torch::kLong);
+      ret = output.sum(0).item<long>();
+    }
+    return ret;
   }
+
+  float f1_score(NtsVar &input, NtsVar &target) {
+    float ret;
+    if (graph->config->classes > 1) {
+      NtsVar predict = input.sigmoid();
+      predict = torch::where(predict > 0.5, 1, 0);
+
+      // f1 = f1_score(x_true, y_pre, average="micro")
+      auto all_pre = predict.sum();
+      auto x_tmp = torch::where(target == 0, 2, 1);
+      auto true_p = (x_tmp == predict).sum();
+      auto all_true = target.sum();
+      auto precision = true_p / all_pre;
+      auto recall = true_p / all_true;
+      auto f2 = 2 * precision * recall / (precision + recall);
+      ret =  f2.item<float>();
+    } else {
+      NtsVar predict = input.argmax(1);
+      NtsVar output = predict.to(torch::kLong).eq(target).to(torch::kLong);
+      ret = output.sum(0).item<long>();
+    }
+    return ret;
+  }  
+
+
 
   void Test(long s) { // 0 train, //1 eval //2 test
     NtsVar mask_train = MASK.eq(s);
@@ -212,13 +272,23 @@ public:
     }
   }
  
-  void Loss(NtsVar &left,NtsVar &right) {
+  void Loss(NtsVar &output,NtsVar &target) {
     //  return torch::nll_loss(a,L_GT_C);
-    torch::Tensor a = left.log_softmax(1);
+    // std::cout << "start loss" << std::endl;
     NtsVar loss_; 
-    loss_= torch::nll_loss(a,right);
+
+    if (graph->config->classes > 1) {
+      // tensor.to(torch::kLong)
+      // loss_ = torch::binary_cross_entropy_with_logits(output, target.to(torch::kFloat));
+      loss_ = torch::binary_cross_entropy(torch::sigmoid(output), target.to(torch::kFloat));
+
+    } else {
+      torch::Tensor a = output.log_softmax(1);
+      loss_ = torch::nll_loss(a, target);
+    }
+    // std::cout << "loss " << loss_.item<float>() << std::endl;
     if (ctx->training == true) {
-      ctx->appendNNOp(left, loss_);
+      ctx->appendNNOp(output, loss_);
     }
   }
 
@@ -299,6 +369,7 @@ public:
     double forward_cost = 0;
     forward_cost -= get_time();
     double tmp_time = 0;
+    float f1 = 0;
     while(sampler->has_rest()){
       // std::cout << "process batch " << batch<< std::endl;
         sg=sampler->get_one();
@@ -321,10 +392,10 @@ public:
         // std::cout << batch_num << " "<< batch <<  " get feature done" << std::endl;
         // rpc.stop_running();
       //  std::cout << "get feature done" << std::endl;
-        NtsVar target_lab=nts::op::get_label(sg->sampled_sgs.back()->dst(), L_GT_C,graph);
+        NtsVar target_lab=nts::op::get_label(sg->sampled_sgs.back()->dst(), L_GT_C, graph);
       //  std::cout << "get label done" << std::endl;
       //  graph->rtminfo->forward = true;
-        for(int l=0;l<(graph->gnnctx->layer_size.size()-1);l++){//forward
+        for(int l=0;l<(graph->gnnctx->layer_size.size()-1);l++) {//forward
           //  int hop=(graph->gnnctx->layer_size.size()-2)-l;
         //  std::cout << "start process layer " << l << std::endl;
             NtsVar Y_i=ctx->runGraphOp<nts::op::MiniBatchFuseOp>(sg,graph, l, X[l]);
@@ -332,6 +403,7 @@ public:
             X[l + 1]=ctx->runVertexForward([&](NtsVar n_i){
                 if (l==(graph->gnnctx->layer_size.size()-2)) {
                   return P[l]->forward(n_i);
+                  // return torch::mean(P[l]->forward(n_i));
                 }else{
                   // if (graph->config->batch_norm) {
                     // n_i = this->bn1d[l](n_i); // for arxiv dataset
@@ -344,9 +416,10 @@ public:
             // printf("run vertex forward done\n");
         } 
         // std::cout << "start loss" << std::endl;
-        Loss(X[graph->gnnctx->layer_size.size()-1],target_lab);
+        Loss(X[graph->gnnctx->layer_size.size()-1], target_lab);
         // std::cout << "loss done" << std::endl;
         correct += getCorrect(X[graph->gnnctx->layer_size.size()-1], target_lab);
+        f1 += f1_score(X[graph->gnnctx->layer_size.size()-1], target_lab);
         // std::cout << "correct done" << std::endl;
         train_nodes += target_lab.size(0);
 
@@ -396,10 +469,9 @@ public:
     // printf("train_ndoes %d\n", train_nodes);
     forward_cost += get_time();
     if (graph->partition_id == 0)
-    printf("part %d batch_num %d sample_cost %.3f forward_cost %.3f\n", 
+    printf("\thost %d batch_num %d sample_cost %.3f forward_cost %.3f\n", 
           graph->partition_id, batch_num, sample_cost, forward_cost);
-
-    return acc;
+    return graph->config->classes > 1 ? f1 / batch_num : acc;
     // if (type == 0) {
     //   printf("Train Acc: %f %d %d\n", acc, correct, sampler->work_range[1]);
     // } else if (type == 1) {
@@ -423,9 +495,11 @@ public:
     // get train/val/test node index. (may be move this to GNNDatum)
     std::vector<VertexId> train_nids, val_nids, test_nids;
     int batch_type = graph->config->batch_type;
+    // std::cout << "l_v_num " << graph->gnnctx->l_v_num << std::endl;
     for (int i = 0; i < graph->gnnctx->l_v_num; ++i) {
     // for (int i = graph->partition_offset[graph->partition_id]; i < graph->partition_offset[graph->partition_id + 1]; ++i) {
       int type = gnndatum->local_mask[i];
+      // std::cout << i << " " << type << " " << i + graph->partition_offset[graph->partition_id] << std::endl;
       if (type == 0) {
         train_nids.push_back(i + graph->partition_offset[graph->partition_id]);
       } else if (type == 1) {
@@ -474,6 +548,8 @@ public:
       // assert (false);
       // auto erased = std::erase_if(cnt, [](const auto& x) { return (x - '0') % 2 == 0; });
     }
+    // std::cout << "pre done" << std::endl;
+    std::cout << "train/val/test: " << train_nids.size() << " " << val_nids.size() << " " << test_nids.size() << std::endl;
     Sampler* train_sampler = new Sampler(fully_rep_graph, train_nids);
     Sampler* eval_sampler = new Sampler(fully_rep_graph, val_nids);
     Sampler* test_sampler = new Sampler(fully_rep_graph, test_nids);
@@ -482,32 +558,39 @@ public:
     double val_time =  0;
     double test_time =  0;
     for (int i_i = 0; i_i < iterations; i_i++) {
+      // std::cout << "epoc " << i_i << std::endl;
       graph->rtminfo->epoch = i_i;
       if (i_i != 0) {
         for (int i = 0; i < P.size(); i++) {
           P[i]->zero_grad();
         }
       }
-      
       ctx->train();
+      // std::cout << "start train" << std::endl;
       if (i_i >= 3)
         train_time -= get_time();
       float train_acc = Forward(train_sampler, 0);
       if (i_i >= 3)
         train_time += get_time();
+      // std::cout << "end train" << std::endl;
       
       ctx->eval();
+      // std::cout << "satr eval" << std::endl;
       if (i_i >= 3)
         val_time -= get_time();
       float val_acc = Forward(eval_sampler, 1);
       if (i_i >= 3)
         val_time += get_time();
+      // std::cout << "end eval" << std::endl;
 
+      // std::cout << "start test" << std::endl;
       if (i_i >= 3)
         test_time -= get_time();
       float test_acc = Forward(test_sampler, 2);
       if (i_i >= 3)
         test_time += get_time();
+      // std::cout << "end test" << std::endl;
+
       if (graph->partition_id == 0) {
         printf("Epoch %03d train_acc %.3f val_acc %.3f test_acc %.3f\n", 
               i_i, train_acc, val_acc, test_acc);

@@ -52,8 +52,10 @@ public:
 GNNDatum(GNNContext *_gnnctx, Graph<Empty> *graph_) {
   gnnctx = _gnnctx;
   local_feature = new ValueType[gnnctx->l_v_num * gnnctx->layer_size[0]];
-  local_label = new long[gnnctx->l_v_num];
-  global_label = new long[graph_->partition_offset[graph_->partitions]];
+  local_label = new long[gnnctx->l_v_num *  graph_->config->classes];
+  global_label = new long[graph_->partition_offset[graph_->partitions] * graph_->config->classes];
+  memset(local_label, 0, sizeof(long) * gnnctx->l_v_num *  graph_->config->classes);
+  memset(global_label, 0, sizeof(long) * graph_->partition_offset[graph_->partitions] * graph_->config->classes);
   local_mask = new int[gnnctx->l_v_num];
   global_mask = new int[graph_->partition_offset[graph_->partitions]];
   // std::cout << "fuck " << graph->partitions << std::endl;
@@ -84,6 +86,19 @@ void random_generate() {
 void registLabel(NtsVar &target) {
   target = graph->Nts->NewLeafKLongTensor(local_label, {gnnctx->l_v_num});
   // torch::from_blob(local_label, gnnctx->l_v_num, torch::kLong);
+}
+
+void registLabel(NtsVar &target, long* data, int w, int h) {
+  target = graph->Nts->NewLeafKLongTensor(data, {w, h});
+  // target = graph->Nts->NewLeafKLongTensor(local_label, {w, h});
+  // torch::from_blob(local_label, gnnctx->l_v_num, torch::kLong);
+  //  for (int i = 0; i < 121; ++i) {
+  //     std::cout << local_label[100 * 121 + i] << " ";
+  //   }std::cout << std::endl;
+  // target = torch::from_blob(local_label, {gnnctx->l_v_num,121}, torch::kLong);
+  // std::cout << target[100] << std::endl;
+  // std::cout << gnnctx->l_v_num << std::endl;
+  // assert(false);
 }
 
 void registGlobalLabel(NtsVar &target) {
@@ -195,24 +210,43 @@ void readFeature_Label_Mask(std::string inputF, std::string inputL,
     std::cout << "open mask file fail!" << std::endl;
     return;
   }
+  // std::cout << inputF << " " << inputM << " " << inputL << std::endl;
+  // assert (false);
+
   ValueType *con_tmp = new ValueType[gnnctx->layer_size[0]];
+  // std::cout << "layer size" << " " << gnnctx->layer_size[0] << std::endl;
+  // assert (false);
+
   std::string la;
   // std::cout<<"finish1"<<std::endl;
   VertexId id = 0;
   while (input_ftr >> id) {
     VertexId size_0 = gnnctx->layer_size[0];
     VertexId id_trans = id - gnnctx->p_v_s;
+    // std::cout << id << " " << id_trans << " " << size_0 <<  std::endl;
+
     if ((gnnctx->p_v_s <= id) && (gnnctx->p_v_e > id)) {
       for (int i = 0; i < size_0; i++) {
         input_ftr >> local_feature[size_0 * id_trans + i];
       }
       input_lbl >> la;
-      input_lbl >> local_label[id_trans];
+      if (graph->config->classes > 1) {
+        int sz, idx;
+        input_lbl >> sz;
+        // std::cout << la << " " << sz << std::endl;
+        while (sz--) {
+          input_lbl >> idx;
+          local_label[id_trans * graph->config->classes + idx] = 1;
+        }
+      } else {
+        input_lbl >> local_label[id_trans];
+      }
 
       input_msk >> la;
       std::string msk;
       input_msk >> msk;
       // std::cout<<la<<" "<<msk<<std::endl;
+      // std::cout << id << " " << id_trans << std::endl;
       if (msk.compare("train") == 0) {
         local_mask[id_trans] = 0;
       } else if (msk.compare("eval") == 0 || msk.compare("val") == 0) {
@@ -241,8 +275,19 @@ void readFeature_Label_Mask(std::string inputF, std::string inputL,
   // read global label
   input_lbl.seekg (0, input_lbl.beg);
   while (input_lbl >> id) {
-    input_lbl >> global_label[id];
+    if (graph->config->classes > 1) {
+      int sz, idx;
+      input_lbl >> sz;
+      // std::cout << la << " " << sz << std::endl;
+      while (sz--) {
+        input_lbl >> idx;
+        global_label[id * graph->config->classes + idx] = 1;
+      }
+    } else {
+      input_lbl >> global_label[id];
+    }
   }
+
   // std::cout << "read label" << std::endl;
 
   input_msk.seekg (0, input_msk.beg);

@@ -284,6 +284,8 @@ void InputInfo::readFromCfgFile(std::string config_file) {
         this->optim_kernel_enable = true;
     } else if (0 == cfg_k.compare("BATCH_TYPE")) {
       this->batch_type = std::atoi(cfg_v.c_str());
+    } else if (0 == cfg_k.compare("CLASSES")) {
+      this->classes = std::atoi(cfg_v.c_str());
     }
 
     else {
@@ -317,6 +319,7 @@ void InputInfo::print() {
   std::cout << "decay_rate\t:\t" << decay_rate << std::endl;
   std::cout << "decay_epoch\t:\t" << decay_epoch << std::endl;
   std::cout << "drop_rate\t:\t" << drop_rate << std::endl;
+  std::cout << "classes\t:\t" << classes << std::endl;
   std::cout <<"------------------input info--------------"<<std::endl;
 }
 
