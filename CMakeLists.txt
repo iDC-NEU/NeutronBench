@@ -74,7 +74,7 @@ string(CONCAT NEUTRONSTAR_FORMAT_DIRS
         "${CMAKE_CURRENT_SOURCE_DIR}/core,"
 	"${CMAKE_CURRENT_SOURCE_DIR}/dep/gemini,"
         "${CMAKE_CURRENT_SOURCE_DIR}/comm,"
-        "${CMAKE_CURRENT_SOURCE_DIR}/cuda,"
+        "${CMAKE_CURRENT_SOURCE_DIR}/utils,"
         "${CMAKE_CURRENT_SOURCE_DIR}/toolkits,"
         )
 
@@ -94,6 +94,7 @@ ${CMAKE_CURRENT_SOURCE_DIR}
 ./comm
 ./cuda
 ./dep/gemini
+./utils
 ${MPI_INCLUDE_PATH}
 )
 
