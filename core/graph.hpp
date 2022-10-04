@@ -294,9 +294,15 @@ public:
     std::stringstream ss(fanout_string);
     std::string number;
     gnnctx->fanout.clear();
-    while (std::getline(ss, number, '-')) {
+    char c = fanout_string.find(',') != std::string::npos ? ',' : '-';
+    while (std::getline(ss, number, c)) {
       gnnctx->fanout.push_back(std::stoi(number));
     }
+    // std::cout << "c = " << c << std::endl;
+    // for (auto it : gnnctx->fanout) {
+    //   std::cout << it << " ";
+    // } std::cout << std::endl;
+    // assert (false);
   }
   
   void init_gnnctx(std::string layer_string) {

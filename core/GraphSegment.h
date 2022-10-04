@@ -172,8 +172,11 @@ public:
   std::string edge_file;
   std::string label_file;
   std::string mask_file;
-  float del_frac = 0.2;
+  float del_frac = 0;
   bool with_cuda;
+  int batch_norm = 0;
+  int time_skip = 3;
+  int runs = 1;
 
   // algorithm related:
   VertexId batch_size;

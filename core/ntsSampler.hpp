@@ -145,46 +145,46 @@ public:
         SampledSubgraph* ssg=new SampledSubgraph(layers_,fanout_);  
         
         for(int i=0;i<layers_;i++){
+            // printf("debug sample layer %d\n", i);
             double layer_time = -get_time();
-            // LOG_DEBUG("sample layer %d", i);
+            
             double sample_pre_time = -get_time();
             ssg->sample_preprocessing(i);
             sample_pre_time += get_time();
-            // printf("sample_pre_time %.3f\n", sample_pre_time);
+            // LOG_DEBUG("sample_pre_time cost %.3f", sample_pre_time);
+
             //whole_graph->SyncAndLog("preprocessing");
             double sample_load_dst = -get_time();
-            
             if(i==0){
                 // double sample_load_dst = -get_time();
                 int len = sample_nids.size();
               ssg->sample_load_destination([&](std::vector<VertexId>& destination){
-                    std::unordered_set<VertexId> st;
-                    unsigned seed = std::chrono::system_clock::now ().time_since_epoch ().count();
-                    std::shuffle (sample_nids.begin(), sample_nids.end(), std::default_random_engine(seed));
+                    // std::unordered_set<VertexId> st;
+                    // unsigned seed = std::chrono::system_clock::now ().time_since_epoch ().count();
+                    // std::shuffle (sample_nids.begin(), sample_nids.end(), std::default_random_engine(seed));
                   for(int j=0;j<actl_batch_size;j++){
-                    //   destination.push_back(work_offset++);
-                    // destination.push_back(sample_nids[work_offset++]);
-                    if (type < 2 || !phase) { // type = 0, 1(seq, shuffle) or val or test
-                        destination.push_back(sample_nids[work_offset++]);
-                    } else if (type == 2) { // type = 2, random batch
+                    destination.push_back(sample_nids[work_offset++]);
+                    // if (type < 2 || !phase) { // type = 0, 1(seq, shuffle) or val or test
+                    //     destination.push_back(sample_nids[work_offset++]);
+                    // } else if (type == 2) { // type = 2, random batch
                         
-                        destination.push_back(sample_nids[work_offset++]);
+                    //     destination.push_back(sample_nids[work_offset++]);
 
-                        // while (true) {
-                        //     int select = random_uniform_int(0, len-1);
-                        //     if (st.find(select) != st.end()) {
-                        //         continue;
-                        //     }
-                        //     st.insert(select);
-                        //     destination.push_back(sample_nids[select]);
-                        //     work_offset++;
-                        //     // printf("select %d\n", select);
-                        //     break;
-                        // }
-                    // } else if (type == 3) {
-                    } else {
-                        destination.push_back(sample_nids[work_offset++]);
-                    }
+                    //     // while (true) {
+                    //     //     int select = random_uniform_int(0, len-1);
+                    //     //     if (st.find(select) != st.end()) {
+                    //     //         continue;
+                    //     //     }
+                    //     //     st.insert(select);
+                    //     //     destination.push_back(sample_nids[select]);
+                    //     //     work_offset++;
+                    //     //     // printf("select %d\n", select);
+                    //     //     break;
+                    //     // }
+                    // // } else if (type == 3) {
+                    // } else {
+                    //     destination.push_back(sample_nids[work_offset++]);
+                    // }
                   }
                 //   printf("load dst done!\n");
               },i);
@@ -198,20 +198,30 @@ public:
                ssg->sample_load_destination(i); 
               //whole_graph->SyncAndLog("sample_load_destination2");
             }
+            // printf("debug sample load dest done\n");
             sample_load_dst += get_time();
-            // printf("sample_load_dst %.3f\n", sample_load_dst);
+            // LOG_DEBUG("sample_load_dst cost %.3f", sample_load_dst);
             
             double sample_init_co = -get_time();
             ssg->init_co([&](VertexId dst){
-                VertexId nbrs=whole_graph->column_offset[dst+1]
-                                 -whole_graph->column_offset[dst];
-            return (nbrs>fanout_[i]) ? fanout_[i] : nbrs;
+                VertexId nbrs=whole_graph->column_offset[dst+1] - whole_graph->column_offset[dst];
+                int ret = std::min((int)nbrs, fanout_[i]);
+                if (ret == -1) {
+                    // std::cout << "-1 " << nbrs << std::endl;
+                    ret = nbrs;
+                }
+                return ret;
             },i);
-            ssg->sample_processing([&](VertexId fanout_i,
+            sample_init_co += get_time();
+            // LOG_DEBUG("sample_init_co cost %.3f", sample_init_co);
+            
+            double sample_processing_time = -get_time();
+            ssg->sample_processing([&](int fanout_i,
                     VertexId dst,
                     std::vector<VertexId> &column_offset,
                         std::vector<VertexId> &row_indices,VertexId id){
                     // unsigned seeds[33];
+                    // LOG_DEBUG("fanout %d, dst %d, id %d", fanout_i, dst, id);
                 for(VertexId src_idx=whole_graph->column_offset[dst];
                         src_idx<whole_graph->column_offset[dst+1];src_idx++){
                     //ReservoirSampling
@@ -220,6 +230,7 @@ public:
                         write_pos+=column_offset[id];
                         row_indices[write_pos]=whole_graph->row_indices[src_idx];
                     }else{
+                        // std::cout << "random " << std::endl;
                         // VertexId random=rand()%write_pos;
                         // VertexId random=rand_r(&seeds[omp_get_thread_num()])%write_pos;
                         VertexId random=random_uniform_int(0, write_pos-1);
@@ -230,11 +241,14 @@ public:
                     }
                 }
             });
+            sample_processing_time += get_time();
+            // LOG_DEBUG("debug sample_processing_cost cost %.3f", sample_processing_time);
             //whole_graph->SyncAndLog("sample_processing");
-             double sample_post = -get_time();
+
+            double sample_post = -get_time();
             ssg->sample_postprocessing();
             sample_post += get_time();
-            // printf("sample_post %.3f\n", sample_post);
+            // LOG_DEBUG("sample_post %.3f", sample_post);
             
             //whole_graph->SyncAndLog("sample_postprocessing");
             layer_time += get_time();
@@ -247,6 +261,7 @@ public:
         // }
         std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
         push_one(ssg);
+        // printf("debug: sample one done!\n");
     }
 
     void LayerUniformSample(int layers, int batch_size, std::vector<int> fanout) {
@@ -284,6 +299,7 @@ public:
             copy(candidate_set.begin(), candidate_set.end(), std::back_inserter(candidate_vector));
             // LOG_DEBUG("candidate_vector is done");
             int layer_size = std::min(fanout[i], (int)candidate_vector.size());
+            if (layer_size == -1) layer_size = candidate_vector.size();
 
             std::unordered_map<VertexId, size_t> n_occurrences;
             size_t n_candidates = candidate_vector.size();

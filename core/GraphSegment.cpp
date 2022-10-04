@@ -302,7 +302,13 @@ void InputInfo::readFromCfgFile(std::string config_file) {
     } else if (0 == cfg_k.compare("DEL_FRAC")) {
       this->del_frac = std::atof(cfg_v.c_str());
       assert(this->del_frac <= 1.0);
-      // printf("del frac %f\n", this->del_frac);
+    } else if (0 == cfg_k.compare("BATCH_NORM")) {
+      this->batch_norm = std::atoi(cfg_v.c_str());
+    } else if (0 == cfg_k.compare("TIME_SKIP")) {
+      this->time_skip = std::atoi(cfg_v.c_str());
+    } else if (0 == cfg_k.compare("RUNS")) {
+      this->runs = std::atoi(cfg_v.c_str());
+      // std::cout << "runs " << this->runs << std::endl;
       // assert(false);
     }
 
@@ -354,6 +360,9 @@ void InputInfo::print() {
   std::cout << "decay_epoch\t:\t" << decay_epoch << std::endl;
   std::cout << "drop_rate\t:\t" << drop_rate << std::endl;
   std::cout << "classes\t\t:\t" << classes << std::endl;
+  std::cout << "batch_norm\t:\t" << batch_norm << std::endl;
+  std::cout << "time_skip\t:\t" << time_skip << std::endl;
+  std::cout << "runs\t\t:\t" << runs << std::endl;
   std::cout <<"------------------input info--------------"<<std::endl;
 }
 
