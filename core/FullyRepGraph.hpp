@@ -68,6 +68,34 @@ public:
         sampled_sgs.clear();
     }
 
+    void update_degrees(Graph<Empty> *graph, int layer) {
+        // LOG_DEBUG("udpate degrees");
+        VertexId* outs = graph->out_degree_for_backward;
+        VertexId* ins = graph->in_degree_for_backward;
+        memset(outs, 0, sizeof(outs));
+        memset(ins, 0, sizeof(ins));
+        // printf("vertex %d outs elememt %d ins element %d\n", graph->vertices, sizeof(outs)/sizeof(VertexId), sizeof(ins)/sizeof(VertexId));
+        // assert(sizeof(outs) / sizeof(VertexId) == graph->vertices);
+        // assert(sizeof(ins) / sizeof(VertexId) == graph->vertices);
+        for (int i = 0; i < graph->vertices; ++i) {
+            outs[i] = 0;
+            ins[i] = 0;
+            // assert(outs[i] == 0);
+            // assert(ins[i] == 0);
+        }
+        for (auto src : sampled_sgs[layer]->src()) {
+            outs[src]++;
+        }
+        for (auto dst : sampled_sgs[layer]->dst()) {
+            ins[dst]++;
+        }
+
+        // for (int i = 0; i < graph->vertices; ++i) {
+        //     assert(graph->in_degree_for_backward[i] == ins[i]);
+        //     assert(graph->out_degree_for_backward[i] == outs[i]);
+        // }
+    }
+
     void random_gen_seed() {
         for (int i = 0; i < threads; ++i) {
             seeds[i] = rand();

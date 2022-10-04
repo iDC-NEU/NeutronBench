@@ -278,9 +278,12 @@ public:
     loss_epoch = 0;
 
     double nn_cost = 0;
+    double update_degree_cost = 0;
     while(sampler->has_rest()){
         sg=sampler->get_one();
+
         std::vector<NtsVar> X;
+        // LOG_DEBUG("forward graph address %p", graph);
         NtsVar d;
         X.resize(graph->gnnctx->layer_size.size(),d);
       
@@ -316,6 +319,9 @@ public:
             //   cout << "dopout" << std::endl;
             //   X[l] = torch::dropout(X[l], drop_rate, ctx->is_train());
             // }
+            update_degree_cost -= get_time();
+            sg->update_degrees(graph, l);
+            update_degree_cost += get_time();
 
             NtsVar Y_i=ctx->runGraphOp<nts::op::MiniBatchFuseOp>(sg, graph, l, X[l]);
             // printf("run graphop done\n");
@@ -339,7 +345,6 @@ public:
             Y_i);
             // printf("run vertex forward done\n");
         } 
-
 
         // std::cout << "start loss" << std::endl;
         // std::cout << X[layers] << std::endl;
@@ -425,6 +430,8 @@ public:
     // printf("train_ndoes %d\n", train_nodes);
     forward_cost += get_time();
     LOG_DEBUG("forward cost %.3f", forward_cost);
+    LOG_DEBUG("upadte_degree_cost %.5f", update_degree_cost);
+
 
     // if (graph->partition_id == 0)
     // printf("\thost %d batch_num %d sample_cost %.3f forward_cost %.3f\n", 
@@ -527,6 +534,7 @@ public:
       ctx->eval();
       if (i_i >= graph->config->time_skip) val_time -= get_time();
       float val_acc = Forward(eval_sampler, 1);
+      float val_loss = loss_epoch;
       best_val_acc = std::max(best_val_acc, val_acc);
       if (i_i >= graph->config->time_skip) val_time += get_time();
 
@@ -538,7 +546,7 @@ public:
 
       float test_acc = 0;
       if (graph->partition_id == 0) {
-        std::cout << loss_epoch << std::endl;
+        // std::cout << loss_epoch << std::endl;
         printf("Epoch %03d loss %.3f train_acc %.3f val_acc %.3f test_acc %.3f\n\n", i_i, train_loss, train_acc, val_acc, test_acc);
         // LOG_INFO("Epoch %03d loss %.3f train_acc %.3f val_acc %.3f test_acc %.3f", i_i, train_loss, train_acc, val_acc, test_acc);
       }
