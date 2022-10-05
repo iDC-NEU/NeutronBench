@@ -31,6 +31,7 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 #include "GCN_EAGER.hpp"
 #include "GCN_EAGER_single.hpp"
 #include "GIN_GPU.hpp"
+#include "test_batch_distributed.hpp"
 #endif
 
 int main(int argc, char **argv) {
@@ -103,7 +104,15 @@ int main(int argc, char **argv) {
     tie(mean, var) = get_mean_var(best_val_accs);
     printf("val acc %d runs: %.4f(%.4f)\n", graph->config->runs, mean, var);
     std::cout << "edge_file: " << graph->config->edge_file << std::endl;
-  } else if (graph->config->algorithm == std::string("GCNLAYER")) {
+  } else if (graph->config->algorithm == std::string("TEST_BATCH_DIST")) {
+    graph->load_directed(graph->config->edge_file, graph->config->vertices);
+    graph->generate_backward_structure();
+    TEST_BATCH_DIST_impl *ntsGCN = new TEST_BATCH_DIST_impl(graph, iterations);
+    ntsGCN->init_graph();
+    ntsGCN->init_nn();
+    ntsGCN->run();
+  } 
+   else if (graph->config->algorithm == std::string("GCNLAYER")) {
     graph->load_directed(graph->config->edge_file, graph->config->vertices);
     graph->generate_backward_structure();
     GCN_CPU_LAYER_impl *ntsGCN = new GCN_CPU_LAYER_impl(graph, iterations);

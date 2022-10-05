@@ -110,8 +110,8 @@ NtsVar Loss(NtsVar &output, NtsVar &target, bool onelabel=true) {
 //   }
 // }
 
-
-float get_mean(std::vector<float> &arr) {
+template<typename T>
+float get_mean(std::vector<T> &arr) {
   float mean = 0;
   for (auto &it : arr) {
     mean += it;
@@ -122,7 +122,8 @@ float get_mean(std::vector<float> &arr) {
 }
 
 
-float get_var(std::vector<float> &arr) {
+template<typename T>
+float get_var(std::vector<T> &arr) {
   float mean = get_mean(arr);
   float var = 0;
   for (auto &it : arr) {
@@ -132,7 +133,9 @@ float get_var(std::vector<float> &arr) {
   return var;
 }
 
-std::pair<float, float> get_mean_var(std::vector<float> &arr) {
+
+template<typename T>
+std::pair<float, float> get_mean_var(std::vector<T> &arr) {
   float mean = get_mean(arr);
   float var = 0;
   for (auto &it : arr) {
