@@ -76,6 +76,45 @@ public:
         row_offset.clear();    
         column_indices.clear();
     }
+    
+    void update_degree_of_csc(Graph<Empty> *graph) {
+        VertexId* outs = graph->out_degree_for_backward;
+        VertexId* ins = graph->in_degree_for_backward;
+        for (int i = 0; i < graph->vertices; ++i) {
+            outs[i] = 0;
+            ins[i] = 0;
+        }
+        int dst_size = destination.size();
+        int src_size = source.size();
+        int edge_size = row_indices.size();
+        for (int i = 0; i < dst_size; ++i) {
+            ins[destination[i]] += column_offset[i + 1] - column_offset[i];
+            for (int j = column_offset[i]; j < column_offset[i + 1]; ++j) {
+                int local_src = row_indices[j];
+                outs[source[local_src]]++;
+            }
+        }
+    }
+
+    void update_degree_of_csr(Graph<Empty> *graph) {
+        VertexId* outs = graph->out_degree_for_backward;
+        VertexId* ins = graph->in_degree_for_backward;
+        for (int i = 0; i < graph->vertices; ++i) {
+            outs[i] = 0;
+            ins[i] = 0;
+        }
+        int dst_size = destination.size();
+        int src_size = source.size();
+        int edge_size = column_indices.size();
+        for (int i = 0; i < src_size; ++i) {
+            ins[source[i]] += row_offset[i + 1] - row_offset[i];
+            for (int j = row_offset[i]; j < row_offset[i + 1]; ++j) {
+                int local_dst = column_indices[j];
+                outs[destination[local_dst]]++;
+            }
+        }
+    }
+
     void generate_csr_from_csc() {
         // assert(source.size() == destination.size());
 

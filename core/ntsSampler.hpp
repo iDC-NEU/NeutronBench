@@ -131,7 +131,8 @@ public:
     }
     
     int random_uniform_int(const int min = 0, const int max = 1) {
-        thread_local std::default_random_engine generator;
+        // thread_local std::default_random_engine generator;
+        static thread_local std::mt19937 generator;
         std::uniform_int_distribution<int> distribution(min, max);
         return distribution(generator);
     }
