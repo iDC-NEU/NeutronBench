@@ -47,6 +47,10 @@ new_cfg() {
   echo -e "LEARN_RATE:$9" >> tmp.cfg
   echo -e "WEIGHT_DECAY:${10}" >> tmp.cfg
   echo -e "DROP_RATE:${11}" >> tmp.cfg
+  echo -e "MINI_PULL:${12}" >> tmp.cfg
+  echo -e "BATCH_NORM:${13}" >> tmp.cfg
+  echo -e "TIME_SKIP:3" >> tmp.cfg
+  echo -e "RUNS:${14}" >> tmp.cfg
   other_paras="PROC_OVERLAP:0\nPROC_LOCAL:0\nPROC_CUDA:0\nPROC_REP:0\nLOCK_FREE:1\nDECAY_EPOCH:100\nDECAY_RATE:0.97"
   echo -e ${other_paras} >> tmp.cfg
 }
@@ -62,7 +66,8 @@ cd build && make -j $(nproc) && cd ..
   do
     echo "传递参数位置: " $i
     echo "参数值：" ${arg_arry[$i]}
-    new_cfg 2708 1433-64-7 ./data/cora/cora GCNNEIGHBOR 10-25 ${arg_arry[$i]} 10 0 0.01 0.0001 0.5
+    # new_cfg 2708 1433-64-7 ./data/cora/cora GCNNEIGHBOR 10-25 ${arg_arry[$i]} 10 0 0.01 0.0001 0.5
+    new_cfg 2708 1433-64-7 ./data/cora/cora GCNNEIGHBOR 15,25 ${arg_arry[$i]} 10 shuffle 0.01 0.0001 0.5 0 0 3
     mpiexec -np $h ./build/nts tmp.cfg >> ./log/cora_seq.log
   done
                                   
