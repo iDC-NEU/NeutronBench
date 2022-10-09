@@ -137,7 +137,7 @@ public:
         return distribution(generator);
     }
 
-    void reservoir_sample(int layers_, int batch_size_, const std::vector<int>& fanout_, int type = 0, bool phase=true){
+    void reservoir_sample(int layers_, int batch_size_, const std::vector<int>& fanout_, int type = 0, bool phase=true, bool mini_pull=false){
     // void reservoir_sample(int layers_, int batch_size_, const std::vector<int>& fanout_, int type = 0){
         // LOG_DEBUG("layers %d batch_size %d fanout %d-%d", layers_, batch_size_, fanout_[0], fanout_[1]);
         assert(work_offset<work_range[1]);
@@ -256,10 +256,14 @@ public:
             // printf("sample layer time %.3f\n", layer_time);
         }
         // generate csr for backward graph
-        // for (auto p : ssg->sampled_sgs) {
-            // p->generate_csr_from_csc();
-            // p->debug_generate_csr_from_csc();
-        // }
+        if (mini_pull) {
+            // LOG_DEBUG("generate csr from csc");
+            for (auto p : ssg->sampled_sgs) {
+                p->generate_csr_from_csc();
+                p->debug_generate_csr_from_csc();
+            }
+        }
+            
         std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
         push_one(ssg);
         // printf("debug: sample one done!\n");

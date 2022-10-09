@@ -243,13 +243,12 @@ public:
       // double tmp_start = -get_time();
       sampler->reservoir_sample(layers,
                                 graph->config->batch_size,
-                                graph->gnnctx->fanout, graph->config->batch_type, ctx->is_train());
+                                graph->gnnctx->fanout, graph->config->batch_type, ctx->is_train(), graph->config->mini_pull > 0);
       // printf("# sample_one cost %.3f\n", tmp_start + get_time());
       // assert(tmp_cnt++ < 3);
     }
     sample_cost += get_time();
     // LOG_DEBUG("sample cost %.3f", sample_cost);
-
     if (type ==  0 && graph->rtminfo->epoch >= 3) train_sample_time += sample_cost;
     int batch_num = sampler->size();
     LOG_DEBUG("sample_nodes %d batch_num %d sample_cost %.3f", sampler->sample_nids.size(), batch_num, sample_cost);
@@ -279,6 +278,7 @@ public:
 
     double nn_cost = 0;
     double update_degree_cost = 0;
+    double backward_cost = 0;
     while(sampler->has_rest()){
         sg=sampler->get_one();
 
@@ -287,9 +287,9 @@ public:
         NtsVar d;
         X.resize(graph->gnnctx->layer_size.size(),d);
       
-        // X[0]=nts::op::get_feature(sg->sampled_sgs[0]->src(),F,graph);
         // rpc.keep_running();
         tmp_time = -get_time();
+        // X[0]=nts::op::get_feature(sg->sampled_sgs[0]->src(), F, graph);
         X[0] = nts::op::get_feature_from_global(rpc, sg->sampled_sgs[0]->src(), F, graph);
         tmp_time += get_time();
         if (type == 0 && graph->rtminfo->epoch >= 3) rpc_comm_time += tmp_time;  
@@ -314,14 +314,11 @@ public:
       //  graph->rtminfo->forward = true;
         for(int l = 0; l < layers; l++) {//forward
           //  int hop=(graph->gnnctx->layer_size.size()-2)-l;
-        //  std::cout << "start process layer " << l << std::endl;
+          //  std::cout << "start process layer " << l << std::endl;
             // if (l > 0) {
             //   cout << "dopout" << std::endl;
             //   X[l] = torch::dropout(X[l], drop_rate, ctx->is_train());
             // }
-            update_degree_cost -= get_time();
-            sg->update_degrees(graph, l);
-            update_degree_cost += get_time();
 
             NtsVar Y_i=ctx->runGraphOp<nts::op::MiniBatchFuseOp>(sg, graph, l, X[l]);
             // printf("run graphop done\n");
@@ -331,7 +328,7 @@ public:
                 // std::cout << "last layer" << std::endl;
                 return P[l]->forward(n_i);
                 // return torch::mean(P[l]->forward(n_i));
-              }else{
+              }else {
                 // std::cout << "inter layer" << std::endl;
                 if (graph->config->batch_norm) {
                   // std::cout << "use bn1d" << std::endl;
@@ -350,6 +347,7 @@ public:
         // std::cout << X[layers] << std::endl;
         auto loss_ = Loss(X[layers], target_lab, graph->config->classes == 1);
         loss_epoch += loss_.item<float>();
+        // LOG_DEBUG("loss epoch %.3f", loss_epoch);
         // std::cout << "loss: " << loss_.item<float>() << " loss_epoch " << loss_epoch << std::endl;
         // std::cout << loss_.item<float>() << std::endl;
         // std::cout << "loss after " << loss_.data_ptr() << std::endl;
@@ -358,31 +356,24 @@ public:
           ctx->appendNNOp(X[layers], loss_);
         }
 
-        // std::cout << "start backward" << std::endl;
         if (ctx->training) {
+          backward_cost -= get_time();
           ctx->self_backward(false);
+          backward_cost += get_time();
           // std::cout << "backward done" << std::endl;
           Update();
           // std::cout << "update done" << std::endl;
-          for (int i = 0; i < P.size(); i++) {
-            P[i]->zero_grad();
-          }
+          zero_grad(); // should zero grad after every mini batch compute
           // std::cout << "zero_grad done" << std::endl;
         }
         // std::cout << "backward done" << std::endl;
         // std::cout << "loss done" << std::endl;
-        correct += get_correct(X[layers], target_lab, graph->config->classes == 1);
-        // std::cout << "correct done" << std::endl;
-        // std::cout << "layuer " << layers << std::endl;
-        // assert (false);
-        float f1 = f1_score(X[layers], target_lab, graph->config->classes == 1);
-        f1_epoch += f1;
-
-        // std::cout << X[layers] << std::endl << target_lab << std::endl;
-        // std::cout << correct << std::endl;
-        // std::cout << "f1 " << f1 << " " << f1_epoch << std::endl;
-        // assert(false);
-        train_nodes += target_lab.size(0);
+        if (graph->config->classes == 1) {
+          correct += get_correct(X[layers], target_lab, graph->config->classes == 1);
+          train_nodes += target_lab.size(0);
+        } else {
+          f1_epoch += f1_score(X[layers], target_lab, graph->config->classes == 1);
+        }
 
         // sg->sampled_sgs.back()->dst()
         // graph->rtminfo->forward = false;
@@ -419,24 +410,23 @@ public:
     sampler->restart();
     // acc = 1.0 * correct / sampler->work_range[1];
     // std::cout << "before " << correct << " " << train_nodes << std::endl;
-    if (type == 0 && graph->rtminfo->epoch >= 3)
-      mpi_comm_time -= get_time();
+    if (type == 0 && graph->rtminfo->epoch >= 3) mpi_comm_time -= get_time();
     MPI_Allreduce(MPI_IN_PLACE, &correct, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
     MPI_Allreduce(MPI_IN_PLACE, &train_nodes, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
-    if (type == 0 && graph->rtminfo->epoch >= 3)
-     mpi_comm_time += get_time();
+    if (type == 0 && graph->rtminfo->epoch >= 3) mpi_comm_time += get_time();
     acc = 1.0 * correct / train_nodes;
     // std::cout << "after " << correct << " " << train_nodes << std::endl;
     // printf("train_ndoes %d\n", train_nodes);
     forward_cost += get_time();
-    LOG_DEBUG("forward cost %.3f", forward_cost);
-    LOG_DEBUG("upadte_degree_cost %.5f", update_degree_cost);
+    LOG_DEBUG("Forward cost %.3f (backward cost %.3f)", forward_cost, backward_cost);
+    // LOG_DEBUG("upadte_degree_cost %.5f", update_degree_cost);
 
 
     // if (graph->partition_id == 0)
     // printf("\thost %d batch_num %d sample_cost %.3f forward_cost %.3f\n", 
     //       graph->partition_id, batch_num, sample_cost, forward_cost);
     if (graph->config->classes > 1) {
+      // LOG_DEBUG("use f1_score!");
       f1_epoch /= batch_num;
       acc = f1_epoch;
     }
@@ -448,6 +438,7 @@ public:
   }
 
   void zero_grad() {
+    // LOG_DEBUG("call zero_grad()");
     // if (i_i != 0) {
       for (int i = 0; i < P.size(); i++) {
         P[i]->zero_grad();
@@ -522,6 +513,7 @@ public:
       graph->rtminfo->epoch = i_i;
       zero_grad();
       
+      // LOG_DEBUG("start train()");
       ctx->train();
       // std::cout << "start train" << std::endl;
       if (i_i >= graph->config->time_skip) train_time -= get_time();
@@ -532,6 +524,8 @@ public:
       // std::cout << "end train" << std::endl;
       
       ctx->eval();
+      // LOG_DEBUG("start eval()");
+
       if (i_i >= graph->config->time_skip) val_time -= get_time();
       float val_acc = Forward(eval_sampler, 1);
       float val_loss = loss_epoch;

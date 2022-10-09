@@ -177,6 +177,7 @@ public:
   int batch_norm = 0;
   int time_skip = 3;
   int runs = 1;
+  int mini_pull = 0;
 
   // algorithm related:
   VertexId batch_size;

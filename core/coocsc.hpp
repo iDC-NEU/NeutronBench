@@ -78,6 +78,7 @@ public:
     }
     
     void update_degree_of_csc(Graph<Empty> *graph) {
+        // LOG_DEBUG("update_degree_of_csc");
         VertexId* outs = graph->out_degree_for_backward;
         VertexId* ins = graph->in_degree_for_backward;
         for (int i = 0; i < graph->vertices; ++i) {
@@ -94,9 +95,16 @@ public:
                 outs[source[local_src]]++;
             }
         }
+        // long sum_ins = 0, sum_outs = 0;
+        // for (int i = 0; i < graph->vertices; ++i) {
+        //     sum_ins += ins[i];
+        //     sum_outs += outs[i];
+        // }
+        // assert(sum_ins == sum_outs);
     }
 
     void update_degree_of_csr(Graph<Empty> *graph) {
+        // LOG_DEBUG("update_degree_of_csr");
         VertexId* outs = graph->out_degree_for_backward;
         VertexId* ins = graph->in_degree_for_backward;
         for (int i = 0; i < graph->vertices; ++i) {
@@ -113,6 +121,12 @@ public:
                 outs[destination[local_dst]]++;
             }
         }
+        // long sum_ins = 0, sum_outs = 0;
+        // for (int i = 0; i < graph->vertices; ++i) {
+        //     sum_ins += ins[i];
+        //     sum_outs += outs[i];
+        // }
+        // assert(sum_ins == sum_outs);
     }
 
     void generate_csr_from_csc() {
@@ -149,6 +163,9 @@ public:
                 column_indices[tmp_row_offset[local_src]++] = i;
             }
         }
+        // for (int i= 0; i < src_size; ++i) {
+        //     assert(tmp_row_offset[i] == row_offset[i + 1]);
+        // }
     }
     void postprocessing(){
         src_size=0;
@@ -282,7 +299,7 @@ public:
             assert(edge_csc[i].first == edge_csr[i].first);
             assert(edge_csc[i].second == edge_csr[i].second);
         }
-        assert(false);
+        // assert(false);
     }
     
 // private:

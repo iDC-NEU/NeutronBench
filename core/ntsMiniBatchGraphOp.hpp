@@ -156,6 +156,8 @@ public:
       graph_->Nts->getWritableBuffer(f_input, torch::DeviceType::CPU);
     ValueType *f_output_buffer =
       graph_->Nts->getWritableBuffer(f_output, torch::DeviceType::CPU);   
+    // LOG_DEBUG("forward pull version");
+    this->subgraphs->sampled_sgs[layer]->update_degree_of_csc(graph_);
     this->subgraphs->compute_one_layer(
             [&](VertexId local_dst, std::vector<VertexId>&column_offset, 
                 std::vector<VertexId>&row_indices){
@@ -186,44 +188,74 @@ public:
           graph_->Nts->getWritableBuffer(f_input_grad, torch::DeviceType::CPU);
         ValueType *f_output_grad_buffer =
           graph_->Nts->getWritableBuffer(f_output_grad, torch::DeviceType::CPU);
-        this->subgraphs->compute_one_layer(
-            [&](VertexId local_dst, std::vector<VertexId>&column_offset, 
-                std::vector<VertexId>&row_indices){
-                VertexId src_start=column_offset[local_dst];
-                VertexId src_end=column_offset[local_dst+1];
-                VertexId dst=subgraphs->sampled_sgs[layer]->dst()[local_dst];
-                ValueType *local_input=f_output_grad_buffer+local_dst*feature_size;
-                for(VertexId src_offset=src_start;
-                        src_offset<src_end;src_offset++){
-                    VertexId local_src=subgraphs->sampled_sgs[layer]->r_i(src_offset);
-                    VertexId src=subgraphs->sampled_sgs[layer]->src()[local_src];
-                    ValueType *local_output=f_input_grad_buffer+local_src*feature_size;
-                    nts_acc(local_output, local_input,nts_norm_degree(graph_,src, dst), feature_size);
+        if (graph_->config->mini_pull == 0) {
+          // LOG_DEBUG("use push version of backward");
+          this->subgraphs->sampled_sgs[layer]->update_degree_of_csc(graph_);
+          this->subgraphs->compute_one_layer(
+              [&](VertexId local_dst, std::vector<VertexId>&column_offset, 
+                  std::vector<VertexId>&row_indices){
+                  VertexId src_start=column_offset[local_dst];
+                  VertexId src_end=column_offset[local_dst+1];
+                  VertexId dst=subgraphs->sampled_sgs[layer]->dst()[local_dst];
+                  ValueType *local_input=f_output_grad_buffer+local_dst*feature_size;
+                  for(VertexId src_offset=src_start;
+                          src_offset<src_end;src_offset++){
+                      VertexId local_src=subgraphs->sampled_sgs[layer]->r_i(src_offset);
+                      VertexId src=subgraphs->sampled_sgs[layer]->src()[local_src];
+                      ValueType *local_output=f_input_grad_buffer+local_src*feature_size;
+                      // push version of backward
+                      nts_acc(local_output, local_input,nts_norm_degree(graph_,src, dst), feature_size);
+                  }
+                },
+              layer
+          );
+        } else {
+          // pull
+          this->subgraphs->sampled_sgs[layer]->update_degree_of_csr(graph_);
+          // LOG_DEBUG("use pull version of backward");
+          this->subgraphs->compute_one_layer_backward(
+              [&](VertexId local_src, std::vector<VertexId>&row_offset, 
+                  std::vector<VertexId>&column_indices){
+                  // assert(&column_indices == &subgraphs->sampled_sgs[layer]->c_i());
+                  VertexId dst_start = row_offset[local_src];
+                  VertexId dst_end = row_offset[local_src+1];
+                  VertexId src = subgraphs->sampled_sgs[layer]->src()[local_src];
+                  ValueType *local_input = f_input_grad_buffer + local_src * feature_size;
+                  for(VertexId dst_offset = dst_start; dst_offset < dst_end; dst_offset++){
+                      VertexId local_dst = column_indices[dst_offset];
+                      VertexId dst = subgraphs->sampled_sgs[layer]->dst()[local_dst];
+                      ValueType *local_output = f_output_grad_buffer + local_dst * feature_size;
+                      // nts_acc(, src, dst), ); // if update_degree_csc
+                      nts_comp(local_input, local_output, nts_norm_degree(graph_, dst, src), feature_size);
+                      // nts_acc(local_input, local_output, nts_norm_degree(graph_, dst, src), feature_size);
+                  }
+                },
+              layer
+              // ,12//compute thread num;
+          );
 
-                }
-              },
-            layer
-        );
+          // this->subgraphs->compute_one_layer(
+          //     [&](VertexId local_dst, std::vector<VertexId>&column_offset, 
+          //         std::vector<VertexId>&row_indices){
+          //         VertexId src_start=column_offset[local_dst];
+          //         VertexId src_end=column_offset[local_dst+1];
+          //         VertexId dst=subgraphs->sampled_sgs[layer]->dst()[local_dst];
+          //         ValueType *local_input=f_output_grad_buffer+local_dst*feature_size;
+          //         for(VertexId src_offset=src_start;
+          //                 src_offset<src_end;src_offset++){
+          //             VertexId local_src=subgraphs->sampled_sgs[layer]->r_i(src_offset);
+          //             VertexId src=subgraphs->sampled_sgs[layer]->src()[local_src];
+          //             ValueType *local_output=f_input_grad_buffer+local_src*feature_size;
+          //             nts_acc(local_output, local_input,nts_norm_degree(graph_,src, dst), feature_size);
 
-        // pull
-        // this->subgraphs->compute_one_layer_backward(
-        //     [&](VertexId local_src, std::vector<VertexId>&row_offset, 
-        //         std::vector<VertexId>&column_indices){
-        //         // assert(&column_indices == &subgraphs->sampled_sgs[layer]->c_i());
-        //         VertexId dst_start = row_offset[local_src];
-        //         VertexId dst_end = row_offset[local_src+1];
-        //         VertexId src = subgraphs->sampled_sgs[layer]->src()[local_src];
-        //         ValueType *local_input = f_input_grad_buffer + local_src * feature_size;
-        //         for(VertexId dst_offset = dst_start; dst_offset < dst_end; dst_offset++){
-        //             VertexId local_dst = column_indices[dst_offset];
-        //             VertexId dst = subgraphs->sampled_sgs[layer]->dst()[local_dst];
-        //             ValueType *local_output = f_output_grad_buffer + local_dst * feature_size;
-        //             nts_acc(local_input, local_output, nts_norm_degree(graph_, src, dst), feature_size);
-        //         }
-        //       },
-        //     layer,
-        //     12//compute thread num;
-        // );
+          //         }
+          //       },
+          //     layer
+          // );
+
+
+        }
+
        return f_input_grad;
    }
 

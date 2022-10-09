@@ -310,6 +310,8 @@ void InputInfo::readFromCfgFile(std::string config_file) {
       this->runs = std::atoi(cfg_v.c_str());
       // std::cout << "runs " << this->runs << std::endl;
       // assert(false);
+    } else if (0 == cfg_k.compare("MINI_PULL")) {
+      this->mini_pull = std::atoi(cfg_v.c_str());
     }
 
 
@@ -363,6 +365,7 @@ void InputInfo::print() {
   std::cout << "batch_norm\t:\t" << batch_norm << std::endl;
   std::cout << "time_skip\t:\t" << time_skip << std::endl;
   std::cout << "runs\t\t:\t" << runs << std::endl;
+  std::cout << "mini_pull\t:\t" << mini_pull << std::endl;
   std::cout <<"------------------input info--------------"<<std::endl;
 }
 
