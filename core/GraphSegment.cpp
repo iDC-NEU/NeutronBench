@@ -333,7 +333,7 @@ void InputInfo::print() {
   // std::cout << "batch_type\t\t:\t" << batch_type << std::endl;
   std::cout << "batch_type\t:\t";
   if (batch_type == SHUFFLE) {
-    std::cout << "suffle" << std::endl;
+    std::cout << "shuffle" << std::endl;
   } else if (batch_type == RANDOM) {
     std::cout << "random" << std::endl;
   } else if (batch_type == SEQUENCE) {

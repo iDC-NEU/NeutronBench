@@ -96,13 +96,13 @@ int main(int argc, char **argv) {
       float acc = ntsGCN->run();
       best_val_accs.push_back(acc);
     }
-    std::cout << "accs: ";
+    std::cout << "Best-val-acc: ";
     for (auto &it : best_val_accs) {
       std::cout << it << " ";
     }std::cout << std::endl;
     float mean, var;
     tie(mean, var) = get_mean_var(best_val_accs);
-    printf("val acc %d runs: %.4f(%.4f)\n", graph->config->runs, mean, var);
+    printf("Val-mean-var %d runs: %.4f(%.4f)\n", graph->config->runs, mean, var);
     std::cout << "edge_file: " << graph->config->edge_file << std::endl;
   } else if (graph->config->algorithm == std::string("TEST_BATCH_DIST")) {
     graph->load_directed(graph->config->edge_file, graph->config->vertices);
