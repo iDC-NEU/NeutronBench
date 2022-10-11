@@ -99,7 +99,7 @@ def extract_dataset(args):
         edge_dst = edges[1].numpy().reshape((-1,1))
         edges_list = np.hstack((edge_src, edge_dst))
 
-        train_mask, val_mask, test_mask = split_dataset(num_nodes)
+        train_mask, val_mask, test_mask = split_dataset(num_nodes, 6, 3, 1)
         print("dataset: {} nodes: {} edges: {} feature dims: {} classess: {} label nodes: {}({}/{}/{})"
               .format(dataset, num_nodes, edges_list.shape, 
               list(features.shape), len(np.unique(labels)),

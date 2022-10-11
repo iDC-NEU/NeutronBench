@@ -9,7 +9,17 @@ build/
 *.img
 
 # no log file
-*.log
+# *.log
 *.pdf
 
-# no doc file
+# no data directory
+data/**/
+
+# no exe bin
+a.out
+
+# no tmp cfg
+tmp.cfg
+
+# no zip files
+*.zip

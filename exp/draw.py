@@ -72,6 +72,7 @@ def plot_bar(x_name, y_label,x_label, datas, labels, filename='bar.pdf', color=N
 
 
 def plot_line(X, Y, labels, savefile=None, color=None, y_label=None):
+  print(f'plot_line of {savefile}\n')
   assert(len(X) == len(Y) == len(labels))
   # label在图示(legend)中显示。若为数学公式,则最好在字符串前后添加"$"符号
   # color：b:blue、g:green、r:red、c:cyan、m:magenta、y:yellow、k:black、w:white、、、
@@ -193,6 +194,7 @@ def parse_log(filename=None):
 
 
 def parse_acc(filename, epoch):
+  print(f'parse_acc of {filename}')
   if not os.path.exists(filename):
     print(f'{filename} not exist')
   loss, train_acc, val_acc, test_acc = [], [], [], []
@@ -213,6 +215,7 @@ def parse_acc(filename, epoch):
 
 
 def parse_time(filename, epoch):
+  print(f'parse_time of {filename}')
   if not os.path.exists(filename):
     print(f'{filename} not exist')
   time_list = []
@@ -230,6 +233,7 @@ def parse_time(filename, epoch):
 
 
 def parse_dataset(filename):
+  print(f'parse_dataset of {filename}')
   if not os.path.exists(filename):
     print(f'{filename} not exist')
   dataset = None
@@ -264,8 +268,11 @@ def draw_batch_size():
            }             
 
   pre_path = './log/batch-size/'
-  labels = []
+  plot_path = './pdf/batch-size/'
+  if not os.path.exists(plot_path):
+    os.makedirs(plot_path)
 
+  labels = []
   for k, v in batch_size.items():
     plot_time, plot_acc, labels = [], [], []
     for b in v:
@@ -283,7 +290,7 @@ def draw_batch_size():
     
     if len(plot_acc) == 0:
       continue
-    plot_line(plot_time, plot_acc, labels, pre_path + k + '-batch_size.pdf', y_label='Eval Acc')
+    plot_line(plot_time, plot_acc, labels, plot_path + k + '-batch_size.pdf', y_label='Eval Acc')
 
       
 
