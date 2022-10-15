@@ -85,6 +85,7 @@ NtsVar get_feature(std::vector<VertexId>& src, NtsVar &whole, Graph<Empty> *grap
     return f_output;
   }
   
+// TODO (sanzo): omp speed up  
 NtsVar get_feature_from_global(ntsPeerRPC<ValueType, VertexId>&rpc, std::vector<VertexId>& src, NtsVar& X, Graph<Empty>* graph){
     int feature_size = X.size(1);
     NtsVar f_output = graph->Nts->NewKeyTensor({static_cast<long>(src.size()), feature_size}, torch::DeviceType::CPU);

@@ -68,6 +68,8 @@ int main(int argc, char **argv) {
     ntsGIN->init_nn();
     ntsGIN->run();
   } else if (graph->config->algorithm == std::string("GCNNEIGHBOR")) {
+   
+   
     double load_graph_time = -get_time();
     graph->load_directed(graph->config->edge_file, graph->config->vertices);
     load_graph_time += get_time();
@@ -104,6 +106,8 @@ int main(int argc, char **argv) {
     tie(mean, var) = get_mean_var(best_val_accs);
     printf("Val-mean-var %d runs: %.4f(%.4f)\n", graph->config->runs, mean, var);
     std::cout << "edge_file: " << graph->config->edge_file << std::endl;
+
+
   } else if (graph->config->algorithm == std::string("TEST_BATCH_DIST")) {
     graph->load_directed(graph->config->edge_file, graph->config->vertices);
     graph->generate_backward_structure();

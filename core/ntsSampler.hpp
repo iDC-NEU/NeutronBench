@@ -66,7 +66,7 @@ public:
     ~Sampler(){
         clear_queue();
     }
-    bool has_rest(){
+    bool has_rest_safe(){
         bool condition=false;
         int cond_start=0;
         queue_start_lock.lock();
@@ -81,12 +81,16 @@ public:
         condition=cond_start<cond_end&&cond_start>=0;
         return condition;
     }
+
+    bool has_rest(){
+        return queue_start < queue_end && queue_start >= 0;;
+    }
 //    bool has_rest(){
 //        bool condition=false;
 //        condition=queue_start<queue_end&&queue_start>=0;
 //        return condition;
 //    }
-    SampledSubgraph* get_one(){
+    SampledSubgraph* get_one_safe(){
 //        while(true){
 //            bool condition=queue_start<queue_end;
 //            if(condition){
@@ -100,10 +104,18 @@ public:
         assert(id<work_queue.size());
         return work_queue[id];
     }
+
+    SampledSubgraph* get_one(){
+        VertexId id=queue_start++;
+        assert(id<work_queue.size());
+        return work_queue[id];
+    }
+    
     int size() {
         return work_queue.size();
     }
-    void push_one(SampledSubgraph* ssg) {
+    
+    void push_one_safe(SampledSubgraph* ssg) {
         work_queue.push_back(ssg);
         queue_end_lock.lock();
         queue_end++;
@@ -112,6 +124,14 @@ public:
             queue_start_lock.lock();
             queue_start=0;
             queue_start_lock.unlock();
+        }
+    }
+
+    void push_one(SampledSubgraph* ssg) {
+        work_queue.push_back(ssg);
+        queue_end++;
+        if(work_queue.size()==1){
+            queue_start=0;
         }
     }
 
