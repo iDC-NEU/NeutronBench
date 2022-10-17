@@ -33,8 +33,8 @@ public:
         fanout.clear();
         sampled_sgs.clear();
         curr_layer = 0;
-        threads = numa_num_configured_cpus() - 1;
-        threads = std::max(1, threads);
+        threads = std::max(1, numa_num_configured_cpus() - 1);
+        // threads = std::max(1, numa_num_configured_cpus() / 2);
         seeds = new unsigned[threads];
     }
     SampledSubgraph(int layers_, int batch_size_, const std::vector<int>& fanout_){
@@ -44,8 +44,8 @@ public:
         sampled_sgs.clear();
         curr_layer=0;
         curr_dst_size=batch_size;
-        threads = numa_num_configured_cpus() - 1;
-        threads = std::max(1, threads);
+        threads = std::max(1, numa_num_configured_cpus() - 1);
+        // threads = std::max(1, numa_num_configured_cpus() / 2);
         seeds = new unsigned[threads];
     }
     
@@ -54,10 +54,9 @@ public:
         fanout=fanout_;
         sampled_sgs.clear();
         curr_layer=0;
-        threads = numa_num_configured_cpus() - 1;
-        threads = std::max(1, threads);
-        seeds = new unsigned[threads];
-        // printf("numa_threads %d omp_threads %d\n", threads, omp_get_max_threads());
+        threads = std::max(1, numa_num_configured_cpus() - 1);
+        // threads = std::max(1, numa_num_configured_cpus() / 2);
+        // seeds = new unsigned[threads];
     }
     
     ~SampledSubgraph(){
@@ -108,10 +107,10 @@ public:
             sampCSC* sampled_sg=new sampCSC(0);
             sampled_sgs.push_back(sampled_sg);
         }else{
-        sampCSC* sampled_sg=new sampCSC(curr_dst_size);
-        //sampled_sg->allocate_all();
-        sampled_sg->allocate_vertex();
-        sampled_sgs.push_back(sampled_sg);
+            sampCSC* sampled_sg=new sampCSC(curr_dst_size);
+            // sampled_sg->allocate_all();
+            sampled_sg->allocate_vertex();
+            sampled_sgs.push_back(sampled_sg);
         }
        // assert(layer==sampled_sgs.size()-1);
     }
@@ -126,10 +125,13 @@ public:
            sampled_sgs[layer]->allocate_co_from_dst();
         }
         VertexId offset=0;
+        // std::cout << "dst_size " << curr_dst_size << " ";
         for(VertexId i=0;i<curr_dst_size;i++){
             sampled_sgs[layer]->c_o()[i]=offset;
             offset+=get_nbr_size(sampled_sgs[layer]->dst()[i]);//init destination;
+            // std::cout << offset << " ";
         }
+        // std::cout << std::endl;
         sampled_sgs[layer]->c_o()[curr_dst_size]=offset;  
         sampled_sgs[layer]->allocate_edge(offset);
     }
@@ -146,13 +148,13 @@ public:
     //     return distribution(generator);
     // }
     void sample_processing(std::function<void(VertexId fanout_i,
-                VertexId dst,
-                    std::vector<VertexId> &column_offset,
-                        std::vector<VertexId> &row_indices,VertexId id)> vertex_sample){
+                VertexId dst, std::vector<VertexId> &column_offset,
+                std::vector<VertexId> &row_indices,VertexId id)> vertex_sample){
         {
             // random_gen_seed();
             // threads=30;
-omp_set_num_threads(threads);            
+omp_set_num_threads(threads); 
+// LOG_DEBUG("thrads %d", threads);           
 #pragma omp parallel for num_threads(threads)
             for (VertexId begin_v_i = 0;begin_v_i < curr_dst_size;begin_v_i += 1) {
             // for every vertex, apply the sparse_slot at the partition
@@ -169,6 +171,12 @@ omp_set_num_threads(threads);
     
     void sample_postprocessing(){
         sampled_sgs[sampled_sgs.size()-1]->postprocessing();
+        curr_dst_size=sampled_sgs[sampled_sgs.size()-1]->get_distinct_src_size();
+        curr_layer++;
+    }
+
+    void sample_postprocessing(Bitmap* bits){
+        sampled_sgs[sampled_sgs.size()-1]->postprocessing(bits);
         curr_dst_size=sampled_sgs[sampled_sgs.size()-1]->get_distinct_src_size();
         curr_layer++;
     }

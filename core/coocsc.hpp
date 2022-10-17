@@ -141,6 +141,7 @@ public:
         row_offset.resize(src_size + 1, 0);
         column_indices.resize(edge_size);
         
+        #pragma omp parallel for
         for (int i = 0; i < dst_size; ++i) {
             for (int j = column_offset[i]; j < column_offset[i + 1]; ++j) {
                 int local_src = row_indices[j];
@@ -157,6 +158,8 @@ public:
         std::vector<int> tmp_row_offset(row_offset.begin(), row_offset.end());
         // sum = std::accumulate(tmp_row_offset.begin(), tmp_row_offset.end(), 0);
         // assert(sum == edge_size);
+
+        #pragma omp parallel for
         for (int i = 0; i < dst_size; ++i) {
             for (int j = column_offset[i]; j < column_offset[i + 1]; ++j) {
                 int local_src = row_indices[j];
@@ -172,10 +175,10 @@ public:
         row_indices_debug.resize(row_indices.size(),0);
         for(VertexId i_src=0;i_src<row_indices.size();i_src++){
           //  printf("debug %d\n",i_src);
-          row_indices_debug[i_src]=row_indices[i_src];
-          if(0xFFFFFFFF==row_indices[i_src]){
-              continue;
-          }
+            row_indices_debug[i_src]=row_indices[i_src];
+            if(0xFFFFFFFF==row_indices[i_src]){
+                continue;
+            }
             auto iter = src_index.find(row_indices[i_src]);  
             //printf("%d\n",iter == src_index.end());
             if(iter == src_index.end()){   
@@ -194,6 +197,47 @@ public:
             }
         }
     }
+
+    void postprocessing (Bitmap* bits){
+        // int cnt = 0;
+        // for (int i = 0; i < bits->size; ++i) {
+        //     if (bits->get_bit(i) > 0) {
+        //         cnt++;
+        //     }
+        // }
+        // std::unordered_set<int> st;
+        // for (const auto &node_id : row_indices) {
+        //     st.insert(node_id);
+        //     assert(bits->get_bit(node_id) > 0);
+        // }
+        // assert(st.size() == cnt);
+
+        // assert(cnt == bits->get_size());
+
+        std::vector<int> node_idx(bits->size, -1);
+        src_size = 0;
+        // LOG_DEBUG("fuck debug size %d", bits->size);
+
+        source.reserve(bits->get_size());
+        // #pragma omp parallel for
+        for (int i = 0; i < bits->size; ++i) {
+            if (bits->get_bit(i) > 0) {
+                source.push_back(i);
+                node_idx[i] = src_size++;
+            }
+        }
+        // LOG_DEBUG("after ndoe_idx");
+
+
+        #pragma omp parallel for
+        for (size_t i = 0; i < row_indices.size(); ++i) {
+            int src = row_indices[i];
+            assert(node_idx[src] != -1);
+            row_indices[i] = node_idx[src];
+        }
+        // LOG_DEBUG("after rwo_incic");
+    }
+
     void allocate_vertex(){
         destination.resize(v_size,0);       
         column_offset.resize(v_size+1,0);

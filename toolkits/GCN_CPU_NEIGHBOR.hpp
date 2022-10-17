@@ -245,13 +245,42 @@ public:
 
     // node sampling
     double sample_cost = -get_time();
+    double inner_sample_cost = 0;
+    sampler->zero_debug_time();
     while(sampler->sample_not_finished()) {
-      sampler->reservoir_sample(layers,
+      inner_sample_cost -= get_time();
+      sampler->sample_one(layers,
                                 graph->config->batch_size,
-                                graph->gnnctx->fanout, graph->config->batch_type, ctx->is_train(), graph->config->mini_pull > 0);
+                                graph->gnnctx->fanout, graph->config->batch_type, ctx->is_train());
+      inner_sample_cost += get_time();
     }
     sample_cost += get_time();
+    LOG_DEBUG("sample_cost %.3f", sample_cost);
+    // LOG_DEBUG("sample done! %.3f innner %.3f", sample_cost, inner_sample_cost);
+    // LOG_DEBUG("pre_time %.3f, load_dst_time %.3f, init_co %.3f, processing %.3f, post_time %.3f,", sampler->sample_pre_time, sampler->sample_load_dst, sampler->sample_init_co, sampler->sample_processing_time, sampler->sample_post_time);
+
+
     if (type ==  0 && graph->rtminfo->epoch >= 3) train_sample_time += sample_cost;
+
+    if (graph->config->mini_pull > 0) { // generate csr structure for backward of pull mode
+      double generate_csr_time = -get_time();
+      double convert_time = 0;
+      double debug_time = 0;
+      for (auto ssg : sampler->work_queue) {
+        for (auto p : ssg->sampled_sgs) {
+            convert_time -= get_time();
+            p->generate_csr_from_csc();
+            convert_time += get_time();
+            // debug_time -= get_time();
+            // p->debug_generate_csr_from_csc();
+            // debug_time += get_time();
+        }
+      }
+      generate_csr_time += get_time();
+      // LOG_DEBUG("generate_csr %.3f, convert %.3f debug %.3f ", generate_csr_time, convert_time, debug_time);
+      LOG_DEBUG("generate_csr %.3f", generate_csr_time);
+    }
+
 
     int batch_num = sampler->size();
     if (hosts > 1) {
@@ -397,9 +426,9 @@ public:
     } else {
       LOG_DEBUG("evaluation cost %.3f", train_cost);
     }
-    LOG_DEBUG("sample_cost %.3f, get_feature/lable (%.3f/%.3f)", sample_cost, get_feature_cost, get_label_cost);
-    LOG_DEBUG("forward: graph %.3f, nn %.3f, loss %.3f, acc %.3f, update %.3f", forward_graph_cost, forward_nn_cost, forward_loss_cost, forward_acc_cost, update_cost);
-    LOG_DEBUG("backward cost %.3f", backward_cost);
+    LOG_DEBUG("  get_feature/lable (%.3f/%.3f)", get_feature_cost, get_label_cost);
+    LOG_DEBUG("  forward: graph %.3f, nn %.3f, loss %.3f, acc %.3f, update %.3f", forward_graph_cost, forward_nn_cost, forward_loss_cost, forward_acc_cost, update_cost);
+    LOG_DEBUG("  backward cost %.3f", backward_cost);
     // LOG_DEBUG("forward other %.3f, append %.3f, backward cost %.3f train cost %.3f", forward_other_cost, forward_append_cost, backward_cost, train_cost);
     // LOG_DEBUG("forward other %.3f, backward cost %.3f train cost %.3f", forward_other_cost, backward_cost, train_cost);
     // LOG_DEBUG("forward all %.3f", forward_graph_cost + forward_nn_cost + forward_loss_cost + forward_acc_cost + update_cost + forward_other_cost + forward_append_cost + backward_cost

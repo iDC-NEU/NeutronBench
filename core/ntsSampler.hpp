@@ -37,6 +37,23 @@ public:
     std::vector<VertexId> metis_partition_offset;
     std::vector<VertexId> metis_partition_id;
 
+    double sample_pre_time = 0;
+    double sample_load_dst = 0;
+    double sample_init_co = 0;
+    double sample_post_time = 0;
+    double sample_processing_time = 0;
+    double layer_time = 0;
+    Bitmap* sample_bits;
+
+    void zero_debug_time() {
+        sample_pre_time = 0;
+        sample_load_dst = 0;
+        sample_init_co = 0;
+        sample_post_time = 0;
+        sample_processing_time = 0;
+        layer_time = 0;        
+    }
+
     // template<typename T>
     // T RandInt(T lower, T upper) {
     //     std::uniform_int_distribution<T> dist(lower, upper - 1);
@@ -51,6 +68,7 @@ public:
         work_range[0]=work_start;
         work_range[1]=work_end;
         work_offset=work_start;
+        sample_bits = new Bitmap(whole_graph->global_vertices);
     }
     Sampler(FullyRepGraph* whole_graph_, std::vector<VertexId>& index){
         // assert(index.size() > 0);
@@ -62,6 +80,8 @@ public:
         work_range[0]=0;
         work_range[1]=sample_nids.size();
         work_offset=0;
+        // LOG_DEBUG("vertices %d", whole_graph->global_vertices);
+        sample_bits = new Bitmap(whole_graph->global_vertices);
     }
     ~Sampler(){
         clear_queue();
@@ -157,78 +177,61 @@ public:
         return distribution(generator);
     }
 
-    void reservoir_sample(int layers_, int batch_size_, const std::vector<int>& fanout_, int type = 0, bool phase=true, bool mini_pull=false){
+
+    template<typename T>
+    T rand_int(T upper) {
+        return rand_int<T>(0, upper);
+    }
+
+    // random from [lower, upper)
+    template<typename T>
+    T rand_int(T lower, T upper) {
+        assert(lower < upper);
+        static thread_local std::mt19937 generator;
+        std::uniform_int_distribution<T> distribution(lower, upper - 1);
+        return distribution(generator);
+    }
+
+    void sample_one(int layers_, int batch_size_, const std::vector<int>& fanout_, int type = 0, bool phase=true){
     // void reservoir_sample(int layers_, int batch_size_, const std::vector<int>& fanout_, int type = 0){
         // LOG_DEBUG("layers %d batch_size %d fanout %d-%d", layers_, batch_size_, fanout_[0], fanout_[1]);
         assert(work_offset<work_range[1]);
         int actl_batch_size=std::min((VertexId)batch_size_,work_range[1]-work_offset);
         // LOG_DEBUG("actl_batch %d", actl_batch_size);
         SampledSubgraph* ssg=new SampledSubgraph(layers_,fanout_);  
+        // LOG_DEBUG("fuck batch_size %d", actl_batch_size);
         
         for(int i=0;i<layers_;i++){
             // printf("debug sample layer %d\n", i);
-            double layer_time = -get_time();
-            
-            double sample_pre_time = -get_time();
+            layer_time -= get_time();
+            sample_pre_time -= get_time();
             ssg->sample_preprocessing(i);
             sample_pre_time += get_time();
             // LOG_DEBUG("sample_pre_time cost %.3f", sample_pre_time);
 
             //whole_graph->SyncAndLog("preprocessing");
-            double sample_load_dst = -get_time();
+            sample_load_dst -= get_time();
             if(i==0){
                 // double sample_load_dst = -get_time();
                 int len = sample_nids.size();
-              ssg->sample_load_destination([&](std::vector<VertexId>& destination){
-                    // std::unordered_set<VertexId> st;
-                    // unsigned seed = std::chrono::system_clock::now ().time_since_epoch ().count();
-                    // std::shuffle (sample_nids.begin(), sample_nids.end(), std::default_random_engine(seed));
-                  for(int j=0;j<actl_batch_size;j++){
-                    destination.push_back(sample_nids[work_offset++]);
-                    // if (type < 2 || !phase) { // type = 0, 1(seq, shuffle) or val or test
-                    //     destination.push_back(sample_nids[work_offset++]);
-                    // } else if (type == 2) { // type = 2, random batch
-                        
-                    //     destination.push_back(sample_nids[work_offset++]);
-
-                    //     // while (true) {
-                    //     //     int select = random_uniform_int(0, len-1);
-                    //     //     if (st.find(select) != st.end()) {
-                    //     //         continue;
-                    //     //     }
-                    //     //     st.insert(select);
-                    //     //     destination.push_back(sample_nids[select]);
-                    //     //     work_offset++;
-                    //     //     // printf("select %d\n", select);
-                    //     //     break;
-                    //     // }
-                    // // } else if (type == 3) {
-                    // } else {
-                    //     destination.push_back(sample_nids[work_offset++]);
-                    // }
-                  }
-                //   printf("load dst done!\n");
-              },i);
-                // sample_pre_time += get_time();
-                // printf("sample_pre_time %.3f\n", sample_pre_time);
-            //   for (auto &v : ssg->sampled_sgs[0]->dst()) {
-            //     printf("%d ", v);
-            //   }printf("\n");
-              //whole_graph->SyncAndLog("sample_load_destination");
+                ssg->sample_load_destination(
+                    [&](std::vector<VertexId>& destination){
+                        for(int j=0;j<actl_batch_size;j++){
+                            destination.push_back(sample_nids[work_offset++]);
+                        }
+                    }, i
+                );
             }else{
                ssg->sample_load_destination(i); 
-              //whole_graph->SyncAndLog("sample_load_destination2");
             }
-            // printf("debug sample load dest done\n");
             sample_load_dst += get_time();
             // LOG_DEBUG("sample_load_dst cost %.3f", sample_load_dst);
-            
-            double sample_init_co = -get_time();
+                        
+            sample_init_co -= get_time();
             ssg->init_co([&](VertexId dst){
                 VertexId nbrs=whole_graph->column_offset[dst+1] - whole_graph->column_offset[dst];
                 int ret = std::min((int)nbrs, fanout_[i]);
                 if (ret == -1) {
-                    // std::cout << "-1 " << nbrs << std::endl;
                     ret = nbrs;
                 }
                 return ret;
@@ -236,57 +239,139 @@ public:
             sample_init_co += get_time();
             // LOG_DEBUG("sample_init_co cost %.3f", sample_init_co);
             
-            double sample_processing_time = -get_time();
-            ssg->sample_processing([&](int fanout_i,
-                    VertexId dst,
-                    std::vector<VertexId> &column_offset,
-                        std::vector<VertexId> &row_indices,VertexId id){
-                    // unsigned seeds[33];
-                    // LOG_DEBUG("fanout %d, dst %d, id %d", fanout_i, dst, id);
-                for(VertexId src_idx=whole_graph->column_offset[dst];
-                        src_idx<whole_graph->column_offset[dst+1];src_idx++){
-                    //ReservoirSampling
-                    VertexId write_pos=(src_idx-whole_graph->column_offset[dst]);
-                    if(write_pos<fanout_i){
-                        write_pos+=column_offset[id];
-                        row_indices[write_pos]=whole_graph->row_indices[src_idx];
-                    }else{
-                        // std::cout << "random " << std::endl;
-                        // VertexId random=rand()%write_pos;
-                        // VertexId random=rand_r(&seeds[omp_get_thread_num()])%write_pos;
-                        VertexId random=random_uniform_int(0, write_pos-1);
-                        if(random<fanout_i){
-                          row_indices[random+column_offset[id]]=  
-                                  whole_graph->row_indices[src_idx];
-                        }
-                    }
-                }
+            sample_bits->clear();
+            sample_processing_time = -get_time();
+            // LOG_DEBUG("fuck start processing");
+            // ssg->sample_processing(std::bind(&Sampler::NeighborUniformSample, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5));
+            ssg->sample_processing([=](VertexId fanout_i, VertexId dst, std::vector<VertexId> &column_offset, std::vector<VertexId> &row_indices, VertexId id) {
+                this->NeighborUniformSample(fanout_i, dst, column_offset, row_indices, id);
+                // this->NeighborUniformSample_reservoir(fanout_i, dst, column_offset, row_indices, id);
             });
             sample_processing_time += get_time();
-            // LOG_DEBUG("debug sample_processing_cost cost %.3f", sample_processing_time);
-            //whole_graph->SyncAndLog("sample_processing");
+            // LOG_DEBUG("fuck end processing");
 
-            double sample_post = -get_time();
-            ssg->sample_postprocessing();
-            sample_post += get_time();
+            //whole_graph->SyncAndLog("sample_processing");
+            sample_post_time -= get_time();
+            ssg->sample_postprocessing(sample_bits);
+            // ssg->sample_postprocessing();
+            sample_post_time += get_time();
             // LOG_DEBUG("sample_post %.3f", sample_post);
-            
             //whole_graph->SyncAndLog("sample_postprocessing");
             layer_time += get_time();
             // printf("sample layer time %.3f\n", layer_time);
         }
-        // generate csr for backward graph
-        if (mini_pull) {
-            // LOG_DEBUG("generate csr from csc");
-            for (auto p : ssg->sampled_sgs) {
-                p->generate_csr_from_csc();
-                p->debug_generate_csr_from_csc();
-            }
-        }
-            
+        // LOG_DEBUG("layer %.3f, pre_time %.3f, load_dst_time %.3f, init_co %.3f, processing %.3f, post_time %.3f,", layer_time, sample_pre_time, sample_load_dst, sample_init_co, sample_processing_time, sample_post_time);
         std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
         push_one(ssg);
         // printf("debug: sample one done!\n");
+    }
+
+    void RandomSample(size_t set_size, size_t num, std::vector<size_t>& out) {
+        if (num < set_size) {
+            std::unordered_set<size_t> sampled_idxs;
+            while (sampled_idxs.size() < num) {
+                sampled_idxs.insert(rand_int(set_size));
+            }
+            out.insert(out.end(), sampled_idxs.begin(), sampled_idxs.end());
+        } else {
+            for (size_t i = 0; i < set_size; ++i) {
+                out.push_back(i);
+            }
+        }
+    }
+
+    /*
+    * For a sparse array whose non-zeros are represented by nz_idxs,
+    * negate the sparse array and outputs the non-zeros in the negated array.
+    */
+    void NegateArray(const std::vector<size_t> &nz_idxs, size_t arr_size, std::vector<size_t>* out) {
+        // nz_idxs must have been sorted.
+        auto it = nz_idxs.begin();
+        size_t i = 0;
+        // CHECK_GT(arr_size, nz_idxs.back());
+        assert(arr_size > nz_idxs.back());
+        for (; i < arr_size && it != nz_idxs.end(); i++) {
+            if (*it == i) {
+            it++;
+            continue;
+            }
+            out->push_back(i);
+        }
+        for (; i < arr_size; i++) {
+            out->push_back(i);
+        }
+    }
+
+    void NeighborUniformSample_reservoir(VertexId fanout_i, VertexId dst, std::vector<VertexId> &column_offset, std::vector<VertexId> &row_indices, VertexId id) {
+        for(VertexId src_idx=whole_graph->column_offset[dst];
+                src_idx<whole_graph->column_offset[dst+1];src_idx++){
+            //ReservoirSampling
+            VertexId write_pos=(src_idx-whole_graph->column_offset[dst]);
+            if(write_pos<fanout_i){
+                write_pos+=column_offset[id];
+                row_indices[write_pos]=whole_graph->row_indices[src_idx];
+                sample_bits->set_bit(whole_graph->row_indices[src_idx]);
+            }else{
+                // VertexId random=rand()%write_pos;
+                // VertexId random=rand_r(&seeds[omp_get_thread_num()])%write_pos;
+                VertexId random=random_uniform_int(0, write_pos-1);
+                if(random<fanout_i){
+                    row_indices[random+column_offset[id]]=whole_graph->row_indices[src_idx];
+                    sample_bits->set_bit(whole_graph->row_indices[src_idx]);
+                }
+            }
+        }
+    }
+
+    void NeighborUniformSample(VertexId fanout_i, VertexId dst, std::vector<VertexId> &column_offset, std::vector<VertexId> &row_indices, VertexId id) {
+        auto whole_offset = whole_graph->column_offset;
+        auto whole_indices = whole_graph->row_indices;
+        size_t edge_nums = whole_offset[dst + 1] - whole_offset[dst];
+
+        if (edge_nums <= fanout_i) {
+            // double small_time = -get_time();
+            int pos  = column_offset[id];
+            for (int i = 0; i < edge_nums; ++i) {
+                row_indices[pos++] = whole_indices[whole_offset[dst] + i];
+                sample_bits->set_bit(whole_indices[whole_offset[dst] + i]);
+            }
+            // LOG_DEBUG("edge_nupm %d fanout %d offset [%d,%d] id %d", edge_nums, fanout_i, column_offset[id], column_offset[id + 1], id);
+            assert(pos == column_offset[id + 1]);
+            // small_time += get_time();
+            // LOG_DEBUG("small time %.3f", small_time);
+            return;
+        }
+        assert(fanout_i < edge_nums);
+        
+        std::vector<size_t> sorted_idxs;
+        double random_time = -get_time();
+        // LOG_DEBUG("saorted_idx size %d", sorted_idxs.size());
+        // assert(sorted_idxs.size() == fanout_i);
+        if (edge_nums > 2 * fanout_i) {
+            sorted_idxs.reserve(fanout_i);
+            RandomSample(edge_nums, fanout_i, sorted_idxs);
+            std::sort(sorted_idxs.begin(), sorted_idxs.end());
+        } else {
+            std::vector<size_t> negate;
+            negate.reserve(edge_nums - fanout_i);
+            RandomSample(edge_nums, edge_nums - fanout_i, negate);
+            std::sort(negate.begin(), negate.end());
+            NegateArray(negate, edge_nums, &sorted_idxs);
+        }
+        random_time = -get_time();
+        // LOG_DEBUG("random time %.3f", random_time);
+
+        for (size_t i = 1; i < sorted_idxs.size(); ++i) {
+            assert(sorted_idxs[i] > sorted_idxs[i - 1]);
+        }
+        assert(sorted_idxs.size() == fanout_i);
+
+        int pos = column_offset[id];
+        for (auto& idx : sorted_idxs) {
+            row_indices[pos++] = whole_indices[whole_offset[dst] + idx];
+            sample_bits->set_bit(whole_indices[whole_offset[dst] + idx]);
+        }
+        assert(pos == column_offset[id + 1]);
     }
 
     void LayerUniformSample(int layers, int batch_size, std::vector<int> fanout) {
