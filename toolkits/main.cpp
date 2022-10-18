@@ -15,15 +15,15 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 */
 
 #include "GAT_CPU.hpp"
-#include "GCN_CPU_NEIGHBOR.hpp"
-#include "GCN_CPU_LAYER.hpp"
-#include "GCN_CPU_CLUSTER.hpp"
 #include "GCN_CPU.hpp"
 #include "GCN_CPU_EAGER.hpp"
 #include "GAT_CPU_DIST.hpp"
 #include "GIN_CPU.hpp"
 #include "test_getdepneighbor_cpu.hpp"
 #include "test_batch_distributed.hpp"
+#include "GCN_CPU_NEIGHBOR.hpp"
+#include "GCN_CPU_LAYER.hpp"
+#include "GCN_CPU_CLUSTER.hpp"
 #if CUDA_ENABLE
 #include "test_getdepneighbor_gpu.hpp"
 #include "GAT_GPU_DIST.hpp"
@@ -32,6 +32,7 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 #include "GCN_EAGER.hpp"
 #include "GCN_EAGER_single.hpp"
 #include "GIN_GPU.hpp"
+#include "GCN_GPU_NEIGHBOR.hpp"
 #endif
 
 int main(int argc, char **argv) {
@@ -108,6 +109,13 @@ int main(int argc, char **argv) {
     std::cout << "edge_file: " << graph->config->edge_file << std::endl;
 
 
+  } else if (graph->config->algorithm == std::string("GCNNEIGHBORGPU")) {
+    graph->load_directed(graph->config->edge_file, graph->config->vertices);
+    graph->generate_backward_structure();
+    GCN_GPU_NEIGHBOR_impl *ntsGCN = new GCN_GPU_NEIGHBOR_impl(graph, iterations);
+    ntsGCN->init_graph();
+    ntsGCN->init_nn();
+    ntsGCN->run();
   } else if (graph->config->algorithm == std::string("TEST_BATCH_DIST")) {
     graph->load_directed(graph->config->edge_file, graph->config->vertices);
     graph->generate_backward_structure();
