@@ -33,7 +33,8 @@ public:
         fanout.clear();
         sampled_sgs.clear();
         curr_layer = 0;
-        threads = std::max(1, numa_num_configured_cpus() - 1);
+        threads = std::max(1, numa_num_configured_cpus());
+        // threads = std::max(1, numa_num_configured_cpus() - 1);
         // threads = std::max(1, numa_num_configured_cpus() / 2);
         seeds = new unsigned[threads];
     }
@@ -44,7 +45,8 @@ public:
         sampled_sgs.clear();
         curr_layer=0;
         curr_dst_size=batch_size;
-        threads = std::max(1, numa_num_configured_cpus() - 1);
+        threads = std::max(1, numa_num_configured_cpus());
+        // threads = std::max(1, numa_num_configured_cpus() - 1);
         // threads = std::max(1, numa_num_configured_cpus() / 2);
         seeds = new unsigned[threads];
     }
@@ -54,7 +56,8 @@ public:
         fanout=fanout_;
         sampled_sgs.clear();
         curr_layer=0;
-        threads = std::max(1, numa_num_configured_cpus() - 1);
+        threads = std::max(1, numa_num_configured_cpus());
+        // threads = std::max(1, numa_num_configured_cpus() - 1);
         // threads = std::max(1, numa_num_configured_cpus() / 2);
         // seeds = new unsigned[threads];
     }
@@ -65,6 +68,14 @@ public:
             delete sampled_sgs[i];
         }
         sampled_sgs.clear();
+    }
+
+    void allocate_memory(VertexId v_size) {
+        for (int i = 0; i < layers; ++i) {
+            int e_size = v_size * fanout[i];
+            sampled_sgs.push_back(new sampCSC(v_size, e_size));
+            v_size = e_size;
+        }
     }
 
     void update_degrees(Graph<Empty> *graph, int layer) {
@@ -119,21 +130,14 @@ public:
     }
     
     void init_co(std::function<VertexId(VertexId dst)> get_nbr_size,VertexId layer){
-        if(layer==0){
-           curr_dst_size= sampled_sgs[layer]->dst().size();
-           batch_size=curr_dst_size;
-           sampled_sgs[layer]->allocate_co_from_dst();
-        }
         VertexId offset=0;
-        // std::cout << "dst_size " << curr_dst_size << " ";
         for(VertexId i=0;i<curr_dst_size;i++){
             sampled_sgs[layer]->c_o()[i]=offset;
             offset+=get_nbr_size(sampled_sgs[layer]->dst()[i]);//init destination;
-            // std::cout << offset << " ";
         }
         // std::cout << std::endl;
         sampled_sgs[layer]->c_o()[curr_dst_size]=offset;  
-        sampled_sgs[layer]->allocate_edge(offset);
+        sampled_sgs[layer]->update_edges(offset);
     }
     
     void sample_load_destination(VertexId layer){
@@ -149,13 +153,13 @@ public:
     // }
     void sample_processing(std::function<void(VertexId fanout_i,
                 VertexId dst, std::vector<VertexId> &column_offset,
-                std::vector<VertexId> &row_indices,VertexId id)> vertex_sample){
-        {
+                std::vector<VertexId> &row_indices,VertexId id)> vertex_sample){ {
             // random_gen_seed();
             // threads=30;
 omp_set_num_threads(threads); 
-// LOG_DEBUG("thrads %d", threads);           
-#pragma omp parallel for num_threads(threads)
+// LOG_DEBUG("thrads %d", threads);         
+// LOG_DEBUG("processing %d %d layer %d, fanout %d", 0, curr_dst_size, curr_layer, fanout[curr_layer]);
+        #pragma omp parallel for num_threads(threads)
             for (VertexId begin_v_i = 0;begin_v_i < curr_dst_size;begin_v_i += 1) {
             // for every vertex, apply the sparse_slot at the partition
             // corresponding to the step
@@ -169,43 +173,51 @@ omp_set_num_threads(threads);
         
     }
     
-    void sample_postprocessing(){
-        sampled_sgs[sampled_sgs.size()-1]->postprocessing();
-        curr_dst_size=sampled_sgs[sampled_sgs.size()-1]->get_distinct_src_size();
-        curr_layer++;
-    }
+    // void sample_postprocessing(){
+    //     sampled_sgs[sampled_sgs.size()-1]->postprocessing();
+    //     curr_dst_size=sampled_sgs[sampled_sgs.size()-1]->get_distinct_src_size();
+    //     curr_layer++;
+    // }
 
-    void sample_postprocessing(Bitmap* bits){
-        sampled_sgs[sampled_sgs.size()-1]->postprocessing(bits);
-        curr_dst_size=sampled_sgs[sampled_sgs.size()-1]->get_distinct_src_size();
-        curr_layer++;
+    // void sample_postprocessing(Bitmap* bits){
+    //     sampled_sgs[sampled_sgs.size()-1]->postprocessing(bits);
+    //     curr_dst_size=sampled_sgs[sampled_sgs.size()-1]->get_distinct_src_size();
+    //     curr_layer++;
+    // }
+
+    void sample_postprocessing(Bitmap* bits, int layer){
+        sampled_sgs[layer]->postprocessing(bits);
+        curr_dst_size=sampled_sgs[layer]->get_distinct_src_size();
+        // curr_layer++;
     }
     
     void compute_one_layer(std::function<void(VertexId local_dst, 
                           std::vector<VertexId>&column_offset, 
                               std::vector<VertexId>&row_indices)>sparse_slot,VertexId layer){
+//  void compute_one_layer(std::function<void(VertexId local_dst, 
+//                 VertexId* column_offset, VertexId* row_indices)>sparse_slot,VertexId layer){
+
+
 // threads = 30;
-omp_set_num_threads(threads);
-#pragma omp parallel for num_threads(threads)
-            for (VertexId begin_v_i = 0;
-                begin_v_i < sampled_sgs[layer]->dst().size();
-                    begin_v_i += 1) {
-                    sparse_slot(begin_v_i,sampled_sgs[layer]->c_o(),
-                        sampled_sgs[layer]->r_i());
-            }
+        omp_set_num_threads(threads);
+        #pragma omp parallel for num_threads(threads)
+        for (VertexId begin_v_i = 0; begin_v_i < sampled_sgs[layer]->v_size; begin_v_i += 1) {
+            sparse_slot(begin_v_i,sampled_sgs[layer]->c_o(), sampled_sgs[layer]->r_i());
+        }
     }
 
     void compute_one_layer_backward(std::function<void(VertexId local_dst, 
                           std::vector<VertexId>&column_offset, 
                               std::vector<VertexId>&row_indices)>sparse_slot,VertexId layer){
-omp_set_num_threads(threads);
-#pragma omp parallel for num_threads(threads)
-            for (VertexId begin_v_i = 0;
-                begin_v_i < sampled_sgs[layer]->src().size();
-                    begin_v_i += 1) {
-                    sparse_slot(begin_v_i,sampled_sgs[layer]->r_o(),
-                        sampled_sgs[layer]->c_i());
-            }
+//   void compute_one_layer_backward(std::function<void(VertexId local_dst, 
+//                     VertexId* column_offset, VertexId* row_indices)>sparse_slot,VertexId layer){
+        // LOG_DEBUG("start backward");
+        omp_set_num_threads(threads);
+        #pragma omp parallel for num_threads(threads)
+        for (VertexId begin_v_i = 0; begin_v_i < sampled_sgs[layer]->src_size; begin_v_i += 1) {
+            sparse_slot(begin_v_i, sampled_sgs[layer]->r_o(), sampled_sgs[layer]->c_i());
+        }
+        // LOG_DEBUG("end backward");
     }
         
     

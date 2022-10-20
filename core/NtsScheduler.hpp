@@ -806,12 +806,21 @@ struct Parameter : torch::nn::Module {
     W.set_data(a);
   }
   void learnC2G_with_decay_Adam() {
+    // W_g.set_data(W);
+    // W_g = W_g * weight_decay;
+    // W_g = W_g + W_gradient.cuda(); //+weight_decay;
+    // M_GPU = beta1 * M_GPU + (1 - beta1) * W_g;
+    // V_GPU = beta2 * V_GPU + (1 - beta2) * W_g * W_g;
+    // W.set_data(W - alpha * M_GPU / (torch::sqrt(V_GPU) + epsilon));
+
     W_g.set_data(W);
-    W_g = W_g * weight_decay;
-    W_g = W_g + W_gradient.cuda(); //+weight_decay;
+    W_g = W_gradient.cuda() + weight_decay * W_g;
     M_GPU = beta1 * M_GPU + (1 - beta1) * W_g;
-    V_GPU = beta2 * V_GPU + (1 - beta2) * W_g * W_g;
-    W.set_data(W - alpha * M_GPU / (torch::sqrt(V_GPU) + epsilon));
+    V_GPU = beta2 * V_GPU + (1 - beta2) * torch::square(W_g);
+    NtsVar M_t = M_GPU / (1 - beta1_t);
+    NtsVar V_t = V_GPU / (1 - beta2_t);
+    NtsVar g_t = alpha * M_t / (torch::sqrt(V_t) + epsilon);
+    W.set_data(W - g_t);
   }
   void learn_local_with_decay_Adam() {
     W_g.set_data(W);

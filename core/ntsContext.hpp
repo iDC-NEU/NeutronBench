@@ -338,6 +338,7 @@ template <typename NOPT>
 //      output_grad[top_idx()-1]=ntsOp.top().op->backward(output_grad[top_idx()]);
       pop_one_op();
     }  else if (NNOP == op.top()) {// directly use pytorch
+    b_nn_time -= get_time();
 //        LOG_INFO("FINISH nn %d",op.size());  
       if(output_grad[top_idx()].dim()<2){
           output_grad[top_idx()]=output.top().grad();
@@ -349,6 +350,8 @@ template <typename NOPT>
       }
       
       pop_one_op();
+    b_nn_time += get_time();
+    // LOG_DEBUG("b_nn_time %.3f", b_nn_time);
   //  LOG_INFO("FINISH NN OP");
     } else {
       LOG_INFO("NOT SUPPORT OP");
@@ -407,6 +410,8 @@ template <typename NOPT>
   std::vector<IOTensorId> iot_id;
   int count;
   bool training; // specify training or evaluation mode.
+  double b_nn_time = 0;
+
 //  GraphOperation *gt;
 //  std::vector<CSC_segment_pinned *> subgraphs;
 //  bool bi_direction;

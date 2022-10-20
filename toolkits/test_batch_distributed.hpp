@@ -134,7 +134,7 @@ public:
     }  
     double sample_cost = -get_time();
     while(sampler->sample_not_finished()) {
-      sampler->reservoir_sample(layers,
+      sampler->sample_one(layers,
                                 graph->config->batch_size,
                                 graph->gnnctx->fanout, graph->config->batch_type, ctx->is_train());
     }

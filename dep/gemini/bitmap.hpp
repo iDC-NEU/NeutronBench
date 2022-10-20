@@ -63,7 +63,7 @@ unsigned long get_bit(size_t i) {
   return data[WORD_OFFSET(i)] & (1ul << BIT_OFFSET(i));
 }
 
-unsigned long get_size() {
+unsigned long get_ones() {
   int cnt = 0;
   for (int i = 0; i < WORD_OFFSET(size) + 1; ++i) {
     unsigned long x = data[i];
@@ -74,6 +74,12 @@ unsigned long get_size() {
   }
   return cnt;
 }
+
+unsigned long get_size() {
+  return size;
+}
+
+
 
 };
 
