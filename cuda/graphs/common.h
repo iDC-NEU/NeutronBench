@@ -35,4 +35,4 @@
 
 typedef uint32_t index_t;
 
-#endif // __GROUTE_GRAPHS_COMMON_H
+#endif  // __GROUTE_GRAPHS_COMMON_H

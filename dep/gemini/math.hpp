@@ -27,8 +27,7 @@ typedef struct factor {
   }
   void setRandom(float up) {
     for (int i = 0; i < VECTOR_LENGTH; i++) {
-      data[i] =
-          static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / up));
+      data[i] = static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / up));
     }
   }
 
@@ -67,8 +66,7 @@ typedef struct ParameterW {
   inline float **setRandom(float up) {
     for (int i = 0; i < VECTOR_LENGTH; i++) {
       for (int j = 0; j < VECTOR_LENGTH; j++) {
-        data[i][j] =
-            static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / up));
+        data[i][j] = static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / up));
       }
     }
   }
@@ -83,14 +81,14 @@ typedef struct AllParameter {
   bool is_W3;
 } parameters;
 
-inline int summation(float *dst, const float *src) { // vector+vector
+inline int summation(float *dst, const float *src) {  // vector+vector
   for (int i = 0; i < VECTOR_LENGTH; i++) {
     dst[i] += src[i];
   }
   return 1;
 }
 int vectorMulMatrix(float *dst, float *src,
-                    float **weight) { // vector*weight  cachefriendly multi.
+                    float **weight) {  // vector*weight  cachefriendly multi.
   for (int i = 0; i < VECTOR_LENGTH; i++) {
     dst[i] = 0.0;
   }
@@ -102,7 +100,7 @@ int vectorMulMatrix(float *dst, float *src,
   return 0;
 }
 int matrixMulVector(float *dst, float **weight,
-                    float *src) { // vector*weight  cachefriendly multi.
+                    float *src) {  // vector*weight  cachefriendly multi.
   for (int i = 0; i < VECTOR_LENGTH; i++) {
     dst[i] = 0;
     for (int j = 0; j < VECTOR_LENGTH; j++) {

@@ -86,18 +86,18 @@ struct COOChunk {
     partition_offset = new int[partitions_];
     memset(partition_offset, 0, sizeof(int) * partitions_);
   }
-  int get_edge_partition_size(int i) {
-    return partition_offset[i + 1] - partition_offset[i];
-  }
+  int get_edge_partition_size(int i) { return partition_offset[i + 1] - partition_offset[i]; }
 };
 
-template <typename EdgeData> struct EdgeUnit {
+template <typename EdgeData>
+struct EdgeUnit {
   VertexId src;
   VertexId dst;
   EdgeData edge_data;
 } __attribute__((packed));
 
-template <> struct EdgeUnit<Empty> {
+template <>
+struct EdgeUnit<Empty> {
   VertexId src;
   union {
     VertexId dst;
@@ -105,12 +105,14 @@ template <> struct EdgeUnit<Empty> {
   };
 } __attribute__((packed));
 
-template <typename EdgeData> struct AdjUnit {
+template <typename EdgeData>
+struct AdjUnit {
   VertexId neighbour;
   EdgeData edge_data;
 } __attribute__((packed));
 
-template <> struct AdjUnit<Empty> {
+template <>
+struct AdjUnit<Empty> {
   union {
     VertexId neighbour;
     Empty edge_data;
@@ -122,12 +124,12 @@ struct CompressedAdjIndexUnit {
   VertexId vertex;
 } __attribute__((packed));
 
-template <typename EdgeData> struct VertexAdjList {
+template <typename EdgeData>
+struct VertexAdjList {
   AdjUnit<EdgeData> *begin;
   AdjUnit<EdgeData> *end;
   VertexAdjList() : begin(nullptr), end(nullptr) {}
-  VertexAdjList(AdjUnit<EdgeData> *begin, AdjUnit<EdgeData> *end)
-      : begin(begin), end(end) {}
+  VertexAdjList(AdjUnit<EdgeData> *begin, AdjUnit<EdgeData> *end) : begin(begin), end(end) {}
 };
 
 #endif

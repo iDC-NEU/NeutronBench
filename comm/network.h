@@ -17,24 +17,26 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 #ifndef NETWORK_H
 #define NETWORK_H
 
-#define BIG_MESSAGE 1 // untested
+#define BIG_MESSAGE 1  // untested
+
+#include <malloc.h>
+#include <numa.h>
+#include <omp.h>
+#include <stdio.h>
+
+#include <functional>
+#include <mutex>
+#include <thread>
+#include <vector>
 
 #include "dep/gemini/mpi.hpp"
 #include "dep/gemini/type.hpp"
 
-#include <functional>
-#include <malloc.h>
-#include <mutex>
-#include <numa.h>
-#include <omp.h>
-#include <stdio.h>
-#include <thread>
-#include <vector>
-
 enum MessageTag { ShuffleGraph, PassMessage, GatherVertexArray };
 enum CommType { Master2Mirror, Mirror2Master };
 
-template <typename MsgData> struct MsgUnit {
+template <typename MsgData>
+struct MsgUnit {
   VertexId vertex;
   MsgData msg_data;
 } __attribute__((packed));
@@ -66,7 +68,8 @@ struct MessageBuffer {
   void resize_pinned(size_t new_capacity);
   int *getMsgUnit(int i, int msg_unit_size);
 
-  template <typename t_v> t_v *getMsgData(int i, int msg_unit_size);
+  template <typename t_v>
+  t_v *getMsgData(int i, int msg_unit_size);
 
   template <typename t_v>
   void setMsgData(int i, int msg_unit_size, t_v *buffer);
@@ -75,10 +78,9 @@ struct MessageBuffer {
 };
 
 class NtsGraphCommunicator {
-public:
-  void init(VertexId *partition_offset_, VertexId owned_vertices_,
-            VertexId partitions_, VertexId sockets_, VertexId threads_,
-            VertexId partition_id_, size_t lsbl);
+ public:
+  void init(VertexId *partition_offset_, VertexId owned_vertices_, VertexId partitions_, VertexId sockets_,
+            VertexId threads_, VertexId partition_id_, size_t lsbl);
 
   void release_communicator();
 
@@ -94,12 +96,9 @@ public:
   void init_message_buffer_master_to_mirror_pipe();
   void init_message_buffer_mirror_to_master_pipe();
 
-  inline void set_current_send_partition(VertexId cspi) {
-    current_send_part_id = cspi;
-  }
+  inline void set_current_send_partition(VertexId cspi) { current_send_part_id = cspi; }
 
-  void trigger_one_partition(VertexId partition_id_,
-                             bool flush_local_buffer = true);
+  void trigger_one_partition(VertexId partition_id_, bool flush_local_buffer = true);
   void partition_is_ready_for_recv(VertexId partition_id_);
 
   void achieve_local_message(VertexId current_send_partition_id_);
@@ -109,8 +108,7 @@ public:
   MessageBuffer **recv_one_partition(int &workerId, int step);
 
   void emit_buffer(VertexId vtx, ValueType *buffer, int f_size);
-  void emit_buffer_lock_free(VertexId vtx, ValueType *buffer,
-                             VertexId write_index, int f_size);
+  void emit_buffer_lock_free(VertexId vtx, ValueType *buffer, VertexId write_index, int f_size);
 
   void send_mirror_to_master();
 
@@ -129,24 +127,16 @@ public:
   void send_master_to_mirror_lock_free_no_wait();
   void run_all_master_to_mirror_lock_free_no_wait();
 
-private:
+ private:
   void flush_local_send_buffer_buffer(int t_i, int f_size);
 
-  inline int get_socket_id(int thread_id) {
-    return thread_id / threads_per_socket;
-  }
+  inline int get_socket_id(int thread_id) { return thread_id / threads_per_socket; }
 
-  inline int get_socket_offset(int thread_id) {
-    return thread_id % threads_per_socket;
-  }
+  inline int get_socket_offset(int thread_id) { return thread_id % threads_per_socket; }
 
-  inline size_t size_of_msg(int f_size) {
-    return sizeof(VertexId) + sizeof(ValueType) * f_size;
-  }
+  inline size_t size_of_msg(int f_size) { return sizeof(VertexId) + sizeof(ValueType) * f_size; }
 
-  inline size_t elements_of_msg(int f_size) {
-    return sizeof(VertexId) / sizeof(ValueType) + f_size;
-  }
+  inline size_t elements_of_msg(int f_size) { return sizeof(VertexId) / sizeof(ValueType) + f_size; }
 
   VertexId current_send_part_id;
   VertexId threads_per_socket;
@@ -181,8 +171,9 @@ private:
   std::thread *Send;
   std::thread *Recv;
 };
-template <typename t_v> class Network_simple {
-public:
+template <typename t_v>
+class Network_simple {
+ public:
   t_v *recv_buffer;
   t_v *buffer;
   int worknum;
@@ -197,8 +188,7 @@ public:
 
   void all_reduce_sum(t_v *buffer) {
     MPI_Datatype f_vid_t = get_mpi_data_type<float>();
-    MPI_Allreduce(MPI_IN_PLACE, buffer, weight_row * weight_col, MPI_FLOAT,
-                  MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE, buffer, weight_row * weight_col, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
     // printf("%d sd%f\n", weight_row * weight_col, buffer[3]);
   }
 

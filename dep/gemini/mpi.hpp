@@ -22,7 +22,8 @@ Copyright (c) 2015-2016 Xiaowei Zhu, Tsinghua University
 #include <stdio.h>
 #include <stdlib.h>
 
-template <typename T> MPI_Datatype get_mpi_data_type() {
+template <typename T>
+MPI_Datatype get_mpi_data_type() {
   if (std::is_same<T, char>::value) {
     return MPI_CHAR;
   } else if (std::is_same<T, unsigned char>::value) {
@@ -49,7 +50,7 @@ class MPI_Instance {
   int partition_id;
   int partitions;
 
-public:
+ public:
   MPI_Instance(int *argc, char ***argv) {
     int provided;
     MPI_Init_thread(argc, argv, MPI_THREAD_MULTIPLE, &provided);
@@ -59,20 +60,20 @@ public:
     if (partition_id == 0) {
       printf("thread support level provided by MPI: ");
       switch (provided) {
-      case MPI_THREAD_MULTIPLE:
-        printf("MPI_THREAD_MULTIPLE\n");
-        break;
-      case MPI_THREAD_SERIALIZED:
-        printf("MPI_THREAD_SERIALIZED\n");
-        break;
-      case MPI_THREAD_FUNNELED:
-        printf("MPI_THREAD_FUNNELED\n");
-        break;
-      case MPI_THREAD_SINGLE:
-        printf("MPI_THREAD_SINGLE\n");
-        break;
-      default:
-        assert(false);
+        case MPI_THREAD_MULTIPLE:
+          printf("MPI_THREAD_MULTIPLE\n");
+          break;
+        case MPI_THREAD_SERIALIZED:
+          printf("MPI_THREAD_SERIALIZED\n");
+          break;
+        case MPI_THREAD_FUNNELED:
+          printf("MPI_THREAD_FUNNELED\n");
+          break;
+        case MPI_THREAD_SINGLE:
+          printf("MPI_THREAD_SINGLE\n");
+          break;
+        default:
+          assert(false);
       }
     }
 #endif

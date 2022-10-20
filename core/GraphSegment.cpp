@@ -13,6 +13,8 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
    See the License for the specific language governing permissions and
    limitations under the License.
 */
+#include "core/GraphSegment.h"
+
 #include <fcntl.h>
 #include <malloc.h>
 #include <numa.h>
@@ -33,7 +35,6 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 #include <thread>
 #include <vector>
 
-#include "core/GraphSegment.h"
 #include "dep/gemini/atomic.hpp"
 #include "dep/gemini/bitmap.hpp"
 #include "dep/gemini/constants.hpp"
@@ -41,9 +42,7 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 #include "dep/gemini/time.hpp"
 #include "dep/gemini/type.hpp"
 
-
-void CSC_segment_pinned::init(VertexId src_start, VertexId src_end,
-                              VertexId dst_start, VertexId dst_end,
+void CSC_segment_pinned::init(VertexId src_start, VertexId src_end, VertexId dst_start, VertexId dst_end,
                               VertexId edge_size_, DeviceLocation dt_) {
   src_range[0] = src_start;
   src_range[1] = src_end;
@@ -55,7 +54,7 @@ void CSC_segment_pinned::init(VertexId src_start, VertexId src_end,
   dt = dt_;
 }
 
-//void CSC_segment_pinned::optional_init_sample(int layers) {
+// void CSC_segment_pinned::optional_init_sample(int layers) {
 //  VertexToComm.clear();
 //  for (int i = 0; i < layers; i++) {
 //    VertexToComm.push_back(new Bitmap(batch_size_forward));
@@ -66,27 +65,22 @@ void CSC_segment_pinned::init(VertexId src_start, VertexId src_end,
 // Allocate bitmap for forward and backward vertex
 // and row_offset and column_offset, for CSC/CSR format
 void CSC_segment_pinned::allocVertexAssociateData() {
-
   source_active = new Bitmap(batch_size_backward);
   destination_active = new Bitmap(batch_size_forward);
 
   source_active->clear();
   destination_active->clear();
-  
+
 #if CUDA_ENABLE
   if (dt == GPU_T) {
-    column_offset = (VertexId *)cudaMallocPinned((batch_size_forward + 1) *
-                                                 sizeof(VertexId));
-    row_offset = (VertexId *)cudaMallocPinned((batch_size_backward + 1) *
-                                              sizeof(VertexId)); ///
+    column_offset = (VertexId *)cudaMallocPinned((batch_size_forward + 1) * sizeof(VertexId));
+    row_offset = (VertexId *)cudaMallocPinned((batch_size_backward + 1) * sizeof(VertexId));  ///
   } else
 #endif
 
       if (dt == CPU_T) {
-    column_offset =
-        (VertexId *)malloc((batch_size_forward + 1) * sizeof(VertexId));
-    row_offset =
-        (VertexId *)malloc((batch_size_backward + 1) * sizeof(VertexId)); ///
+    column_offset = (VertexId *)malloc((batch_size_forward + 1) * sizeof(VertexId));
+    row_offset = (VertexId *)malloc((batch_size_backward + 1) * sizeof(VertexId));  ///
     memset(column_offset, 0, (batch_size_forward + 1) * sizeof(VertexId));
     memset(row_offset, 0, (batch_size_backward + 1) * sizeof(VertexId));
     //        column_offset = new VertexId[batch_size_forward+1];
@@ -101,15 +95,11 @@ void CSC_segment_pinned::allocVertexAssociateData() {
 void CSC_segment_pinned::allocEdgeAssociateData() {
 #if CUDA_ENABLE
   if (dt == GPU_T) {
-    row_indices =
-        (VertexId *)cudaMallocPinned((edge_size + 1) * sizeof(VertexId));
-    edge_weight_forward =
-        (ValueType *)cudaMallocPinned((edge_size + 1) * sizeof(ValueType));
+    row_indices = (VertexId *)cudaMallocPinned((edge_size + 1) * sizeof(VertexId));
+    edge_weight_forward = (ValueType *)cudaMallocPinned((edge_size + 1) * sizeof(ValueType));
 
-    column_indices =
-        (VertexId *)cudaMallocPinned((edge_size + 1) * sizeof(VertexId)); ///
-    edge_weight_backward =
-        (ValueType *)cudaMallocPinned((edge_size + 1) * sizeof(ValueType)); ///
+    column_indices = (VertexId *)cudaMallocPinned((edge_size + 1) * sizeof(VertexId));          ///
+    edge_weight_backward = (ValueType *)cudaMallocPinned((edge_size + 1) * sizeof(ValueType));  ///
 
     destination = (long *)cudaMallocPinned((edge_size + 1) * sizeof(long));
     source = (long *)cudaMallocPinned((edge_size + 1) * sizeof(long));
@@ -118,36 +108,34 @@ void CSC_segment_pinned::allocEdgeAssociateData() {
       if (dt == CPU_T) {
     row_indices = (VertexId *)malloc((edge_size + 1) * sizeof(VertexId));
     memset(row_indices, 0, (edge_size + 1) * sizeof(VertexId));
-    edge_weight_forward =
-        (ValueType *)malloc((edge_size + 1) * sizeof(ValueType));
+    edge_weight_forward = (ValueType *)malloc((edge_size + 1) * sizeof(ValueType));
     memset(edge_weight_forward, 0, (edge_size + 1) * sizeof(VertexId));
-    column_indices = (VertexId *)malloc((edge_size + 1) * sizeof(VertexId)); ///
+    column_indices = (VertexId *)malloc((edge_size + 1) * sizeof(VertexId));  ///
     memset(column_indices, 0, (edge_size + 1) * sizeof(VertexId));
-    edge_weight_backward =
-        (ValueType *)malloc((edge_size + 1) * sizeof(ValueType)); ///
+    edge_weight_backward = (ValueType *)malloc((edge_size + 1) * sizeof(ValueType));  ///
     memset(edge_weight_backward, 0, (edge_size + 1) * sizeof(ValueType));
     destination = (long *)malloc((edge_size + 1) * sizeof(long));
     memset(destination, 0, (edge_size + 1) * sizeof(long));
     source = (long *)malloc((edge_size + 1) * sizeof(long));
     memset(source, 0, (edge_size + 1) * sizeof(long));
-//    source_backward = (long *)malloc((edge_size + 1) * sizeof(long));
-//    memset(source_backward, 0, (edge_size + 1) * sizeof(long));
+    //    source_backward = (long *)malloc((edge_size + 1) * sizeof(long));
+    //    memset(source_backward, 0, (edge_size + 1) * sizeof(long));
   } else {
     assert(NOT_SUPPORT_DEVICE_TYPE);
   }
 }
 
-void CSC_segment_pinned::freeAdditional(){
-    #if CUDA_ENABLE
-    if (dt == GPU_T) {
-        ntsFreeHost(destination);
-        ntsFreeHost(source);
-    }
-    #endif
-    if (dt == CPU_T) {
-        free(destination);
-        free(source);
-    }
+void CSC_segment_pinned::freeAdditional() {
+#if CUDA_ENABLE
+  if (dt == GPU_T) {
+    ntsFreeHost(destination);
+    ntsFreeHost(source);
+  }
+#endif
+  if (dt == CPU_T) {
+    free(destination);
+    free(source);
+  }
 }
 
 void CSC_segment_pinned::getDevicePointerAll() {
@@ -155,17 +143,15 @@ void CSC_segment_pinned::getDevicePointerAll() {
   if (dt == GPU_T) {
     column_offset_gpu = (VertexId *)getDevicePointer(column_offset);
     row_indices_gpu = (VertexId *)getDevicePointer(row_indices);
-    edge_weight_forward_gpu =
-        (ValueType *)getDevicePointer(edge_weight_forward);
+    edge_weight_forward_gpu = (ValueType *)getDevicePointer(edge_weight_forward);
 
-    row_offset_gpu = (VertexId *)getDevicePointer(row_offset);         ///
-    column_indices_gpu = (VertexId *)getDevicePointer(column_indices); ///
-    edge_weight_backward_gpu =
-        (ValueType *)getDevicePointer(edge_weight_backward); ///
+    row_offset_gpu = (VertexId *)getDevicePointer(row_offset);                       ///
+    column_indices_gpu = (VertexId *)getDevicePointer(column_indices);               ///
+    edge_weight_backward_gpu = (ValueType *)getDevicePointer(edge_weight_backward);  ///
 
-    source_gpu = (long *)getDevicePointer(source);           ///
-    destination_gpu = (long *)getDevicePointer(destination); ///
-//    source_backward_gpu = (long *)getDevicePointer(source_backward);
+    source_gpu = (long *)getDevicePointer(source);            ///
+    destination_gpu = (long *)getDevicePointer(destination);  ///
+    //    source_backward_gpu = (long *)getDevicePointer(source_backward);
   } else
 #endif
       if (dt == CPU_T) {
@@ -178,37 +164,25 @@ void CSC_segment_pinned::getDevicePointerAll() {
 void CSC_segment_pinned::CopyGraphToDevice() {
 #if CUDA_ENABLE
   if (dt == GPU_T) {
-    column_offset_gpu =
-        (VertexId *)cudaMallocGPU((batch_size_forward + 1) * sizeof(VertexId));
-    row_indices_gpu =
-        (VertexId *)cudaMallocGPU((edge_size + 1) * sizeof(VertexId));
-    edge_weight_forward_gpu =
-        (ValueType *)cudaMallocGPU((edge_size + 1) * sizeof(ValueType));
+    column_offset_gpu = (VertexId *)cudaMallocGPU((batch_size_forward + 1) * sizeof(VertexId));
+    row_indices_gpu = (VertexId *)cudaMallocGPU((edge_size + 1) * sizeof(VertexId));
+    edge_weight_forward_gpu = (ValueType *)cudaMallocGPU((edge_size + 1) * sizeof(ValueType));
 
-    move_bytes_in(column_offset_gpu, column_offset,
-                  (batch_size_forward + 1) * sizeof(VertexId));
-    move_bytes_in(row_indices_gpu, row_indices,
-                  (edge_size + 1) * sizeof(VertexId));
-    move_bytes_in(edge_weight_forward_gpu, edge_weight_forward,
-                  (edge_size + 1) * sizeof(ValueType));
+    move_bytes_in(column_offset_gpu, column_offset, (batch_size_forward + 1) * sizeof(VertexId));
+    move_bytes_in(row_indices_gpu, row_indices, (edge_size + 1) * sizeof(VertexId));
+    move_bytes_in(edge_weight_forward_gpu, edge_weight_forward, (edge_size + 1) * sizeof(ValueType));
 
-    row_offset_gpu =
-        (VertexId *)cudaMallocGPU((batch_size_backward + 1) * sizeof(VertexId));
-    column_indices_gpu =
-        (VertexId *)cudaMallocGPU((edge_size + 1) * sizeof(VertexId));
-    edge_weight_backward_gpu =
-        (ValueType *)cudaMallocGPU((edge_size + 1) * sizeof(ValueType));
+    row_offset_gpu = (VertexId *)cudaMallocGPU((batch_size_backward + 1) * sizeof(VertexId));
+    column_indices_gpu = (VertexId *)cudaMallocGPU((edge_size + 1) * sizeof(VertexId));
+    edge_weight_backward_gpu = (ValueType *)cudaMallocGPU((edge_size + 1) * sizeof(ValueType));
 
-    move_bytes_in(row_offset_gpu, row_offset,
-                  (batch_size_backward + 1) * sizeof(VertexId));
-    move_bytes_in(column_indices_gpu, column_indices,
-                  (edge_size + 1) * sizeof(VertexId));
-    move_bytes_in(edge_weight_backward_gpu, edge_weight_backward,
-                  (edge_size + 1) * sizeof(ValueType));
+    move_bytes_in(row_offset_gpu, row_offset, (batch_size_backward + 1) * sizeof(VertexId));
+    move_bytes_in(column_indices_gpu, column_indices, (edge_size + 1) * sizeof(VertexId));
+    move_bytes_in(edge_weight_backward_gpu, edge_weight_backward, (edge_size + 1) * sizeof(ValueType));
 
-    source_gpu = (long *)getDevicePointer(source);           ///
-    destination_gpu = (long *)getDevicePointer(destination); ///
-//    source_backward_gpu = (long *)getDevicePointer(source_backward);
+    source_gpu = (long *)getDevicePointer(source);            ///
+    destination_gpu = (long *)getDevicePointer(destination);  ///
+    //    source_backward_gpu = (long *)getDevicePointer(source_backward);
 
   } else
 #endif
@@ -250,23 +224,19 @@ void InputInfo::readFromCfgFile(std::string config_file) {
       this->mask_file = cfg_v;
     } else if (0 == cfg_k.compare("PROC_OVERLAP")) {
       this->overlap = false;
-      if (1 == std::atoi(cfg_v.c_str()))
-        this->overlap = true;
+      if (1 == std::atoi(cfg_v.c_str())) this->overlap = true;
     } else if (0 == cfg_k.compare("PROC_LOCAL")) {
       this->process_local = false;
-      if (1 == std::atoi(cfg_v.c_str()))
-        this->process_local = true;
+      if (1 == std::atoi(cfg_v.c_str())) this->process_local = true;
     } else if (0 == cfg_k.compare("PROC_CUDA")) {
       this->with_cuda = false;
-      if (1 == std::atoi(cfg_v.c_str()))
-        this->with_cuda = true;
+      if (1 == std::atoi(cfg_v.c_str())) this->with_cuda = true;
     } else if (0 == cfg_k.compare("PROC_REP")) {
       this->repthreshold = std::atoi(cfg_v.c_str());
 
     } else if (0 == cfg_k.compare("LOCK_FREE")) {
       this->lock_free = false;
-      if (1 == std::atoi(cfg_v.c_str()))
-        this->lock_free = true;
+      if (1 == std::atoi(cfg_v.c_str())) this->lock_free = true;
     } else if (0 == cfg_k.compare("LEARN_RATE")) {
       this->learn_rate = std::atof(cfg_v.c_str());
     } else if (0 == cfg_k.compare("WEIGHT_DECAY")) {
@@ -281,18 +251,17 @@ void InputInfo::readFromCfgFile(std::string config_file) {
       this->batch_size = std::atoi(cfg_v.c_str());
     } else if (0 == cfg_k.compare("OPTIM_KERNEL")) {
       this->optim_kernel_enable = true;
-      if (1 == std::atoi(cfg_v.c_str()))
-        this->optim_kernel_enable = true;
+      if (1 == std::atoi(cfg_v.c_str())) this->optim_kernel_enable = true;
     } else if (0 == cfg_k.compare("BATCH_TYPE")) {
       if (0 == cfg_v.compare("sequence")) {
         this->batch_type = SEQUENCE;
-      } else if (0 == cfg_v.compare("random")) { 
+      } else if (0 == cfg_v.compare("random")) {
         this->batch_type = RANDOM;
-      } else if (0 == cfg_v.compare("shuffle")) { 
+      } else if (0 == cfg_v.compare("shuffle")) {
         this->batch_type = SHUFFLE;
-      } else if (0 == cfg_v.compare("dellow")) { 
+      } else if (0 == cfg_v.compare("dellow")) {
         this->batch_type = DELLOW;
-      } else if (0 == cfg_v.compare("delhigh")) { 
+      } else if (0 == cfg_v.compare("delhigh")) {
         this->batch_type = DELHIGH;
       } else {
         this->batch_type = SHUFFLE;
@@ -314,7 +283,6 @@ void InputInfo::readFromCfgFile(std::string config_file) {
       this->mini_pull = std::atoi(cfg_v.c_str());
     }
 
-
     else {
       printf("not supported configure\n");
     }
@@ -323,7 +291,6 @@ void InputInfo::readFromCfgFile(std::string config_file) {
 }
 
 void InputInfo::print() {
-
   std::cout << "algorithm\t:\t" << algorithm << std::endl;
   std::cout << "vertices\t:\t" << vertices << std::endl;
   std::cout << "epochs\t\t:\t" << epochs << std::endl;
@@ -366,7 +333,7 @@ void InputInfo::print() {
   std::cout << "time_skip\t:\t" << time_skip << std::endl;
   std::cout << "runs\t\t:\t" << runs << std::endl;
   std::cout << "mini_pull\t:\t" << mini_pull << std::endl;
-  std::cout <<"------------------input info--------------"<<std::endl;
+  std::cout << "------------------input info--------------" << std::endl;
 }
 
 void RuntimeInfo::init_rtminfo() {
@@ -393,8 +360,7 @@ void RuntimeInfo::set(InputInfo *gnncfg) {
   this->optim_kernel_enable = gnncfg->optim_kernel_enable;
 }
 
-void GraphStorage::optional_generate_sample_graph(GNNContext *gnnctx,
-                                                  COOChunk *_graph_cpu_in) {
+void GraphStorage::optional_generate_sample_graph(GNNContext *gnnctx, COOChunk *_graph_cpu_in) {
   VertexId *tmp_column_offset;
   VertexId local_edge_size = gnnctx->l_e_num;
   column_offset = new VertexId[gnnctx->l_v_num + 1];

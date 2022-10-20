@@ -1,7 +1,7 @@
 #include "core/neutronstar.hpp"
 
 class COMMNET_impl {
-public:
+ public:
   int iterations;
   ValueType learn_rate;
   ValueType weight_decay;
@@ -16,19 +16,19 @@ public:
   // graph
   VertexSubset *active;
   Graph<Empty> *graph;
-  //std::vector<CSC_segment_pinned *> subgraphs;
+  // std::vector<CSC_segment_pinned *> subgraphs;
   // NN
   GNNDatum *gnndatum;
   NtsVar L_GT_C;
   NtsVar L_GT_G;
   NtsVar MASK;
   NtsVar MASK_gpu;
-  //GraphOperation *gt;
+  // GraphOperation *gt;
   PartitionedGraph *partitioned_graph;
   // Variables
   std::vector<Parameter *> P;
   std::vector<NtsVar> X;
-  nts::ctx::NtsContext* ctx;
+  nts::ctx::NtsContext *ctx;
   NtsVar F;
   NtsVar loss;
   NtsVar tt;
@@ -46,8 +46,7 @@ public:
   double graph_time = 0;
   double all_graph_time = 0;
 
-  COMMNET_impl(Graph<Empty> *graph_, int iterations_,
-               bool process_local = false, bool process_overlap = false) {
+  COMMNET_impl(Graph<Empty> *graph_, int iterations_, bool process_local = false, bool process_overlap = false) {
     graph = graph_;
     iterations = iterations_;
 
@@ -66,30 +65,28 @@ public:
     graph->rtminfo->lock_free = graph->config->lock_free;
   }
   void init_graph() {
-//    graph->generate_COO();
-//    graph->reorder_COO_W2W();
-//    // generate_CSC_Segment_Tensor_pinned(graph, csc_segment, true);
-//    gt = new GraphOperation(graph, active);
-//    gt->GenerateGraphSegment(subgraphs, GPU_T, [&](VertexId src, VertexId dst) {
-//      return gt->norm_degree(src, dst);
-//    });
-//    double load_rep_time = 0;
-//    load_rep_time -= get_time();
-//    // graph->load_replicate3(graph->gnnctx->layer_size);
-//    load_rep_time += get_time();
-//    if (graph->partition_id == 0)
-//      printf("#load_rep_time=%lf(s)\n", load_rep_time);
-//    gt->GenerateMessageBitmap(subgraphs);
-    partitioned_graph=new PartitionedGraph(graph, active);
-    partitioned_graph->GenerateAll([&](VertexId src, VertexId dst) {
-      return nts::op::nts_norm_degree(graph,src, dst);
-        },GPU_T);  
+    //    graph->generate_COO();
+    //    graph->reorder_COO_W2W();
+    //    // generate_CSC_Segment_Tensor_pinned(graph, csc_segment, true);
+    //    gt = new GraphOperation(graph, active);
+    //    gt->GenerateGraphSegment(subgraphs, GPU_T, [&](VertexId src, VertexId dst) {
+    //      return gt->norm_degree(src, dst);
+    //    });
+    //    double load_rep_time = 0;
+    //    load_rep_time -= get_time();
+    //    // graph->load_replicate3(graph->gnnctx->layer_size);
+    //    load_rep_time += get_time();
+    //    if (graph->partition_id == 0)
+    //      printf("#load_rep_time=%lf(s)\n", load_rep_time);
+    //    gt->GenerateMessageBitmap(subgraphs);
+    partitioned_graph = new PartitionedGraph(graph, active);
+    partitioned_graph->GenerateAll(
+        [&](VertexId src, VertexId dst) { return nts::op::nts_norm_degree(graph, src, dst); }, GPU_T);
     graph->init_message_buffer();
     graph->init_communicatior();
-    ctx=new nts::ctx::NtsContext();
+    ctx = new nts::ctx::NtsContext();
   }
   void init_nn() {
-
     learn_rate = graph->config->learn_rate;
     weight_decay = graph->config->weight_decay;
     drop_rate = graph->config->drop_rate;
@@ -99,14 +96,13 @@ public:
     beta1 = 0.9;
     beta2 = 0.999;
     epsilon = 1e-9;
-    
+
     torch::manual_seed(0);
     GNNDatum *gnndatum = new GNNDatum(graph->gnnctx, graph);
     if (0 == graph->config->feature_file.compare("random")) {
       gnndatum->random_generate();
     } else {
-      gnndatum->readFeature_Label_Mask(graph->config->feature_file,
-                                       graph->config->label_file,
+      gnndatum->readFeature_Label_Mask(graph->config->feature_file, graph->config->label_file,
                                        graph->config->mask_file);
     }
     gnndatum->registLabel(L_GT_C);
@@ -115,12 +111,10 @@ public:
     MASK_gpu = MASK.cuda();
 
     for (int i = 0; i < graph->gnnctx->layer_size.size() - 1; i++) {
-      P.push_back(new Parameter(graph->gnnctx->layer_size[i],
-                                graph->gnnctx->layer_size[i + 1], alpha, beta1,
-                                beta2, epsilon, weight_decay));
-      P.push_back(new Parameter(graph->gnnctx->layer_size[i],
-                                graph->gnnctx->layer_size[i + 1], alpha, beta1,
-                                beta2, epsilon, weight_decay));
+      P.push_back(new Parameter(graph->gnnctx->layer_size[i], graph->gnnctx->layer_size[i + 1], alpha, beta1, beta2,
+                                epsilon, weight_decay));
+      P.push_back(new Parameter(graph->gnnctx->layer_size[i], graph->gnnctx->layer_size[i + 1], alpha, beta1, beta2,
+                                epsilon, weight_decay));
       //            P.push_back(new Parameter(graph->gnnctx->layer_size[i],
       //                        graph->gnnctx->layer_size[i+1]));
     }
@@ -133,10 +127,8 @@ public:
       P[i]->Adam_to_GPU();
     }
 
-    F = graph->Nts->NewLeafTensor(
-        gnndatum->local_feature,
-        {graph->gnnctx->l_v_num, graph->gnnctx->layer_size[0]},
-        torch::DeviceType::CPU);
+    F = graph->Nts->NewLeafTensor(gnndatum->local_feature, {graph->gnnctx->l_v_num, graph->gnnctx->layer_size[0]},
+                                  torch::DeviceType::CPU);
 
     for (int i = 0; i < graph->gnnctx->layer_size.size(); i++) {
       NtsVar d;
@@ -145,15 +137,14 @@ public:
     X[0] = F.cuda().set_requires_grad(true);
   }
 
-  void Test(long s) { // 0 train, //1 eval //2 test
+  void Test(long s) {  // 0 train, //1 eval //2 test
     NtsVar mask_train = MASK_gpu.eq(s);
-    NtsVar all_train =
-        X[graph->gnnctx->layer_size.size() - 1]
-            .argmax(1)
-            .to(torch::kLong)
-            .eq(L_GT_G)
-            .to(torch::kLong)
-            .masked_select(mask_train.view({mask_train.size(0)}));
+    NtsVar all_train = X[graph->gnnctx->layer_size.size() - 1]
+                           .argmax(1)
+                           .to(torch::kLong)
+                           .eq(L_GT_G)
+                           .to(torch::kLong)
+                           .masked_select(mask_train.view({mask_train.size(0)}));
     NtsVar all = all_train.sum(0).cpu();
     long *p_correct = all.data_ptr<long>();
     long g_correct = 0;
@@ -163,18 +154,14 @@ public:
     MPI_Allreduce(p_correct, &g_correct, 1, dt, MPI_SUM, MPI_COMM_WORLD);
     MPI_Allreduce(&p_train, &g_train, 1, dt, MPI_SUM, MPI_COMM_WORLD);
     float acc_train = 0.0;
-    if (g_train > 0)
-      acc_train = float(g_correct) / g_train;
+    if (g_train > 0) acc_train = float(g_correct) / g_train;
     if (graph->partition_id == 0) {
       if (s == 0)
-        std::cout << "Train ACC: " << acc_train << " " << g_train << " "
-                  << g_correct << std::endl;
+        std::cout << "Train ACC: " << acc_train << " " << g_train << " " << g_correct << std::endl;
       else if (s == 1)
-        std::cout << "Eval  ACC: " << acc_train << " " << g_train << " "
-                  << g_correct << " " << std::endl;
+        std::cout << "Eval  ACC: " << acc_train << " " << g_train << " " << g_correct << " " << std::endl;
       else if (s == 2)
-        std::cout << "Test  ACC: " << acc_train << " " << g_train << " "
-                  << g_correct << " " << std::endl;
+        std::cout << "Test  ACC: " << acc_train << " " << g_train << " " << g_correct << " " << std::endl;
     }
   }
 
@@ -185,13 +172,10 @@ public:
     //        X_mirror[layer]=x.detach();
     //    }
     if (layer < graph->gnnctx->layer_size.size() - 2) {
-      y = torch::relu(P[layer * 2 + 0]->forward(a) +
-                      P[layer * 2 + 1]->forward(x))
-              .set_requires_grad(true);
+      y = torch::relu(P[layer * 2 + 0]->forward(a) + P[layer * 2 + 1]->forward(x)).set_requires_grad(true);
     } else if (layer == graph->gnnctx->layer_size.size() - 2) {
-      y = torch::relu(P[layer * 2 + 0]->forward(a) +
-                      P[layer * 2 + 1]->forward(x));
-      y = y.log_softmax(1); // CUDA
+      y = torch::relu(P[layer * 2 + 0]->forward(a) + P[layer * 2 + 1]->forward(x));
+      y = y.log_softmax(1);  // CUDA
     }
     return y;
   }
@@ -200,10 +184,8 @@ public:
     //  return torch::nll_loss(a,L_GT_C);
     torch::Tensor a = X[graph->gnnctx->layer_size.size() - 1];
     torch::Tensor mask_train = MASK_gpu.eq(0);
-    loss = torch::nll_loss(
-        a.masked_select(mask_train.expand({mask_train.size(0), a.size(1)}))
-            .view({-1, a.size(1)}),
-        L_GT_G.masked_select(mask_train.view({mask_train.size(0)})));
+    loss = torch::nll_loss(a.masked_select(mask_train.expand({mask_train.size(0), a.size(1)})).view({-1, a.size(1)}),
+                           L_GT_G.masked_select(mask_train.view({mask_train.size(0)})));
     ctx->appendNNOp(a, loss);
   }
 
@@ -219,19 +201,13 @@ public:
     graph->rtminfo->forward = true;
     for (int i = 0; i < graph->gnnctx->layer_size.size() - 1; i++) {
       graph->rtminfo->curr_layer = i;
-       NtsVar Y_i= ctx->runGraphOp<nts::op::ForwardGPUfuseOp>(partitioned_graph,active,X[i]);      
-       X[i + 1]=ctx->runVertexForward([&](NtsVar n_i,NtsVar v_i){
-            return vertexForward(n_i, v_i);
-        },
-        Y_i,
-        X[i]);
+      NtsVar Y_i = ctx->runGraphOp<nts::op::ForwardGPUfuseOp>(partitioned_graph, active, X[i]);
+      X[i + 1] = ctx->runVertexForward([&](NtsVar n_i, NtsVar v_i) { return vertexForward(n_i, v_i); }, Y_i, X[i]);
     }
   }
 
-   void run() {
-    if (graph->partition_id == 0)
-      printf("GNNmini::Engine[Dist.GPU.GCNimpl] running [%d] Epochs\n",
-             iterations);
+  void run() {
+    if (graph->partition_id == 0) printf("GNNmini::Engine[Dist.GPU.GCNimpl] running [%d] Epochs\n", iterations);
 
     exec_time -= get_time();
     for (int i_i = 0; i_i < iterations; i_i++) {
@@ -250,13 +226,10 @@ public:
       ctx->self_backward();
       Update();
       // cp->debug();
-      if (graph->partition_id == 0)
-        std::cout << "GNNmini::Running.Epoch[" << i_i << "]:loss\t" << loss
-                  << std::endl;
+      if (graph->partition_id == 0) std::cout << "GNNmini::Running.Epoch[" << i_i << "]:loss\t" << loss << std::endl;
     }
     exec_time += get_time();
 
     delete active;
   }
-
 };

@@ -16,22 +16,22 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 #ifndef NTSGRAPHOP_HPP
 #define NTSGRAPHOP_HPP
 #include <assert.h>
-#include <map>
 #include <math.h>
-#include <stack>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+
+#include <map>
+#include <stack>
 #include <vector>
 
+#include "core/PartitionedGraph.hpp"
 #include "core/graph.hpp"
 #include "core/ntsBaseOp.hpp"
-#include "core/PartitionedGraph.hpp"
-
 #include "ntsCPUFusedGraphOp.hpp"
 #include "ntsDistCPUGraphOp.hpp"
-#include "ntsSingleCPUGraphOp.hpp"
 #include "ntsMiniBatchGraphOp.hpp"
+#include "ntsSingleCPUGraphOp.hpp"
 
 #if CUDA_ENABLE
 #include "ntsDistGPUFusedGraphOp.hpp"
@@ -41,8 +41,8 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 //#include "ntsSubLinearNNOP.hpp"
 //#include "ntsNNOP.hpp"
 
-//namespace nts {
-//namespace op {
+// namespace nts {
+// namespace op {
 //
 ////class ntsGraphOp {
 ////public:
@@ -56,10 +56,10 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 ////  virtual NtsVar &forward(NtsVar &input) = 0;
 ////  virtual NtsVar backward(NtsVar &output_grad) = 0;
 ////};
-//    
-//#if CUDA_ENABLE    
-//class ForwardGPUfuseOp : public ntsGraphOp{
-//public:
+//
+//#if CUDA_ENABLE
+// class ForwardGPUfuseOp : public ntsGraphOp{
+// public:
 //  std::vector<CSC_segment_pinned *> subgraphs;
 //
 //  ForwardGPUfuseOp(PartitionedGraph *partitioned_graph,VertexSubset *active)
@@ -84,7 +84,7 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 //  }
 //  return f_output;
 //  }
-//  
+//
 //  NtsVar backward(NtsVar &f_output_grad){
 //      int feature_size = f_output_grad.size(1);
 //      NtsVar f_input_grad=graph_->Nts->NewKeyTensor(f_output_grad,torch::DeviceType::CUDA);
@@ -103,10 +103,10 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 //  }
 //};
 //
-//class ForwardSingleGPUfuseOp : public ntsGraphOp{
-//public:
+// class ForwardSingleGPUfuseOp : public ntsGraphOp{
+// public:
 //  std::vector<CSC_segment_pinned *> subgraphs;
-//  
+//
 //  ForwardSingleGPUfuseOp(PartitionedGraph *partitioned_graph,VertexSubset *active)
 //      : ntsGraphOp(partitioned_graph, active) {
 //    subgraphs = partitioned_graph->graph_chunks;
@@ -117,33 +117,33 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 //    graph_->forward_single<int, ValueType>(f_input, subgraphs, f_output, feature_size);
 //    return f_output;
 //  }
-//  
+//
 //  NtsVar backward(NtsVar &f_output_grad){
 //    int feature_size = f_output_grad.size(1);
 //    NtsVar f_input_grad=graph_->Nts->NewKeyTensor(f_output_grad,torch::DeviceType::CUDA);
-//    graph_->backward_single<int, ValueType>(f_output_grad, subgraphs, 
+//    graph_->backward_single<int, ValueType>(f_output_grad, subgraphs,
 //            f_input_grad, feature_size);
 //      return f_input_grad;
-//  }    
+//  }
 //
 //};
 //#endif
-//class SingleCPUSrcDstScatterOp : public ntsGraphOp{
-//public:
+// class SingleCPUSrcDstScatterOp : public ntsGraphOp{
+// public:
 //  std::vector<CSC_segment_pinned *> subgraphs;
-//  
+//
 //  SingleCPUSrcDstScatterOp(PartitionedGraph *partitioned_graph,VertexSubset *active)
 //      : ntsGraphOp(partitioned_graph, active) {
 //    subgraphs = partitioned_graph->graph_chunks;
 //  }
 //  NtsVar forward(NtsVar &f_input){
 //    int feature_size = f_input.size(1);
-//    NtsVar f_output=graph_->Nts->NewKeyTensor({graph_->gnnctx->l_e_num, 
+//    NtsVar f_output=graph_->Nts->NewKeyTensor({graph_->gnnctx->l_e_num,
 //                2*feature_size},torch::DeviceType::CPU);
 //    ValueType *f_input_buffer =
 //      graph_->Nts->getWritableBuffer(f_input, torch::DeviceType::CPU);
 //    ValueType *f_output_buffer =
-//      graph_->Nts->getWritableBuffer(f_output, torch::DeviceType::CPU);            
+//      graph_->Nts->getWritableBuffer(f_output, torch::DeviceType::CPU);
 //  graph_->local_vertex_operation<int, ValueType>( // For EACH Vertex
 //      [&](VertexId vtx, CSC_segment_pinned *subgraph, VertexId recv_id) {
 //        // iterate the incoming edge for vtx
@@ -154,16 +154,16 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 //          nts_copy(f_output_buffer, eid * 2 + 1, f_input_buffer, vtx, feature_size,1);
 //        }
 //      },
-//      subgraphs, feature_size, active_);            
+//      subgraphs, feature_size, active_);
 //    return f_output;
 //  }
-//  
+//
 //  NtsVar backward(NtsVar &f_output_grad){
 //      int feature_size=f_output_grad.size(1);
-//                     assert(feature_size%2==0); 
-//    NtsVar f_input_grad=graph_->Nts->NewLeafTensor({graph_->gnnctx->l_v_num, 
+//                     assert(feature_size%2==0);
+//    NtsVar f_input_grad=graph_->Nts->NewLeafTensor({graph_->gnnctx->l_v_num,
 //                feature_size/2},torch::DeviceType::CPU);
-//              
+//
 //    ValueType *f_input_grad_buffer =
 //      graph_->Nts->getWritableBuffer(f_input_grad, torch::DeviceType::CPU);
 //    ValueType *f_output_grad_buffer =
@@ -184,26 +184,26 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 //      },
 //      subgraphs, feature_size, active_);
 //      return f_input_grad;
-//  }    
+//  }
 //
 //};
 //
-//class SingleCPUSrcScatterOp : public ntsGraphOp{
-//public:
+// class SingleCPUSrcScatterOp : public ntsGraphOp{
+// public:
 //  std::vector<CSC_segment_pinned *> subgraphs;
-//  
+//
 //  SingleCPUSrcScatterOp(PartitionedGraph *partitioned_graph,VertexSubset *active)
 //      : ntsGraphOp(partitioned_graph, active) {
 //    subgraphs = partitioned_graph->graph_chunks;
 //  }
 //  NtsVar forward(NtsVar &f_input){
 //    int feature_size = f_input.size(1);
-//    NtsVar f_output=graph_->Nts->NewKeyTensor({graph_->gnnctx->l_e_num, 
+//    NtsVar f_output=graph_->Nts->NewKeyTensor({graph_->gnnctx->l_e_num,
 //                feature_size},torch::DeviceType::CPU);
 //    ValueType *f_input_buffer =
 //      graph_->Nts->getWritableBuffer(f_input, torch::DeviceType::CPU);
 //    ValueType *f_output_buffer =
-//      graph_->Nts->getWritableBuffer(f_output, torch::DeviceType::CPU);            
+//      graph_->Nts->getWritableBuffer(f_output, torch::DeviceType::CPU);
 //    graph_->local_vertex_operation<int, ValueType>( // For EACH Vertex
 //      [&](VertexId vtx, CSC_segment_pinned *subgraph, VertexId recv_id) {
 //        // iterate the incoming edge for vtx
@@ -213,15 +213,15 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 //          nts_copy(f_output_buffer, eid, f_input_buffer, src, feature_size,1);
 //        }
 //      },
-//      subgraphs, feature_size, active_);            
+//      subgraphs, feature_size, active_);
 //    return f_output;
 //  }
-//  
+//
 //  NtsVar backward(NtsVar &f_output_grad){
 //      int feature_size=f_output_grad.size(1);
-//    NtsVar f_input_grad=graph_->Nts->NewLeafTensor({graph_->gnnctx->l_v_num, 
+//    NtsVar f_input_grad=graph_->Nts->NewLeafTensor({graph_->gnnctx->l_v_num,
 //                feature_size},torch::DeviceType::CPU);
-//              
+//
 //    ValueType *f_input_grad_buffer =
 //      graph_->Nts->getWritableBuffer(f_input_grad, torch::DeviceType::CPU);
 //    ValueType *f_output_grad_buffer =
@@ -239,46 +239,46 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 //      },
 //      subgraphs, feature_size, active_);
 //      return f_input_grad;
-//  }    
+//  }
 //
 //};
 //
-//class SingleCPUDstAggregateOp : public ntsGraphOp{
-//public:
+// class SingleCPUDstAggregateOp : public ntsGraphOp{
+// public:
 //  std::vector<CSC_segment_pinned *> subgraphs;
-//  
+//
 //  SingleCPUDstAggregateOp(PartitionedGraph *partitioned_graph,VertexSubset *active)
 //      : ntsGraphOp(partitioned_graph, active) {
 //    subgraphs = partitioned_graph->graph_chunks;
 //  }
 //  NtsVar forward(NtsVar &f_input){// input edge  output vertex
 //    int feature_size = f_input.size(1);
-//    NtsVar f_output=graph_->Nts->NewKeyTensor({graph_->gnnctx->l_v_num, 
+//    NtsVar f_output=graph_->Nts->NewKeyTensor({graph_->gnnctx->l_v_num,
 //                feature_size},torch::DeviceType::CPU);
 //    ValueType *f_input_buffer =
 //      graph_->Nts->getWritableBuffer(f_input, torch::DeviceType::CPU);
 //    ValueType *f_output_buffer =
-//      graph_->Nts->getWritableBuffer(f_output, torch::DeviceType::CPU);  
-//    
+//      graph_->Nts->getWritableBuffer(f_output, torch::DeviceType::CPU);
+//
 //    graph_->local_vertex_operation<int, ValueType>( // For EACH Vertex
 //      [&](VertexId vtx, CSC_segment_pinned *subgraph, VertexId recv_id) {
 //        // iterate the incoming edge for vtx
 //        for (long eid = subgraph->column_offset[vtx];
 //             eid < subgraph->column_offset[vtx + 1]; eid++) {
 //          VertexId src = subgraph->row_indices[eid];
-//          nts_acc(f_output_buffer + vtx * feature_size, 
+//          nts_acc(f_output_buffer + vtx * feature_size,
 //                  f_input_buffer + eid * feature_size, feature_size);
 //        }
 //      },
-//      subgraphs, feature_size, active_);            
+//      subgraphs, feature_size, active_);
 //    return f_output;
 //  }
-//  
+//
 //  NtsVar backward(NtsVar &f_output_grad){// input vtx grad; output edge grad
 //      int feature_size=f_output_grad.size(1);
-//    NtsVar f_input_grad=graph_->Nts->NewLeafTensor({graph_->gnnctx->l_e_num, 
+//    NtsVar f_input_grad=graph_->Nts->NewLeafTensor({graph_->gnnctx->l_e_num,
 //                feature_size},torch::DeviceType::CPU);
-//              
+//
 //    ValueType *f_input_grad_buffer =
 //      graph_->Nts->getWritableBuffer(f_input_grad, torch::DeviceType::CPU);
 //    ValueType *f_output_grad_buffer =
@@ -296,14 +296,14 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 //      },
 //      subgraphs, feature_size, active_);
 //      return f_input_grad;
-//  }    
+//  }
 //
 //};
-//class SingleEdgeSoftMax : public ntsGraphOp{
-//public:
+// class SingleEdgeSoftMax : public ntsGraphOp{
+// public:
 //  std::vector<CSC_segment_pinned *> subgraphs;
 //  NtsVar IntermediateResult;
-//  
+//
 //  SingleEdgeSoftMax(PartitionedGraph *partitioned_graph,VertexSubset *active)
 //      : ntsGraphOp(partitioned_graph, active) {
 //    subgraphs = partitioned_graph->graph_chunks;
@@ -311,13 +311,13 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 //  NtsVar forward(NtsVar &f_input_){// input i_msg  output o_msg
 //     //NtsVar f_input_=f_input.detach();
 //    int feature_size = f_input_.size(1);
-//    NtsVar f_output=graph_->Nts->NewKeyTensor({graph_->gnnctx->l_e_num, 
+//    NtsVar f_output=graph_->Nts->NewKeyTensor({graph_->gnnctx->l_e_num,
 //                feature_size},torch::DeviceType::CPU);
 //    ValueType *f_input_buffer =
 //      graph_->Nts->getWritableBuffer(f_input_, torch::DeviceType::CPU);
 //    ValueType *f_output_buffer =
 //      graph_->Nts->getWritableBuffer(f_output, torch::DeviceType::CPU);
-//    
+//
 //        graph_->local_vertex_operation<int, ValueType>( // For EACH Vertex
 //        [&](VertexId vtx, CSC_segment_pinned *subgraph, VertexId recv_id) {
 //          long eid_start = subgraph->column_offset[vtx];
@@ -326,24 +326,24 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 //          assert(eid_start >= 0);
 //          NtsVar d = f_input_.slice(0, eid_start, eid_end, 1).softmax(0);
 //          ValueType *d_buffer =
-//          graph_->Nts->getWritableBuffer(d, torch::DeviceType::CPU);      
-//          nts_copy(f_output_buffer, eid_start, d_buffer, 
-//                  0, feature_size,(eid_end-eid_start));   
+//          graph_->Nts->getWritableBuffer(d, torch::DeviceType::CPU);
+//          nts_copy(f_output_buffer, eid_start, d_buffer,
+//                  0, feature_size,(eid_end-eid_start));
 //        },
 //        subgraphs, f_input_.size(1), this->active_);
-//    
+//
 //    IntermediateResult=f_output;
-//          
+//
 //    return f_output;
 //  }
-//  
+//
 //  NtsVar backward(NtsVar &f_output_grad){// input vtx grad; output edge grad
 //    int feature_size=f_output_grad.size(1);
-//    NtsVar f_input_grad=graph_->Nts->NewLeafTensor({graph_->gnnctx->l_e_num, 
+//    NtsVar f_input_grad=graph_->Nts->NewLeafTensor({graph_->gnnctx->l_e_num,
 //                feature_size},torch::DeviceType::CPU);
 //    ValueType *f_input_grad_buffer =
 //      graph_->Nts->getWritableBuffer(f_input_grad, torch::DeviceType::CPU);
-//    
+//
 //    graph_->local_vertex_operation<int, ValueType>( // For EACH Vertex
 //        [&](VertexId vtx, CSC_segment_pinned *subgraph, VertexId recv_id) {
 //          long eid_start = subgraph->column_offset[vtx];
@@ -352,22 +352,22 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 //          assert(eid_start >= 0);
 //          NtsVar d   = f_output_grad.slice(0, eid_start, eid_end, 1);
 //          NtsVar imr =IntermediateResult.slice(0, eid_start, eid_end, 1);
-//          //s4=(s2*s1)-(s2)*(s2.t().mm(s1)); 
-//          NtsVar d_o =(imr*d)-imr*(d.t().mm(imr)); 
+//          //s4=(s2*s1)-(s2)*(s2.t().mm(s1));
+//          NtsVar d_o =(imr*d)-imr*(d.t().mm(imr));
 //          ValueType *d_o_buffer =
 //          graph_->Nts->getWritableBuffer(d_o, torch::DeviceType::CPU);
-//          nts_copy(f_input_grad_buffer, eid_start, d_o_buffer, 
+//          nts_copy(f_input_grad_buffer, eid_start, d_o_buffer,
 //                  0, feature_size,(eid_end-eid_start));
 //        },
 //        subgraphs, f_output_grad.size(1), this->active_);
 //      return f_input_grad;
-//  }    
+//  }
 //
 //};
 //
 //
-//class ForwardCPUfuseOp : public ntsGraphOp {
-//public:
+// class ForwardCPUfuseOp : public ntsGraphOp {
+// public:
 //  std::vector<CSC_segment_pinned *> subgraphs;
 //  ForwardCPUfuseOp(PartitionedGraph *partitioned_graph,VertexSubset *active)
 //      : ntsGraphOp(partitioned_graph, active) {
@@ -498,14 +498,14 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 //      feature_size, active_);
 //  delete[] output_buffer;
 //  return f_input_grad;
-//  
+//
 //  }
 //};
 //
-//class DistGetDepNbrOp : public ntsGraphOp{
-//public:
+// class DistGetDepNbrOp : public ntsGraphOp{
+// public:
 //  std::vector<CSC_segment_pinned *> subgraphs;
-//  
+//
 //  DistGetDepNbrOp(PartitionedGraph *partitioned_graph,VertexSubset *active)
 //      : ntsGraphOp(partitioned_graph, active) {
 //    subgraphs = partitioned_graph->graph_chunks;
@@ -513,13 +513,13 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 //  NtsVar forward(NtsVar &f_input){// input edge  output vertex
 //    int feature_size = f_input.size(1);
 //    //LOG_INFO("owned_mirrors (%d)",partitioned_graph_->owned_mirrors);
-//    NtsVar f_output=graph_->Nts->NewKeyTensor({partitioned_graph_->owned_mirrors, 
+//    NtsVar f_output=graph_->Nts->NewKeyTensor({partitioned_graph_->owned_mirrors,
 //                feature_size},torch::DeviceType::CPU);
 //    ValueType *f_input_buffer =
 //      graph_->Nts->getWritableBuffer(f_input, torch::DeviceType::CPU);
 //    ValueType *f_output_buffer =
-//      graph_->Nts->getWritableBuffer(f_output, torch::DeviceType::CPU);  
-//    //LOG_INFO("owned_mirrors (%d)",partitioned_graph_->owned_mirrors);    
+//      graph_->Nts->getWritableBuffer(f_output, torch::DeviceType::CPU);
+//    //LOG_INFO("owned_mirrors (%d)",partitioned_graph_->owned_mirrors);
 //      graph_->get_from_dep_neighbor_mutisockets<int, ValueType>( // For EACH Vertex Processing
 //      [&](VertexId src, int current_send_partition) {
 //        if (graph_->rtminfo->lock_free) {
@@ -541,28 +541,28 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 //                f_input_buffer + (src - graph_->gnnctx->p_v_s) * feature_size,
 //                feature_size);
 //          }
-//        
+//
 //      },
 //      [&](VertexId dst, ValueType *recv_buffer, VertexId recv_id) {
-//        memcpy(f_output_buffer + partitioned_graph_->MirrorIndex[dst] 
+//        memcpy(f_output_buffer + partitioned_graph_->MirrorIndex[dst]
 //                * feature_size, recv_buffer, sizeof(ValueType) * feature_size);
 //        return 0;
 //      },
 //      subgraphs, feature_size, active_);
-//      
+//
 //    return f_output;
 //  }
-//  
+//
 //  NtsVar backward(NtsVar &f_output_grad){// input vtx grad; output edge grad
 //    int feature_size=f_output_grad.size(1);
-//    NtsVar f_input_grad=graph_->Nts->NewLeafTensor({graph_->gnnctx->l_v_num, 
+//    NtsVar f_input_grad=graph_->Nts->NewLeafTensor({graph_->gnnctx->l_v_num,
 //                feature_size},torch::DeviceType::CPU);
 //    ValueType *f_input_grad_buffer =
 //      graph_->Nts->getWritableBuffer(f_input_grad, torch::DeviceType::CPU);
 //    ValueType *f_output_grad_buffer =
 //      graph_->Nts->getWritableBuffer(f_output_grad, torch::DeviceType::CPU);
-//    
-//      
+//
+//
 //    graph_->process_edges_backward_decoupled_multisockets<
 //      int, ValueType>( // For EACH Vertex
 //                       // Processing
@@ -586,19 +586,19 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 //        }
 //      },
 //      [&](VertexId src, ValueType *msg) {
-//        nts_acc(f_input_grad_buffer + (src - graph_->gnnctx->p_v_s) 
+//        nts_acc(f_input_grad_buffer + (src - graph_->gnnctx->p_v_s)
 //                * feature_size, msg, feature_size);
 //        return 1;
 //      },
-//     feature_size, active_); 
+//     feature_size, active_);
 //      return f_input_grad;
-//  }    
+//  }
 //
 //};
-//class DistScatterSrc : public ntsGraphOp{
-//public:
+// class DistScatterSrc : public ntsGraphOp{
+// public:
 //  //std::vector<CSC_segment_pinned *> subgraphs;
-//  
+//
 //  DistScatterSrc(PartitionedGraph *partitioned_graph,VertexSubset *active)
 //      : ntsGraphOp(partitioned_graph, active) {
 //    //subgraphs = partitioned_graph->graph_chunks;
@@ -606,14 +606,14 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 //  NtsVar forward(NtsVar &f_input){// input edge  output vertex
 //    int feature_size = f_input.size(1);
 //    //LOG_INFO("owned_mirrors (%d)",partitioned_graph_->owned_mirrors);
-//    NtsVar f_output=graph_->Nts->NewKeyTensor({partitioned_graph_->owned_edges, 
+//    NtsVar f_output=graph_->Nts->NewKeyTensor({partitioned_graph_->owned_edges,
 //                feature_size},torch::DeviceType::CPU);
 //    ValueType *f_input_buffer =
 //      graph_->Nts->getWritableBuffer(f_input, torch::DeviceType::CPU);
 //    ValueType *f_output_buffer =
-//      graph_->Nts->getWritableBuffer(f_output, torch::DeviceType::CPU);  
+//      graph_->Nts->getWritableBuffer(f_output, torch::DeviceType::CPU);
 //    //LOG_INFO("owned_mirrors (%d)",partitioned_graph_->owned_mirrors);
-//    
+//
 //      partitioned_graph_->DistSchedulingMaster(
 //        [&](VertexId dst,PartitionedGraph* pg){
 //            VertexId dst_trans =dst-graph_->gnnctx->p_v_s;
@@ -622,16 +622,16 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 //                VertexId src=pg->row_indices[eid];
 //                VertexId src_pos=pg->MirrorIndex[src];
 //                nts_copy(f_output_buffer,eid,f_input_buffer,
-//                        src_pos,feature_size,1);    
-//            }     
-//        
-//        });    
+//                        src_pos,feature_size,1);
+//            }
+//
+//        });
 //      return f_output;
 //  }
-//  
+//
 //  NtsVar backward(NtsVar &f_output_grad){// input vtx grad; output edge grad
 //    int feature_size=f_output_grad.size(1);
-//    NtsVar f_input_grad=graph_->Nts->NewLeafTensor({partitioned_graph_->owned_mirrors, 
+//    NtsVar f_input_grad=graph_->Nts->NewLeafTensor({partitioned_graph_->owned_mirrors,
 //                feature_size},torch::DeviceType::CPU);
 //    ValueType *f_input_grad_buffer =
 //      graph_->Nts->getWritableBuffer(f_input_grad, torch::DeviceType::CPU);
@@ -646,18 +646,18 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 //                VertexId src_pos=pg->MirrorIndex[src];
 //                nts_acc(f_input_grad_buffer+src_pos*feature_size,
 //                            f_output_grad_buffer+eid*feature_size,
-//                                feature_size);    
-//            }     
-//        
-//        });    
-//      
+//                                feature_size);
+//            }
+//
+//        });
+//
 //      return f_input_grad;
 //  }
 //};
-//class DistScatterDst : public ntsGraphOp{
-//public:
+// class DistScatterDst : public ntsGraphOp{
+// public:
 //  //std::vector<CSC_segment_pinned *> subgraphs;
-//  
+//
 //  DistScatterDst(PartitionedGraph *partitioned_graph,VertexSubset *active)
 //      : ntsGraphOp(partitioned_graph, active) {
 //    //subgraphs = partitioned_graph->graph_chunks;
@@ -665,30 +665,30 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 //  NtsVar forward(NtsVar &f_input){// input edge  output vertex
 //    int feature_size = f_input.size(1);
 //    //LOG_INFO("owned_mirrors (%d)",partitioned_graph_->owned_mirrors);
-//    NtsVar f_output=graph_->Nts->NewKeyTensor({partitioned_graph_->owned_edges, 
+//    NtsVar f_output=graph_->Nts->NewKeyTensor({partitioned_graph_->owned_edges,
 //                feature_size},torch::DeviceType::CPU);
 //    ValueType *f_input_buffer =
 //      graph_->Nts->getWritableBuffer(f_input, torch::DeviceType::CPU);
 //    ValueType *f_output_buffer =
-//      graph_->Nts->getWritableBuffer(f_output, torch::DeviceType::CPU);  
+//      graph_->Nts->getWritableBuffer(f_output, torch::DeviceType::CPU);
 //    //LOG_INFO("owned_mirrors (%d)",partitioned_graph_->owned_mirrors);
-//    
+//
 //      partitioned_graph_->DistSchedulingMaster(
 //        [&](VertexId dst,PartitionedGraph* pg){
 //            VertexId dst_trans =dst-graph_->gnnctx->p_v_s;
 //            for(int eid=pg->column_offset[dst_trans];
 //                    eid<pg->column_offset[dst_trans+1];eid++){
 //                nts_copy(f_output_buffer,eid,f_input_buffer,
-//                        dst_trans,feature_size,1);    
-//            }     
-//        
-//        });    
+//                        dst_trans,feature_size,1);
+//            }
+//
+//        });
 //      return f_output;
 //  }
-//  
+//
 //  NtsVar backward(NtsVar &f_output_grad){// input vtx grad; output edge grad
 //    int feature_size=f_output_grad.size(1);
-//    NtsVar f_input_grad=graph_->Nts->NewLeafTensor({graph_->gnnctx->l_v_num, 
+//    NtsVar f_input_grad=graph_->Nts->NewLeafTensor({graph_->gnnctx->l_v_num,
 //                feature_size},torch::DeviceType::CPU);
 //    ValueType *f_input_grad_buffer =
 //      graph_->Nts->getWritableBuffer(f_input_grad, torch::DeviceType::CPU);
@@ -703,18 +703,18 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 //                VertexId src_pos=pg->MirrorIndex[src];
 //                nts_acc(f_input_grad_buffer+dst_trans*feature_size,
 //                            f_output_grad_buffer+eid*feature_size,
-//                                feature_size);    
-//            }     
-//        
-//        });    
-//      
+//                                feature_size);
+//            }
+//
+//        });
+//
 //      return f_input_grad;
-//  }    
+//  }
 //};
-//class DistAggregateDst : public ntsGraphOp{
-//public:
+// class DistAggregateDst : public ntsGraphOp{
+// public:
 //  //std::vector<CSC_segment_pinned *> subgraphs;
-//  
+//
 //  DistAggregateDst(PartitionedGraph *partitioned_graph,VertexSubset *active)
 //      : ntsGraphOp(partitioned_graph, active) {
 //    //subgraphs = partitioned_graph->graph_chunks;
@@ -722,14 +722,14 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 //  NtsVar forward(NtsVar &f_input){// input edge  output vertex
 //    int feature_size = f_input.size(1);
 //    //LOG_INFO("owned_mirrors (%d)",partitioned_graph_->owned_mirrors);
-//    NtsVar f_output=graph_->Nts->NewKeyTensor({partitioned_graph_->owned_vertices, 
+//    NtsVar f_output=graph_->Nts->NewKeyTensor({partitioned_graph_->owned_vertices,
 //                feature_size},torch::DeviceType::CPU);
 //    ValueType *f_input_buffer =
 //      graph_->Nts->getWritableBuffer(f_input, torch::DeviceType::CPU);
 //    ValueType *f_output_buffer =
-//      graph_->Nts->getWritableBuffer(f_output, torch::DeviceType::CPU);  
+//      graph_->Nts->getWritableBuffer(f_output, torch::DeviceType::CPU);
 //    //LOG_INFO("owned_mirrors (%d)",partitioned_graph_->owned_mirrors);
-//    
+//
 //      partitioned_graph_->DistSchedulingMaster(
 //        [&](VertexId dst,PartitionedGraph* pg){
 //            VertexId dst_trans =dst-graph_->gnnctx->p_v_s;
@@ -737,18 +737,18 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 //                    eid<pg->column_offset[dst_trans+1];eid++){
 //                    nts_acc(f_output_buffer+dst_trans*feature_size,
 //                            f_input_buffer+eid*feature_size,
-//                                feature_size);    
+//                                feature_size);
 ////                nts_copy(f_output_buffer,eid,f_input_buffer,
-////                        dst_trans,feature_size,1);    
-//            }     
-//        
-//        });    
+////                        dst_trans,feature_size,1);
+//            }
+//
+//        });
 //      return f_output;
 //  }
-//  
+//
 //  NtsVar backward(NtsVar &f_output_grad){// input vtx grad; output edge grad
 //    int feature_size=f_output_grad.size(1);
-//    NtsVar f_input_grad=graph_->Nts->NewLeafTensor({partitioned_graph_->owned_edges, 
+//    NtsVar f_input_grad=graph_->Nts->NewLeafTensor({partitioned_graph_->owned_edges,
 //                feature_size},torch::DeviceType::CPU);
 //    ValueType *f_input_grad_buffer =
 //      graph_->Nts->getWritableBuffer(f_input_grad, torch::DeviceType::CPU);
@@ -765,25 +765,25 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 ////                            f_output_grad_buffer+eid*feature_size,
 ////                                feature_size);
 //                nts_copy(f_input_grad_buffer,eid,f_output_grad_buffer,
-//                        dst_trans,feature_size,1);                   
-//            }     
-//        
-//        });    
-//      
+//                        dst_trans,feature_size,1);
+//            }
+//
+//        });
+//
 //      return f_input_grad;
-//  }    
+//  }
 //};
-//class DistEdgeSoftMax : public ntsGraphOp{
-//public:
+// class DistEdgeSoftMax : public ntsGraphOp{
+// public:
 //  NtsVar IntermediateResult;
-//  
+//
 //  DistEdgeSoftMax(PartitionedGraph *partitioned_graph,VertexSubset *active)
 //      : ntsGraphOp(partitioned_graph, active) {
 //  }
 //  NtsVar forward(NtsVar &f_input_){// input i_msg  output o_msg
 //     //NtsVar f_input_=f_input.detach();
 //    int feature_size = f_input_.size(1);
-//    NtsVar f_output=graph_->Nts->NewKeyTensor({partitioned_graph_->owned_edges, 
+//    NtsVar f_output=graph_->Nts->NewKeyTensor({partitioned_graph_->owned_edges,
 //                feature_size},torch::DeviceType::CPU);
 //    ValueType *f_input_buffer =
 //      graph_->Nts->getWritableBuffer(f_input_, torch::DeviceType::CPU);
@@ -796,17 +796,17 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 //          NtsVar d = f_input_.slice(0, eid_start, eid_end, 1).softmax(0);
 //            VertexId dst_trans =dst-graph_->gnnctx->p_v_s;
 //          ValueType *d_buffer =
-//          graph_->Nts->getWritableBuffer(d, torch::DeviceType::CPU);    
-//          nts_copy(f_output_buffer, eid_start, d_buffer, 
+//          graph_->Nts->getWritableBuffer(d, torch::DeviceType::CPU);
+//          nts_copy(f_output_buffer, eid_start, d_buffer,
 //                  0, feature_size,(eid_end-eid_start));
 //        });
-//    IntermediateResult=f_output;        
+//    IntermediateResult=f_output;
 //    return f_output;
 //  }
-//  
+//
 //  NtsVar backward(NtsVar &f_output_grad){// input vtx grad; output edge grad
 //    int feature_size=f_output_grad.size(1);
-//    NtsVar f_input_grad=graph_->Nts->NewLeafTensor({partitioned_graph_->owned_edges, 
+//    NtsVar f_input_grad=graph_->Nts->NewLeafTensor({partitioned_graph_->owned_edges,
 //                feature_size},torch::DeviceType::CPU);
 //    ValueType *f_input_grad_buffer =
 //      graph_->Nts->getWritableBuffer(f_input_grad, torch::DeviceType::CPU);
@@ -816,14 +816,14 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 //          long eid_end = pg->column_offset[dst + 1];
 //          NtsVar d   = f_output_grad.slice(0, eid_start, eid_end, 1);
 //          NtsVar imr =IntermediateResult.slice(0, eid_start, eid_end, 1);
-//          NtsVar d_o =(imr*d)-imr*(d.t().mm(imr)); 
+//          NtsVar d_o =(imr*d)-imr*(d.t().mm(imr));
 //          ValueType *d_o_buffer =
 //          graph_->Nts->getWritableBuffer(d_o, torch::DeviceType::CPU);
-//          nts_copy(f_input_grad_buffer, eid_start, d_o_buffer, 
+//          nts_copy(f_input_grad_buffer, eid_start, d_o_buffer,
 //                  0, feature_size,(eid_end-eid_start));
-//        
+//
 //        });
-//  }    
+//  }
 //
 //};
 //

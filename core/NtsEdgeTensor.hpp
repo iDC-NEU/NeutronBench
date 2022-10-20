@@ -28,38 +28,33 @@ struct ntsEdgeTensor {
     size_1 = -1;
     dim = 0;
   }
-  ntsEdgeTensor(int feature_size, CSC_segment_pinned *subgraph_,
-                NtsScheduler *ntsscheduler_) {
+  ntsEdgeTensor(int feature_size, CSC_segment_pinned *subgraph_, NtsScheduler *ntsscheduler_) {
     initEdgeTensor(feature_size, subgraph_, ntsscheduler_);
   }
 
-  void initEdgeTensorFromTensor(int feature_size, CSC_segment_pinned *subgraph_,
-                                NtsScheduler *ntsscheduler_, NtsVar &e_tensor) {
+  void initEdgeTensorFromTensor(int feature_size, CSC_segment_pinned *subgraph_, NtsScheduler *ntsscheduler_,
+                                NtsVar &e_tensor) {
     size_1 = feature_size;
     subgraph = subgraph_;
     ntsscheduler = ntsscheduler_;
     size_0 = subgraph->edge_size;
     long size = ((long)size_1) * size_0;
     edgeTensor = e_tensor;
-    data_buffer =
-        ntsscheduler->getWritableBuffer(e_tensor, torch::DeviceType::CPU);
+    data_buffer = ntsscheduler->getWritableBuffer(e_tensor, torch::DeviceType::CPU);
     edgeTensorIndexedbyDst.clear();
     NtsVar d;
     edgeTensorIndexedbyDst.resize(subgraph->batch_size_forward, d);
-    for (VertexId vtx = subgraph->dst_range[0]; vtx < subgraph->dst_range[1];
-         vtx++) {
+    for (VertexId vtx = subgraph->dst_range[0]; vtx < subgraph->dst_range[1]; vtx++) {
       long eid_start = subgraph->column_offset[vtx];
       long eid_end = subgraph->column_offset[vtx + 1];
       int offset = vtx - subgraph->dst_range[0];
       edgeTensorIndexedbyDst[offset] = ntsscheduler->NewLeafTensor(
-          data_buffer + eid_start * size_1, {(eid_end - eid_start), size_1},
-          torch::DeviceType::CPU);
+          data_buffer + eid_start * size_1, {(eid_end - eid_start), size_1}, torch::DeviceType::CPU);
     }
     dim = 2;
   }
 
-  void initEdgeTensor(int feature_size, CSC_segment_pinned *subgraph_,
-                      NtsScheduler *ntsscheduler_) {
+  void initEdgeTensor(int feature_size, CSC_segment_pinned *subgraph_, NtsScheduler *ntsscheduler_) {
     size_1 = feature_size;
     subgraph = subgraph_;
     ntsscheduler = ntsscheduler_;
@@ -69,22 +64,17 @@ struct ntsEdgeTensor {
     edgeTensorIndexedbyDst.clear();
     NtsVar d;
     edgeTensorIndexedbyDst.resize(subgraph->batch_size_forward, d);
-    for (VertexId vtx = subgraph->dst_range[0]; vtx < subgraph->dst_range[1];
-         vtx++) {
+    for (VertexId vtx = subgraph->dst_range[0]; vtx < subgraph->dst_range[1]; vtx++) {
       long eid_start = subgraph->column_offset[vtx];
       long eid_end = subgraph->column_offset[vtx + 1];
       int offset = vtx - subgraph->dst_range[0];
       edgeTensorIndexedbyDst[offset] = ntsscheduler->NewLeafTensor(
-          data_buffer + eid_start * size_1, {(eid_end - eid_start), size_1},
-          torch::DeviceType::CPU);
+          data_buffer + eid_start * size_1, {(eid_end - eid_start), size_1}, torch::DeviceType::CPU);
     }
-    edgeTensor = ntsscheduler->NewLeafTensor(data_buffer, {size_0, size_1},
-                                             torch::DeviceType::CPU);
+    edgeTensor = ntsscheduler->NewLeafTensor(data_buffer, {size_0, size_1}, torch::DeviceType::CPU);
     dim = 2;
   }
-  NtsVar &getNbrTensor(VertexId vtx) {
-    return edgeTensorIndexedbyDst[vtx - subgraph->dst_range[0]];
-  }
+  NtsVar &getNbrTensor(VertexId vtx) { return edgeTensorIndexedbyDst[vtx - subgraph->dst_range[0]]; }
 
   long size(int index) {
     assert(0 <= index && index <= 1);
@@ -111,14 +101,11 @@ struct ntsVertexTensor {
     size_1 = -1;
     dim = 0;
   }
-  ntsVertexTensor(int feature_size, CSC_segment_pinned *subgraph_,
-                  NtsScheduler *ntsscheduler_) {
+  ntsVertexTensor(int feature_size, CSC_segment_pinned *subgraph_, NtsScheduler *ntsscheduler_) {
     initVertexTensor(feature_size, subgraph_, ntsscheduler_);
   }
 
-  void initVertexTensorFromTensor(int feature_size,
-                                  CSC_segment_pinned *subgraph_,
-                                  NtsScheduler *ntsscheduler_,
+  void initVertexTensorFromTensor(int feature_size, CSC_segment_pinned *subgraph_, NtsScheduler *ntsscheduler_,
                                   NtsVar &e_tensor) {
     size_1 = feature_size;
     subgraph = subgraph_;
@@ -126,22 +113,19 @@ struct ntsVertexTensor {
     size_0 = subgraph->batch_size_forward;
     long size = ((long)size_1) * size_0;
     vertexTensor = e_tensor;
-    data_buffer =
-        ntsscheduler->getWritableBuffer(e_tensor, torch::DeviceType::CPU);
+    data_buffer = ntsscheduler->getWritableBuffer(e_tensor, torch::DeviceType::CPU);
     vertexTensorIndexedbyDst.clear();
     NtsVar d;
     vertexTensorIndexedbyDst.resize(subgraph->batch_size_forward, d);
-    for (VertexId vtx = subgraph->dst_range[0]; vtx < subgraph->dst_range[1];
-         vtx++) {
+    for (VertexId vtx = subgraph->dst_range[0]; vtx < subgraph->dst_range[1]; vtx++) {
       int offset = vtx - subgraph->dst_range[0];
-      vertexTensorIndexedbyDst[offset] = ntsscheduler->NewLeafTensor(
-          data_buffer + offset * size_1, {1, size_1}, torch::DeviceType::CPU);
+      vertexTensorIndexedbyDst[offset] =
+          ntsscheduler->NewLeafTensor(data_buffer + offset * size_1, {1, size_1}, torch::DeviceType::CPU);
     }
     dim = 2;
   }
 
-  void initVertexTensor(int feature_size, CSC_segment_pinned *subgraph_,
-                        NtsScheduler *ntsscheduler_) {
+  void initVertexTensor(int feature_size, CSC_segment_pinned *subgraph_, NtsScheduler *ntsscheduler_) {
     size_1 = feature_size;
     subgraph = subgraph_;
     ntsscheduler = ntsscheduler_;
@@ -151,19 +135,15 @@ struct ntsVertexTensor {
     vertexTensorIndexedbyDst.clear();
     NtsVar d;
     vertexTensorIndexedbyDst.resize(subgraph->batch_size_forward, d);
-    for (VertexId vtx = subgraph->dst_range[0]; vtx < subgraph->dst_range[1];
-         vtx++) {
+    for (VertexId vtx = subgraph->dst_range[0]; vtx < subgraph->dst_range[1]; vtx++) {
       int offset = vtx - subgraph->dst_range[0];
-      vertexTensorIndexedbyDst[offset] = ntsscheduler->NewLeafTensor(
-          data_buffer + offset * size_1, {1, size_1}, torch::DeviceType::CPU);
+      vertexTensorIndexedbyDst[offset] =
+          ntsscheduler->NewLeafTensor(data_buffer + offset * size_1, {1, size_1}, torch::DeviceType::CPU);
     }
-    vertexTensor = ntsscheduler->NewLeafTensor(data_buffer, {size_0, size_1},
-                                               torch::DeviceType::CPU);
+    vertexTensor = ntsscheduler->NewLeafTensor(data_buffer, {size_0, size_1}, torch::DeviceType::CPU);
     dim = 2;
   }
-  NtsVar &getVtxTensor(VertexId vtx) {
-    return vertexTensorIndexedbyDst[vtx - subgraph->dst_range[0]];
-  }
+  NtsVar &getVtxTensor(VertexId vtx) { return vertexTensorIndexedbyDst[vtx - subgraph->dst_range[0]]; }
 
   long size(int index) {
     assert(0 <= index && index <= 1);
@@ -182,6 +162,6 @@ struct ntsVertexTensor {
   NtsScheduler *ntsscheduler;
 };
 
-} // namespace nts
+}  // namespace nts
 
 #endif
