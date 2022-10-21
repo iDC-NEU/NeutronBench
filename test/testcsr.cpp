@@ -54,7 +54,8 @@ int main(int argc, char** argv) {
   // sampler->work_queue[0]->sampled_sgs[1]->debug();
   int number = 0;
   while (sampler->sample_not_finished()) {
-    sampler->sample_one(2, 128, {5, 10});
+    sampler->sample_one();
+    // sampler->sample_one(2, 128, {5, 10});
     //   printf("number %d\n",number+=128);
   }
   fully_rep_graph->SyncAndLog("sample_one_finish");

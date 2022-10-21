@@ -72,7 +72,7 @@ class SampledSubgraph {
     sampled_sgs.clear();
   }
 
-  void allocate_memory(VertexId v_size) {
+  void alloc_memory(VertexId v_size) {
     for (int i = 0; i < layers; ++i) {
       int e_size = v_size * fanout[i];
       sampled_sgs.push_back(new sampCSC(v_size, e_size));

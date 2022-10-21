@@ -45,6 +45,8 @@ class sampCSC {
     column_indices.resize(e_);
     destination.resize(v_);
     source.resize(e_);
+    edge_weight_forward = new ValueType[e_];
+    edge_weight_backward = new ValueType[e_];
     // src_index.clear();
   }
 
@@ -54,6 +56,28 @@ class sampCSC {
     this->row_indices = row_indices;
     this->source = source;
     this->destination = destination;
+  }
+
+  void compute_weight_forward(Graph<Empty>* graph) {
+#pragma omp parallel for
+    for (VertexId i = 0; i < v_size; ++i) {
+      for (VertexId j = column_offset[i]; j < column_offset[i + 1]; ++j) {
+        VertexId src_id = source[row_indices[j]];
+        VertexId dst_id = destination[i];
+        edge_weight_forward[j] = nts::op::nts_norm_degree(graph, src_id, dst_id);
+      }
+    }
+  }
+
+  void compute_weight_backward(Graph<Empty>* graph) {
+#pragma omp parallel for
+    for (VertexId i = 0; i < src_size; ++i) {
+      for (VertexId j = row_offset[i]; j < row_offset[i + 1]; ++j) {
+        VertexId src_id = source[i];
+        VertexId dst_id = destination[column_indices[j]];
+        edge_weight_backward[j] = nts::op::nts_norm_degree(graph, src_id, dst_id);
+      }
+    }
   }
 
   sampCSC(VertexId v_) {
@@ -82,7 +106,8 @@ class sampCSC {
     column_indices.clear();
   }
 
-  void update_degree_of_csc(Graph<Empty>* graph) {
+  // void update_degree_of_csc(Graph<Empty>* graph) {
+  void update_degree(Graph<Empty>* graph) {
     VertexId* outs = graph->out_degree_for_backward;
     VertexId* ins = graph->in_degree_for_backward;
 #pragma omp parallel for
@@ -107,30 +132,30 @@ class sampCSC {
     // assert(sum_ins == sum_outs);
   }
 
-  void update_degree_of_csr(Graph<Empty>* graph) {
-    // LOG_DEBUG("update_degree_of_csr");
-    VertexId* outs = graph->out_degree_for_backward;
-    VertexId* ins = graph->in_degree_for_backward;
-#pragma omp parallel for
-    for (int i = 0; i < graph->vertices; ++i) {
-      outs[i] = 0;
-      ins[i] = 0;
-    }
-    for (int i = 0; i < src_size; ++i) {
-      ins[source[i]] += row_offset[i + 1] - row_offset[i];
-      // #pragma omp parallel for
-      for (int j = row_offset[i]; j < row_offset[i + 1]; ++j) {
-        int local_dst = column_indices[j];
-        outs[destination[local_dst]]++;
-      }
-    }
-    // long sum_ins = 0, sum_outs = 0;
-    // for (int i = 0; i < graph->vertices; ++i) {
-    //     sum_ins += ins[i];
-    //     sum_outs += outs[i];
-    // }
-    // assert(sum_ins == sum_outs);
-  }
+  //   void update_degree_of_csr(Graph<Empty>* graph) {
+  //     // LOG_DEBUG("update_degree_of_csr");
+  //     VertexId* outs = graph->out_degree_for_backward;
+  //     VertexId* ins = graph->in_degree_for_backward;
+  // #pragma omp parallel for
+  //     for (int i = 0; i < graph->vertices; ++i) {
+  //       outs[i] = 0;
+  //       ins[i] = 0;
+  //     }
+  //     for (int i = 0; i < src_size; ++i) {
+  //       ins[source[i]] += row_offset[i + 1] - row_offset[i];
+  //       // #pragma omp parallel for
+  //       for (int j = row_offset[i]; j < row_offset[i + 1]; ++j) {
+  //         int local_dst = column_indices[j];
+  //         outs[destination[local_dst]]++;
+  //       }
+  //     }
+  //     // long sum_ins = 0, sum_outs = 0;
+  //     // for (int i = 0; i < graph->vertices; ++i) {
+  //     //     sum_ins += ins[i];
+  //     //     sum_outs += outs[i];
+  //     // }
+  //     // assert(sum_ins == sum_outs);
+  //   }
 
   void generate_csr_from_csc() {
     // assert(source.size() == destination.size());

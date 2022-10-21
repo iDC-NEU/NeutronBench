@@ -185,7 +185,8 @@ class MiniBatchFuseOp : public ntsGraphOp {
     ValueType *f_input_buffer = graph_->Nts->getWritableBuffer(f_input, torch::DeviceType::CPU);
     ValueType *f_output_buffer = graph_->Nts->getWritableBuffer(f_output, torch::DeviceType::CPU);
     // LOG_DEBUG("forward pull version");
-    this->subgraphs->sampled_sgs[layer]->update_degree_of_csc(graph_);
+    this->subgraphs->sampled_sgs[layer]->update_degree(graph_);
+    this->subgraphs->sampled_sgs[layer]->compute_weight_forward(graph_);
     this->subgraphs->compute_one_layer(
         // [&](VertexId local_dst, VertexId* column_offset, VertexId* row_indices){
         [&](VertexId local_dst, std::vector<VertexId> &column_offset, std::vector<VertexId> &row_indices) {
@@ -198,7 +199,9 @@ class MiniBatchFuseOp : public ntsGraphOp {
             VertexId local_src = row_indices[src_offset];
             VertexId src = subgraphs->sampled_sgs[layer]->src()[local_src];
             ValueType *local_input = f_input_buffer + local_src * feature_size;
-            nts_comp(local_output, local_input, nts_norm_degree(graph_, src, dst), feature_size);
+            // nts_comp(local_output, local_input, nts_norm_degree(graph_, src, dst), feature_size);
+            nts_comp(local_output, local_input, this->subgraphs->sampled_sgs[layer]->edge_weight_forward[src_offset],
+                     feature_size);
           }
         },
         layer);
@@ -212,9 +215,10 @@ class MiniBatchFuseOp : public ntsGraphOp {
         graph_->Nts->NewLeafTensor({subgraphs->sampled_sgs[layer]->src_size, feature_size}, torch::DeviceType::CPU);
     ValueType *f_input_grad_buffer = graph_->Nts->getWritableBuffer(f_input_grad, torch::DeviceType::CPU);
     ValueType *f_output_grad_buffer = graph_->Nts->getWritableBuffer(f_output_grad, torch::DeviceType::CPU);
+    this->subgraphs->sampled_sgs[layer]->update_degree(graph_);
     if (graph_->config->mini_pull == 0) {
       // LOG_DEBUG("use push version of backward");
-      this->subgraphs->sampled_sgs[layer]->update_degree_of_csc(graph_);
+      this->subgraphs->sampled_sgs[layer]->compute_weight_forward(graph_);
       this->subgraphs->compute_one_layer(
           [&](VertexId local_dst, std::vector<VertexId> &column_offset, std::vector<VertexId> &row_indices) {
             // [&](VertexId local_dst, VertexId* column_offset, VertexId* row_indices){
@@ -227,13 +231,15 @@ class MiniBatchFuseOp : public ntsGraphOp {
               VertexId src = subgraphs->sampled_sgs[layer]->src()[local_src];
               ValueType *local_output = f_input_grad_buffer + local_src * feature_size;
               // push version of backward
-              nts_acc(local_output, local_input, nts_norm_degree(graph_, src, dst), feature_size);
+              // nts_acc(local_output, local_input, nts_norm_degree(graph_, src,
+              // dst), feature_size);
+              nts_comp(local_output, local_input, this->subgraphs->sampled_sgs[layer]->edge_weight_forward[src_offset],
+                       feature_size);
             }
           },
           layer);
-    } else {
-      // pull
-      this->subgraphs->sampled_sgs[layer]->update_degree_of_csr(graph_);
+    } else {  // pull
+      this->subgraphs->sampled_sgs[layer]->compute_weight_backward(graph_);
       // LOG_DEBUG("use pull version of backward");
       this->subgraphs->compute_one_layer_backward(
           // [&](VertexId local_src, VertexId* row_offset, VertexId* column_indices){
@@ -249,32 +255,16 @@ class MiniBatchFuseOp : public ntsGraphOp {
               VertexId dst = subgraphs->sampled_sgs[layer]->dst()[local_dst];
               ValueType *local_output = f_output_grad_buffer + local_dst * feature_size;
               // nts_acc(, src, dst), ); // if update_degree_csc
-              nts_comp(local_input, local_output, nts_norm_degree(graph_, dst, src), feature_size);
+              // nts_comp(local_input, local_output, nts_norm_degree(graph_,
+              // src, dst), feature_size);
+              nts_comp(local_input, local_output, this->subgraphs->sampled_sgs[layer]->edge_weight_backward[dst_offset],
+                       feature_size);
               // nts_acc(local_input, local_output, nts_norm_degree(graph_, dst, src), feature_size);
             }
           },
           layer
           // ,12//compute thread num;
       );
-
-      // this->subgraphs->compute_one_layer(
-      //     [&](VertexId local_dst, std::vector<VertexId>&column_offset,
-      //         std::vector<VertexId>&row_indices){
-      //         VertexId src_start=column_offset[local_dst];
-      //         VertexId src_end=column_offset[local_dst+1];
-      //         VertexId dst=subgraphs->sampled_sgs[layer]->dst()[local_dst];
-      //         ValueType *local_input=f_output_grad_buffer+local_dst*feature_size;
-      //         for(VertexId src_offset=src_start;
-      //                 src_offset<src_end;src_offset++){
-      //             VertexId local_src=subgraphs->sampled_sgs[layer]->r_i(src_offset);
-      //             VertexId src=subgraphs->sampled_sgs[layer]->src()[local_src];
-      //             ValueType *local_output=f_input_grad_buffer+local_src*feature_size;
-      //             nts_acc(local_output, local_input,nts_norm_degree(graph_,src, dst), feature_size);
-
-      //         }
-      //       },
-      //     layer
-      // );
     }
 
     return f_input_grad;
@@ -301,7 +291,7 @@ class SingleGPUSampleGraphOp : public ntsGraphOp {
     ValueType *f_input_buffer = graph_->Nts->getWritableBuffer(f_input, torch::DeviceType::CUDA);
     ValueType *f_output_buffer = graph_->Nts->getWritableBuffer(f_output, torch::DeviceType::CUDA);
     // LOG_DEBUG("forward pull version");
-    this->subgraphs->sampled_sgs[layer]->update_degree_of_csc(graph_);
+    this->subgraphs->sampled_sgs[layer]->update_degree(graph_);
 
     this->subgraphs->compute_one_layer(
         [&](VertexId local_dst, std::vector<VertexId> &column_offset, std::vector<VertexId> &row_indices) {
@@ -328,7 +318,7 @@ class SingleGPUSampleGraphOp : public ntsGraphOp {
     ValueType *f_output_grad_buffer = graph_->Nts->getWritableBuffer(f_output_grad, torch::DeviceType::CPU);
     if (graph_->config->mini_pull == 0) {
       // LOG_DEBUG("use push version of backward");
-      this->subgraphs->sampled_sgs[layer]->update_degree_of_csc(graph_);
+      this->subgraphs->sampled_sgs[layer]->update_degree(graph_);
       this->subgraphs->compute_one_layer(
           [&](VertexId local_dst, std::vector<VertexId> &column_offset, std::vector<VertexId> &row_indices) {
             VertexId src_start = column_offset[local_dst];
@@ -344,9 +334,8 @@ class SingleGPUSampleGraphOp : public ntsGraphOp {
             }
           },
           layer);
-    } else {
-      // pull
-      this->subgraphs->sampled_sgs[layer]->update_degree_of_csr(graph_);
+    } else {  // pull
+      this->subgraphs->sampled_sgs[layer]->update_degree(graph_);
       // LOG_DEBUG("use pull version of backward");
       this->subgraphs->compute_one_layer_backward(
           [&](VertexId local_src, std::vector<VertexId> &row_offset, std::vector<VertexId> &column_indices) {
@@ -360,7 +349,7 @@ class SingleGPUSampleGraphOp : public ntsGraphOp {
               VertexId dst = subgraphs->sampled_sgs[layer]->dst()[local_dst];
               ValueType *local_output = f_output_grad_buffer + local_dst * feature_size;
               // nts_acc(, src, dst), ); // if update_degree_csc
-              nts_comp(local_input, local_output, nts_norm_degree(graph_, dst, src), feature_size);
+              nts_comp(local_input, local_output, nts_norm_degree(graph_, src, dst), feature_size);
               // nts_acc(local_input, local_output, nts_norm_degree(graph_, dst, src), feature_size);
             }
           },

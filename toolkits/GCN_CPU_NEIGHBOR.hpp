@@ -267,8 +267,7 @@ class GCN_CPU_NEIGHBOR_impl {
     for (VertexId i = 0; i < sampler->batch_nums; ++i) {
       // LOG_DEBUG("batch %d", i);
       sample_cost -= get_time();
-      sampler->sample_one(layers, graph->config->batch_size, graph->gnnctx->fanout, graph->config->batch_type,
-                          ctx->is_train());
+      sampler->sample_one(graph->config->batch_type, ctx->is_train());
       sample_cost += get_time();
       auto ssg = sampler->work_queue[0];
       if (graph->config->mini_pull > 0) {  // generate csr structure for backward of pull mode
@@ -277,6 +276,7 @@ class GCN_CPU_NEIGHBOR_impl {
           convert_time -= get_time();
           // LOG_DEBUG("start generate csr");
           p->generate_csr_from_csc();
+          // p->compute_weight_backward(graph);
           // LOG_DEBUG("end generate csr");
           convert_time += get_time();
           debug_time -= get_time();

@@ -131,8 +131,7 @@ class TEST_BATCH_DIST_impl {
     }
     double sample_cost = -get_time();
     while (sampler->sample_not_finished()) {
-      sampler->sample_one(layers, graph->config->batch_size, graph->gnnctx->fanout, graph->config->batch_type,
-                          ctx->is_train());
+      sampler->sample_one(graph->config->batch_type, ctx->is_train());
     }
     sample_cost += get_time();
     LOG_DEBUG("sample cost %.3f", sample_cost);

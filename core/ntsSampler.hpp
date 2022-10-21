@@ -37,6 +37,7 @@ class Sampler {
   VertexId work_range[2];
   VertexId work_offset;
   std::vector<VertexId> sample_nids;
+  std::vector<int> fanout;
   std::vector<VertexId> metis_partition_offset;
   std::vector<VertexId> metis_partition_id;
   VertexId batch_size;
@@ -81,6 +82,7 @@ class Sampler {
     work_range[0] = work_start;
     work_range[1] = work_end;
     work_offset = work_start;
+    work_queue.clear();
     sample_bits = new Bitmap(whole_graph->global_vertices);
   }
   Sampler(FullyRepGraph* whole_graph_, std::vector<VertexId>& index, Device dev = CPU, int gpu_id = 0) {
@@ -98,7 +100,7 @@ class Sampler {
     // LOG_DEBUG("vertices %d", whole_graph->global_vertices);
     sample_bits = new Bitmap(whole_graph->global_vertices);
 
-    auto& fanout = whole_graph->graph_->gnnctx->fanout;
+    fanout = whole_graph->graph_->gnnctx->fanout;
     batch_size = whole_graph->graph_->config->batch_size;
     if (work_range[1] < batch_size) batch_size = work_range[1];
     batch_nums = (work_range[1] + batch_size - 1) / batch_size;
@@ -110,10 +112,13 @@ class Sampler {
     //     work_queue.push_back(new SampledSubgraph(layers, fanout));
     //     work_queue.back()->allocate_memory(actl_size);
     // }
-    work_queue.push_back(new SampledSubgraph(layers, fanout));
-    work_queue.back()->allocate_memory(batch_size);
-    assert(work_queue.size() == 1);
+    pre_alloc_one();
     // assert (false);
+  }
+
+  void pre_alloc_one() {
+    work_queue.push_back(new SampledSubgraph(layers, fanout));
+    work_queue.back()->alloc_memory(batch_size);
   }
   ~Sampler() { clear_queue(); }
   bool has_rest_safe() {
@@ -218,18 +223,20 @@ class Sampler {
     return distribution(generator);
   }
 
-  void sample_one(int layers_, int batch_size_, const std::vector<int>& fanout_, int type = 0, bool phase = true) {
-    // void reservoir_sample(int layers_, int batch_size_, const std::vector<int>& fanout_, int type = 0){
-    // LOG_DEBUG("layers %d batch_size %d fanout %d-%d", layers_, batch_size_, fanout_[0], fanout_[1]);
+  void sample_one(int type = 0, bool phase = true) {
+    // void reservoir_sample(int layers, int batch_size_, const
+    // std::vector<int>& fanout_, int type = 0){ LOG_DEBUG("layers %d batch_size
+    // %d fanout %d-%d", layers, batch_size_, fanout_[0], fanout_[1]);
     assert(work_offset < work_range[1]);
-    VertexId actl_batch_size = std::min((VertexId)batch_size_, work_range[1] - work_offset);
+    // assert(batch_size == batch_size_);
+    VertexId actl_batch_size = std::min(batch_size, work_range[1] - work_offset);
     // LOG_DEBUG("actl_batch %d", actl_batch_size);
-    // SampledSubgraph* ssg=new SampledSubgraph(layers_,fanout_);
+    // SampledSubgraph* ssg=new SampledSubgraph(layers,fanout_);
     // auto ssg = work_queue[work_offset / batch_size_];
     auto ssg = work_queue[0];
     // LOG_DEBUG("fuck batch_size %d", actl_batch_size);
     ssg->curr_dst_size = actl_batch_size;
-    for (int i = 0; i < layers_; i++) {
+    for (int i = 0; i < layers; i++) {
       // LOG_DEBUG("layer %d", i);
       ssg->curr_layer = i;
       sample_load_dst -= get_time();
@@ -266,8 +273,8 @@ class Sampler {
       ssg->init_co(
           [&](VertexId dst) {
             int nbrs = whole_graph->column_offset[dst + 1] - whole_graph->column_offset[dst];
-            if (fanout_[i] < 0) return nbrs;
-            return std::min(nbrs, fanout_[i]);
+            if (fanout[i] < 0) return nbrs;
+            return std::min(nbrs, fanout[i]);
           },
           i);
       sample_init_co += get_time();
@@ -304,6 +311,7 @@ class Sampler {
       // LOG_DEBUG("sample_post %.3f", sample_post);
       // whole_graph->SyncAndLog("sample_postprocessing");
       layer_time += get_time();
+      // csc_layer->compute_weight_forward(whole_graph->graph_);
       // printf("sample layer time %.3f\n", layer_time);
     }
     work_offset += actl_batch_size;
