@@ -28,30 +28,45 @@ class sampCSC {
   sampCSC() {
     v_size = 0;
     e_size = 0;
-    column_offset.clear();
-    row_indices.clear();
-    row_offset.clear();
-    column_indices.clear();
-    src_index.clear();
-    destination.clear();
-    source.clear();
+    column_indices = nullptr;
+    row_offset = nullptr;
+    row_indices = nullptr;
+    column_offset = nullptr;
+    source = nullptr;
+    destination = nullptr;
+    node_idx = nullptr;
   }
   sampCSC(VertexId v_, VertexId e_) {
     v_size = v_;
     e_size = e_;
-    column_offset.resize(v_ + 1);
-    row_indices.resize(e_);
-    row_offset.resize(e_);
-    column_indices.resize(e_);
-    destination.resize(v_);
-    source.resize(e_);
+    // column_offset.resize(v_ + 1);
+    // row_indices.resize(e_);
+    // row_offset.resize(e_);
+    // column_indices.resize(e_);
+    // destination.resize(v_);
+    // source.resize(e_);
+    source = new VertexId[e_];
+    destination = new VertexId[v_];
+    column_offset = new VertexId[v_ + 1];
+    column_indices = new VertexId[e_];
+    row_offset = new VertexId[e_ + 1];
+    row_indices = new VertexId[e_];
     edge_weight_forward = new ValueType[e_];
     edge_weight_backward = new ValueType[e_];
-    // src_index.clear();
+    node_idx = nullptr;
   }
 
   void init(std::vector<VertexId>& column_offset, std::vector<VertexId>& row_indices, std::vector<VertexId>& source,
             std::vector<VertexId>& destination) {
+    assert(false);
+    // this->column_offset = column_offset;
+    // this->row_indices = row_indices;
+    // this->source = source;
+    // this->destination = destination;
+  }
+
+  // TODO(sanzo): use memcpy, need arr size arg
+  void init(VertexId* column_offset, VertexId* row_indices, VertexId* source, VertexId* destination) {
     this->column_offset = column_offset;
     this->row_indices = row_indices;
     this->source = source;
@@ -83,27 +98,25 @@ class sampCSC {
   sampCSC(VertexId v_) {
     v_size = v_;
     e_size = 0;
-    // column_offset.clear();
-    column_offset.resize(v_ + 1, 0);
-    row_indices.clear();
-    row_offset.clear();
-    column_indices.clear();
-    src_index.clear();
-    // destination.clear();
-    destination.resize(v_);
-    source.clear();
+    column_offset = new VertexId[v_ + 1]{};
+    row_indices = nullptr;
+    row_offset = nullptr;
+    column_indices = nullptr;
+    node_idx = nullptr;
+    destination = new VertexId[v_];
+    source = nullptr;
   }
   // void alloc_index_table(VertexId size) {
   //     node_idx[]
   // }
   ~sampCSC() {
-    column_offset.clear();
-    row_indices.clear();
-    src_index.clear();
-    destination.clear();
-    source.clear();
-    row_offset.clear();
-    column_indices.clear();
+    delete[] column_offset;
+    delete[] row_indices;
+    delete[] node_idx;
+    delete[] destination;
+    delete[] source;
+    delete[] row_offset;
+    delete[] column_indices;
   }
 
   // void update_degree_of_csc(Graph<Empty>* graph) {
@@ -133,7 +146,7 @@ class sampCSC {
   }
 
   //   void update_degree_of_csr(Graph<Empty>* graph) {
-  //     // LOG_DEBUG("update_degree_of_csr");
+  // LOG_DEBUG("update_degree_of_csr");
   //     VertexId* outs = graph->out_degree_for_backward;
   //     VertexId* ins = graph->in_degree_for_backward;
   // #pragma omp parallel for
@@ -162,8 +175,8 @@ class sampCSC {
 
     int dst_size = v_size;
     int edge_size = e_size;
-    assert(row_offset.size() >= src_size + 1);
-    memset(row_offset.data(), 0, sizeof(VertexId) * (src_size + 1));
+    // assert(row_offset.size() >= src_size + 1);
+    memset(row_offset, 0, sizeof(VertexId) * (src_size + 1));
 #pragma omp parallel for
     for (int i = 0; i < src_size + 1; ++i) {
       assert(row_offset[i] == 0);
@@ -180,7 +193,7 @@ class sampCSC {
     }
     assert(row_offset[src_size] == column_offset[v_size]);
     assert(row_offset[src_size] == e_size);
-    std::vector<int> tmp_row_offset(row_offset.begin(), row_offset.end());
+    std::vector<int> tmp_row_offset(row_offset, row_offset + src_size + 1);
 
     // #pragma omp parallel for
     for (int i = 0; i < dst_size; ++i) {
@@ -196,32 +209,32 @@ class sampCSC {
     // }
   }
 
-  void postprocessing() {
-    src_size = 0;
-    row_indices_debug.resize(row_indices.size(), 0);
-    for (VertexId i_src = 0; i_src < row_indices.size(); i_src++) {
-      //  printf("debug %d\n",i_src);
-      row_indices_debug[i_src] = row_indices[i_src];
-      if (0xFFFFFFFF == row_indices[i_src]) {
-        continue;
-      }
-      auto iter = src_index.find(row_indices[i_src]);
-      // printf("%d\n",iter == src_index.end());
-      if (iter == src_index.end()) {
-        //    printf("debug %d\n",i_src);
-        src_index.insert(std::make_pair(row_indices[i_src], src_size));
-        src_size++;
-        //     printf("debug %d\n",i_src);
-        source.push_back(row_indices[i_src]);
-        row_indices[i_src] = src_size - 1;
-        // reset src for computation
-      } else {
-        // redundant continue;
-        assert(row_indices[i_src] == iter->first);
-        row_indices[i_src] = iter->second;  // reset src for computation
-      }
-    }
-  }
+  // void postprocessing() {
+  //   src_size = 0;
+  //   row_indices_debug.resize(e_size, 0);
+  //   for (VertexId i_src = 0; i_src < e_size; i_src++) {
+  //     //  printf("debug %d\n",i_src);
+  //     row_indices_debug[i_src] = row_indices[i_src];
+  //     if (0xFFFFFFFF == row_indices[i_src]) {
+  //       continue;
+  //     }
+  //     auto iter = node_idx.find(row_indices[i_src]);
+  //     // printf("%d\n",iter == node_idx.end());
+  //     if (iter == node_idx.end()) {
+  //       //    printf("debug %d\n",i_src);
+  //       node_idx.insert(std::make_pair(row_indices[i_src], src_size));
+  //       src_size++;
+  //       //     printf("debug %d\n",i_src);
+  //       source.push_back(row_indices[i_src]);
+  //       row_indices[i_src] = src_size - 1;
+  //       // reset src for computation
+  //     } else {
+  //       // redundant continue;
+  //       assert(row_indices[i_src] == iter->first);
+  //       row_indices[i_src] = iter->second;  // reset src for computation
+  //     }
+  //   }
+  // }
 
   void postprocessing(Bitmap* bits) {
     // std::unordered_set<int> st;
@@ -234,7 +247,17 @@ class sampCSC {
     // assert(st.size() == bits->get_ones());
     //////////////////////////////
 
-    std::vector<int> node_idx(bits->size, -1);
+    if (!node_idx) {
+      node_idx = new VertexId[bits->get_size()]{};
+      // LOG_DEBUG("alloc node_idx in first call, size %d", bits->get_size());
+    }
+#pragma omp parallel for
+    for (int i = 0; i < bits->get_size(); ++i) {
+      node_idx[i] = -1;
+    }
+
+    // std::vector<int> node_idx(bits->size, -1);
+
     src_size = 0;
     for (int i = 0; i < bits->size; ++i) {
       if (bits->get_bit(i) > 0) {
@@ -256,24 +279,25 @@ class sampCSC {
   }
 
   void allocate_vertex() {
-    destination.resize(v_size, 0);
-    column_offset.resize(v_size + 1, 0);
+    destination = new VertexId[v_size]{};
+    column_offset = new VertexId[v_size + 1]{};
   }
-  void init_dst(VertexId* dst) {
-    // LOG_DEBUG("copy to dst size %d", v_size);
-    memcpy(destination.data(), dst, sizeof(VertexId) * v_size);
-  }
+
+  void init_dst(VertexId* dst) { memcpy(destination, dst, sizeof(VertexId) * v_size); }
   void allocate_co_from_dst() {
-    v_size = destination.size();
-    column_offset.resize(v_size + 1, 0);
+    assert(false);
+    // v_size = destination.size();
+    // column_offset.resize(v_size + 1, 0);
   }
   void allocate_edge() {
     assert(0);
-    row_indices.resize(e_size, 0);
+    // row_indices.resize(e_size, 0);
   }
-  void allocate_edge(VertexId e_size_) {
-    e_size = e_size_;
-    row_indices.resize(e_size, 0);
+  void allocate_edge(VertexId e_size) {
+    assert(false);
+    this->e_size = e_size;
+    // row_indices.resize(e_size, 0);
+    row_indices = new VertexId[e_size]{};
   }
   void update_edges(VertexId e_size) { this->e_size = e_size; }
   void update_vertices(VertexId v_size) { this->v_size = v_size; }
@@ -285,47 +309,50 @@ class sampCSC {
   VertexId r_i(VertexId vid) { return row_indices[vid]; }
   VertexId c_i(VertexId vid) { return column_indices[vid]; }
   VertexId r_o(VertexId vid) { return row_offset[vid]; }
-  std::vector<VertexId>& dst() { return destination; }
-  std::vector<VertexId>& src() { return source; }
-  std::vector<VertexId>& c_o() { return column_offset; }
-  std::vector<VertexId>& r_i() { return row_indices; }
-  std::vector<VertexId>& r_o() { return row_offset; }
-  std::vector<VertexId>& c_i() { return column_indices; }
+  VertexId* dst() { return destination; }
+  VertexId* src() { return source; }
+  VertexId* c_o() { return column_offset; }
+  VertexId* r_i() { return row_indices; }
+  VertexId* r_o() { return row_offset; }
+  VertexId* c_i() { return column_indices; }
   VertexId get_distinct_src_size() { return src_size; }
   void debug() {
-    printf("print one layer:\ndst:\t");
-    for (int i = 0; i < destination.size(); i++) {
-      printf("%d\t", destination[i]);
-    }
-    printf("\nc_o:\t");
-    for (int i = 0; i < column_offset.size(); i++) {
-      printf("%d\t", column_offset[i]);
-    }
-    printf("\nr_i:\t");
-    for (int i = 0; i < row_indices.size(); i++) {
-      printf("%d\t", row_indices[i]);
-    }
-    printf("\nrid:\t");
-    for (int i = 0; i < row_indices_debug.size(); i++) {
-      printf("%d\t", row_indices_debug[i]);
-    }
-    printf("\nsrc:\t");
-    for (int i = 0; i < source.size(); i++) {
-      printf("%d\t", source[i]);
-    }
-    printf("\n\n");
+    assert(false);
+    // printf("print one layer:\ndst:\t");
+    // for (int i = 0; i < destination.size(); i++) {
+    //   printf("%d\t", destination[i]);
+    // }
+    // printf("\nc_o:\t");
+    // for (int i = 0; i < column_offset.size(); i++) {
+    //   printf("%d\t", column_offset[i]);
+    // }
+    // printf("\nr_i:\t");
+    // for (int i = 0; i < row_indices.size(); i++) {
+    //   printf("%d\t", row_indices[i]);
+    // }
+    // printf("\nrid:\t");
+    // for (int i = 0; i < row_indices_debug.size(); i++) {
+    //   printf("%d\t", row_indices_debug[i]);
+    // }
+    // printf("\nsrc:\t");
+    // for (int i = 0; i < source.size(); i++) {
+    //   printf("%d\t", source[i]);
+    // }
+    // printf("\n\n");
   }
 
   void debug_generate_csr_from_csc() {
+    // LOG_DEBUG("start debgug_generate");
     std::vector<std::pair<int, int>> edge_csc, edge_csr;
-    int dst_size = v_size;
+    // LOG_DEBUG("after vector");
     for (int i = 0; i < src_size; ++i) {
       for (int j = row_offset[i]; j < row_offset[i + 1]; ++j) {
         edge_csr.push_back(std::make_pair(i, column_indices[j]));
       }
     }
+    // LOG_DEBUG("after push edge_csr");
 
-    for (int i = 0; i < dst_size; ++i) {
+    for (int i = 0; i < v_size; ++i) {
       for (int j = column_offset[i]; j < column_offset[i + 1]; ++j) {
         edge_csc.push_back(std::make_pair(row_indices[j], i));
       }
@@ -342,6 +369,7 @@ class sampCSC {
 
     sort(edge_csr.begin(), edge_csr.end(), cmp);
     sort(edge_csc.begin(), edge_csc.end(), cmp);
+    // LOG_DEBUG("fater sort");
     int edge_size = edge_csc.size();
     for (int i = 0; i < edge_size; ++i) {
       // printf("(%d %d) - (%d %d)\n", edge_csr[i].first, edge_csr[i].second, edge_csc[i].first, edge_csc[i].second);
@@ -369,23 +397,20 @@ class sampCSC {
   }
 
   // private:
-  std::vector<VertexId> row_offset;
-  std::vector<VertexId> column_offset;  // local offset
-  std::vector<VertexId> row_indices;    // local id
-  std::vector<VertexId> column_indices;
-  // VertexId* column_offset;
-  // VertexId* row_offset;
-  // VertexId* row_indices;
-  // VertexId* column_indices;
+  VertexId* column_offset;
+  VertexId* row_offset;
+  VertexId* row_indices;     // local id
+  VertexId* column_indices;  // local id
+  VertexId* source;          // global id
+  VertexId* destination;     // global id
 
   std::vector<VertexId> row_indices_debug;  // local id
 
-  std::vector<VertexId> source;       // global id
-  std::vector<VertexId> destination;  // global_id
   // VertexId* source;
   // VertexId* destination;
 
-  std::unordered_map<VertexId, VertexId> src_index;  // set
+  // std::unordered_map<VertexId, VertexId> src_index;  // set
+  VertexId* node_idx;
 
   VertexId v_size;    // dst_size
   VertexId e_size;    // edge size

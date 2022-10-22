@@ -33,25 +33,7 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 namespace nts {
 namespace op {
 
-NtsVar get_label(std::vector<VertexId> &dst, NtsVar &whole, Graph<Empty> *graph) {
-  NtsVar f_output;
-  if (graph->config->classes > 1) {
-    f_output = graph->Nts->NewLeafKLongTensor({dst.size(), graph->config->classes});
-  } else {
-    f_output = graph->Nts->NewLeafKLongTensor({dst.size()});
-  }
-
-#pragma omp parallel for
-  for (int i = 0; i < dst.size(); i++) {
-    // printf("offset %d %d, dst %d local %d\n", graph->partition_offset[graph->partition_id],
-    //         graph->partition_offset[graph->partition_id + 1], dst[i], dst[i] -
-    //         graph->partition_offset[graph->partition_id]);
-    f_output[i] = whole[dst[i] - graph->partition_offset[graph->partition_id]];
-  }
-  return f_output;
-}
-
-NtsVar get_label(std::vector<VertexId> &dst, int dst_size, NtsVar &whole, Graph<Empty> *graph) {
+NtsVar get_label(VertexId *dst, VertexId dst_size, NtsVar &whole, Graph<Empty> *graph) {
   NtsVar f_output;
   if (graph->config->classes > 1) {
     f_output = graph->Nts->NewLeafKLongTensor({dst_size, graph->config->classes});
@@ -69,16 +51,16 @@ NtsVar get_label(std::vector<VertexId> &dst, int dst_size, NtsVar &whole, Graph<
   return f_output;
 }
 
-NtsVar get_label_from_global(std::vector<VertexId> &dst, NtsVar &whole, Graph<Empty> *graph) {
+NtsVar get_label_from_global(VertexId *dst, VertexId dst_size, NtsVar &whole, Graph<Empty> *graph) {
   // NtsVar f_output=graph->Nts->NewLeafKLongTensor({dst.size()});
   NtsVar f_output;
   if (graph->config->classes > 1) {
-    f_output = graph->Nts->NewLeafKLongTensor({dst.size(), graph->config->classes});
+    f_output = graph->Nts->NewLeafKLongTensor({dst_size, graph->config->classes});
   } else {
-    f_output = graph->Nts->NewLeafKLongTensor({dst.size()});
+    f_output = graph->Nts->NewLeafKLongTensor({dst_size});
   }
 #pragma omp parallel for
-  for (int i = 0; i < dst.size(); i++) {
+  for (int i = 0; i < dst_size; i++) {
     // printf("offset %d %d, dst %d local %d\n", graph->partition_offset[graph->partition_id],
     //         graph->partition_offset[graph->partition_id + 1], dst[i], dst[i] -
     //         graph->partition_offset[graph->partition_id]);
@@ -87,21 +69,7 @@ NtsVar get_label_from_global(std::vector<VertexId> &dst, NtsVar &whole, Graph<Em
   return f_output;
 }
 
-NtsVar get_feature(std::vector<VertexId> &src, NtsVar &whole, Graph<Empty> *graph) {
-  int feature_size = whole.size(1);
-  // NtsVar f_output=graph->Nts->NewKeyTensor({src.size(), feature_size},torch::DeviceType::CPU);
-  NtsVar f_output = graph->Nts->NewKeyTensor({src.size(), feature_size}, torch::DeviceType::CPU);
-  ValueType *f_input_buffer = graph->Nts->getWritableBuffer(whole, torch::DeviceType::CPU);
-  ValueType *f_output_buffer = graph->Nts->getWritableBuffer(f_output, torch::DeviceType::CPU);
-#pragma omp parallel for
-  for (int i = 0; i < src.size(); i++) {
-    memcpy(f_output_buffer + i * feature_size, f_input_buffer + src[i] * feature_size,
-           feature_size * sizeof(ValueType));
-  }
-  return f_output;
-}
-
-NtsVar get_feature(std::vector<VertexId> &src, int src_size, NtsVar &whole, Graph<Empty> *graph) {
+NtsVar get_feature(VertexId *src, VertexId src_size, NtsVar &whole, Graph<Empty> *graph) {
   int feature_size = whole.size(1);
   // NtsVar f_output=graph->Nts->NewKeyTensor({src.size(), feature_size},torch::DeviceType::CPU);
   NtsVar f_output = graph->Nts->NewKeyTensor({src_size, feature_size}, torch::DeviceType::CPU);
@@ -116,17 +84,17 @@ NtsVar get_feature(std::vector<VertexId> &src, int src_size, NtsVar &whole, Grap
 }
 
 // TODO (sanzo): omp speed up
-NtsVar get_feature_from_global(ntsPeerRPC<ValueType, VertexId> &rpc, std::vector<VertexId> &src, NtsVar &X,
+NtsVar get_feature_from_global(ntsPeerRPC<ValueType, VertexId> &rpc, VertexId *src, VertexId src_size, NtsVar &X,
                                Graph<Empty> *graph) {
   int feature_size = X.size(1);
-  NtsVar f_output = graph->Nts->NewKeyTensor({static_cast<long>(src.size()), feature_size}, torch::DeviceType::CPU);
+  NtsVar f_output = graph->Nts->NewKeyTensor({static_cast<long>(src_size), feature_size}, torch::DeviceType::CPU);
   ValueType *f_output_buffer = graph->Nts->getWritableBuffer(f_output, torch::DeviceType::CPU);
   std::vector<std::vector<VertexId>> partition_ids;
 
   // 将节点按照partition分类
   partition_ids.resize(graph->partitions);
-  for (auto id : src) {
-    partition_ids[graph->get_partition_id(id)].push_back(id);
+  for (int i = 0; i < src_size; ++i) {
+    partition_ids[graph->get_partition_id(src[i])].push_back(src[i]);
   }
   std::vector<std::vector<std::vector<ValueType>>> resultVector;
   resultVector.resize(graph->partitions);
@@ -137,7 +105,7 @@ NtsVar get_feature_from_global(ntsPeerRPC<ValueType, VertexId> &rpc, std::vector
   }
   std::vector<int> partition_index(graph->partitions, 0);
 
-  for (int i = 0; i < src.size(); i++) {
+  for (int i = 0; i < src_size; i++) {
     int partition_id = graph->get_partition_id(src[i]);
     //        int feature_index = __sync_fetch_and_add(&partition_index[partition_id], 1);
     int feature_index = partition_index[partition_id]++;
@@ -189,7 +157,7 @@ class MiniBatchFuseOp : public ntsGraphOp {
     this->subgraphs->sampled_sgs[layer]->compute_weight_forward(graph_);
     this->subgraphs->compute_one_layer(
         // [&](VertexId local_dst, VertexId* column_offset, VertexId* row_indices){
-        [&](VertexId local_dst, std::vector<VertexId> &column_offset, std::vector<VertexId> &row_indices) {
+        [&](VertexId local_dst, VertexId *column_offset, VertexId *row_indices) {
           // assert(&row_indices == &subgraphs->sampled_sgs[layer]->r_i());
           VertexId src_start = column_offset[local_dst];
           VertexId src_end = column_offset[local_dst + 1];
@@ -220,7 +188,7 @@ class MiniBatchFuseOp : public ntsGraphOp {
       // LOG_DEBUG("use push version of backward");
       this->subgraphs->sampled_sgs[layer]->compute_weight_forward(graph_);
       this->subgraphs->compute_one_layer(
-          [&](VertexId local_dst, std::vector<VertexId> &column_offset, std::vector<VertexId> &row_indices) {
+          [&](VertexId local_dst, VertexId *column_offset, VertexId *row_indices) {
             // [&](VertexId local_dst, VertexId* column_offset, VertexId* row_indices){
             VertexId src_start = column_offset[local_dst];
             VertexId src_end = column_offset[local_dst + 1];
@@ -244,7 +212,7 @@ class MiniBatchFuseOp : public ntsGraphOp {
       this->subgraphs->compute_one_layer_backward(
           // [&](VertexId local_src, VertexId* row_offset, VertexId* column_indices){
           // [&](VertexId local_src, VertexId* row_offset, VertexId* column_indices){
-          [&](VertexId local_src, std::vector<VertexId> &row_offset, std::vector<VertexId> &column_indices) {
+          [&](VertexId local_src, VertexId *row_offset, VertexId *column_indices) {
             // assert(&column_indices == &subgraphs->sampled_sgs[layer]->c_i());
             VertexId dst_start = row_offset[local_src];
             VertexId dst_end = row_offset[local_src + 1];
@@ -287,14 +255,14 @@ class SingleGPUSampleGraphOp : public ntsGraphOp {
   NtsVar forward(NtsVar &f_input) {
     int feature_size = f_input.size(1);
     NtsVar f_output =
-        graph_->Nts->NewKeyTensor({subgraphs->sampled_sgs[layer]->dst().size(), feature_size}, torch::DeviceType::CUDA);
+        graph_->Nts->NewKeyTensor({subgraphs->sampled_sgs[layer]->v_size, feature_size}, torch::DeviceType::CUDA);
     ValueType *f_input_buffer = graph_->Nts->getWritableBuffer(f_input, torch::DeviceType::CUDA);
     ValueType *f_output_buffer = graph_->Nts->getWritableBuffer(f_output, torch::DeviceType::CUDA);
     // LOG_DEBUG("forward pull version");
     this->subgraphs->sampled_sgs[layer]->update_degree(graph_);
 
     this->subgraphs->compute_one_layer(
-        [&](VertexId local_dst, std::vector<VertexId> &column_offset, std::vector<VertexId> &row_indices) {
+        [&](VertexId local_dst, VertexId *column_offset, VertexId *row_indices) {
           // assert(&row_indices == &subgraphs->sampled_sgs[layer]->r_i());
           VertexId src_start = column_offset[local_dst];
           VertexId src_end = column_offset[local_dst + 1];
@@ -313,14 +281,14 @@ class SingleGPUSampleGraphOp : public ntsGraphOp {
   NtsVar backward(NtsVar &f_output_grad) {
     int feature_size = f_output_grad.size(1);
     NtsVar f_input_grad =
-        graph_->Nts->NewLeafTensor({subgraphs->sampled_sgs[layer]->src().size(), feature_size}, torch::DeviceType::CPU);
+        graph_->Nts->NewLeafTensor({subgraphs->sampled_sgs[layer]->src_size, feature_size}, torch::DeviceType::CPU);
     ValueType *f_input_grad_buffer = graph_->Nts->getWritableBuffer(f_input_grad, torch::DeviceType::CPU);
     ValueType *f_output_grad_buffer = graph_->Nts->getWritableBuffer(f_output_grad, torch::DeviceType::CPU);
     if (graph_->config->mini_pull == 0) {
       // LOG_DEBUG("use push version of backward");
       this->subgraphs->sampled_sgs[layer]->update_degree(graph_);
       this->subgraphs->compute_one_layer(
-          [&](VertexId local_dst, std::vector<VertexId> &column_offset, std::vector<VertexId> &row_indices) {
+          [&](VertexId local_dst, VertexId *column_offset, VertexId *row_indices) {
             VertexId src_start = column_offset[local_dst];
             VertexId src_end = column_offset[local_dst + 1];
             VertexId dst = subgraphs->sampled_sgs[layer]->dst()[local_dst];
@@ -338,7 +306,7 @@ class SingleGPUSampleGraphOp : public ntsGraphOp {
       this->subgraphs->sampled_sgs[layer]->update_degree(graph_);
       // LOG_DEBUG("use pull version of backward");
       this->subgraphs->compute_one_layer_backward(
-          [&](VertexId local_src, std::vector<VertexId> &row_offset, std::vector<VertexId> &column_indices) {
+          [&](VertexId local_src, VertexId *row_offset, VertexId *column_indices) {
             // assert(&column_indices == &subgraphs->sampled_sgs[layer]->c_i());
             VertexId dst_start = row_offset[local_src];
             VertexId dst_end = row_offset[local_src + 1];

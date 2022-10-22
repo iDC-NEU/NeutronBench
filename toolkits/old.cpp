@@ -361,7 +361,8 @@ class GCN_CPU_NEIGHBOR_impl {
 
       get_feature_cost -= get_time();
       if (hosts > 1) {
-        X[0] = nts::op::get_feature_from_global(*rpc, sg->sampled_sgs[0]->src(), F, graph);
+        X[0] =
+            nts::op::get_feature_from_global(*rpc, sg->sampled_sgs[0]->src(), sg->sampled_sgs[0]->src_size, F, graph);
         // if (type == 0 && graph->rtminfo->epoch >= 3) rpc_comm_time += tmp_time;
       } else {
         // X[0]=nts::op::get_feature(sg->sampled_sgs[0]->src(), F, graph);

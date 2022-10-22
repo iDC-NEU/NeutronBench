@@ -146,12 +146,12 @@ class TEST_BATCH_DIST_impl {
       for (int i = 0; i < layers; ++i) {
         auto* p = sg->sampled_sgs[i];
         if (i == 0) {
-          tmp.push_back(p->src().size());
-          layer_nodes[i].push_back(p->src().size());
+          tmp.push_back(p->src_size);
+          layer_nodes[i].push_back(p->src_size);
         }
-        tmp.push_back(p->dst().size());
-        layer_nodes[i + 1].push_back(p->dst().size());
-        // LOG_DEBUG("batch %d layers %d blocks %d %d", batch_idx, i, p->src().size(), p->dst().size());
+        tmp.push_back(p->v_size);
+        layer_nodes[i + 1].push_back(p->v_size);
+        // LOG_DEBUG("batch %d layers %d blocks %d %d", batch_idx, i, p->src_size, p->v_size);
       }
       batch_nodes.push_back(tmp);
       batch_idx++;

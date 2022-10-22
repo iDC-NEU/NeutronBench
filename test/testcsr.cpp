@@ -68,8 +68,8 @@ int main(int argc, char** argv) {
   //}
   LOG_INFO("CORRECT1");
   nts::op::MiniBatchFuseOp* miniBatchFuseOp = new nts::op::MiniBatchFuseOp(sg, graph, 0);
-  LOG_INFO("CORRECT2%d %d", sg->sampled_sgs[0]->src().size(), 128);
-  NtsVar f_input = graph->Nts->NewOnesTensor({sg->sampled_sgs[0]->src().size(), 4}, torch::DeviceType::CPU);
+  LOG_INFO("CORRECT2%d %d", sg->sampled_sgs[0]->src_size, 128);
+  NtsVar f_input = graph->Nts->NewOnesTensor({sg->sampled_sgs[0]->src_size, 4}, torch::DeviceType::CPU);
 
   NtsVar f_output = miniBatchFuseOp->forward(f_input);
   std::cout << f_output << std::endl;

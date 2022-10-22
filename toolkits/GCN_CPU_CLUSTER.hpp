@@ -266,11 +266,12 @@ class GCN_CPU_CLUSTER_impl {
     //  X[0]=nts::op::get_feature(sg->sampled_sgs[graph->gnnctx->layer_size.size()-2]->src(),F,graph);
     // X[0]=nts::op::get_feature(sg->sampled_sgs[0]->src(),F,graph);
     // std::cout << "dst num " << sg->sampled_sgs.back()->dst().size() << std::endl;
-    X[0] = nts::op::get_feature_from_global(rpc, sg->sampled_sgs[0]->src(), F, graph);
+    X[0] = nts::op::get_feature_from_global(rpc, sg->sampled_sgs[0]->src(), sg->sampled_sgs[0]->src_size, F, graph);
     // printf("get feature done\n");
 
     // NtsVar target_lab=nts::op::get_label(sg->sampled_sgs.back()->dst(),L_GT_C,graph);
-    NtsVar target_lab = nts::op::get_label_from_global(sg->sampled_sgs.back()->dst(), global_label, graph);
+    NtsVar target_lab = nts::op::get_label_from_global(sg->sampled_sgs.back()->dst(), sg->sampled_sgs.back()->v_size,
+                                                       global_label, graph);
     // printf("get label done\n");
     // std::cout << "target_lab " << target_lab.size(0)  << std::endl;
     //  graph->rtminfo->forward = true;
@@ -294,9 +295,9 @@ class GCN_CPU_CLUSTER_impl {
     }
 
     local_mask = torch::zeros_like(target_lab, at::TensorOptions().dtype(torch::kLong));
-    auto& vec_dst = sg->sampled_sgs.back()->dst();
+    auto vec_dst = sg->sampled_sgs.back()->dst();
     // printf("start local mask\n");
-    for (int i = 0; i < (int)vec_dst.size(); ++i) {
+    for (int i = 0; i < sg->sampled_sgs.back()->v_size; ++i) {
       // local_mask[i] = MASK[vec_dst[i]].item<long>();
       local_mask[i] = global_mask[vec_dst[i]].item<long>();
     }

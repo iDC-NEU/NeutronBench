@@ -112,6 +112,7 @@ class Sampler {
     //     work_queue.push_back(new SampledSubgraph(layers, fanout));
     //     work_queue.back()->allocate_memory(actl_size);
     // }
+    work_queue.clear();
     pre_alloc_one();
     // assert (false);
   }
@@ -237,14 +238,11 @@ class Sampler {
     // LOG_DEBUG("fuck batch_size %d", actl_batch_size);
     ssg->curr_dst_size = actl_batch_size;
     for (int i = 0; i < layers; i++) {
-      // LOG_DEBUG("layer %d", i);
       ssg->curr_layer = i;
       sample_load_dst -= get_time();
-      // sampCSC* csc_layer = new sampCSC(ssg->curr_dst_size);
       auto csc_layer = ssg->sampled_sgs[i];
-      // LOG_DEBUG("ssg addr %p, csc addr %p", ssg->sampled_sgs[i], csc_layer);
+      // LOG_DEBUG("sample_one layer %d update_vertices done, dst_size %d", i, ssg->curr_dst_size);
       csc_layer->update_vertices(ssg->curr_dst_size);
-      // LOG_DEBUG("start layer %d dst_size %d %d", i, ssg->curr_dst_size, csc_layer->src_size);
       if (i == 0) {
         csc_layer->init_dst(sample_nids.data() + work_offset);
         // LOG_DEBUG("dst size %d", csc_layer->v_size);
@@ -253,7 +251,7 @@ class Sampler {
         }
         // LOG_DEBUG("layer 0 src size %d", csc_layer->src().size());
       } else {
-        csc_layer->init_dst(ssg->sampled_sgs[i - 1]->src().data());
+        csc_layer->init_dst(ssg->sampled_sgs[i - 1]->src());
         // LOG_DEBUG("dst size %d", csc_layer->v_size);
         // LOG_DEBUG("after init_dst csc v_size %d, pre src size %d", csc_layer->v_size, ssg->sampled_sgs[i -
         // 1]->src_size);
@@ -264,6 +262,7 @@ class Sampler {
           assert(csc_layer->dst()[j] == ssg->sampled_sgs[i - 1]->src()[j]);
         }
       }
+      // LOG_DEBUG("sample_one layer %d init_dst done", i);
       // LOG_DEBUG("after init dst");
       // ssg->sampled_sgs.push_back(csc_layer);
       sample_load_dst += get_time();
@@ -278,7 +277,7 @@ class Sampler {
           },
           i);
       sample_init_co += get_time();
-      // LOG_DEBUG("after init co");
+      // LOG_DEBUG("sample_one layer %d init_column_offset done", i);
 
       // LOG_DEBUG("sample_init_co cost %.3f", sample_init_co);
 
@@ -287,32 +286,23 @@ class Sampler {
       // LOG_DEBUG("fanout_i %d\n", fanout_i[i]);
       // ssg->sample_processing(std::bind(&Sampler::NeighborUniformSample, this, std::placeholders::_1,
       // std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5));
-      ssg->sample_processing([=](VertexId fanout_i, VertexId dst, std::vector<VertexId>& column_offset,
-                                 std::vector<VertexId>& row_indices, VertexId id) {
-        this->NeighborUniformSample(fanout_i, dst, column_offset, row_indices, id);
-        // this->NeighborUniformSample_reservoir(fanout_i, dst, column_offset, row_indices, id);
-      });
+      ssg->sample_processing(
+          [=](VertexId fanout_i, VertexId dst, VertexId* column_offset, VertexId* row_indices, VertexId id) {
+            this->NeighborUniformSample(fanout_i, dst, column_offset, row_indices, id);
+            // this->NeighborUniformSample_reservoir(fanout_i, dst, column_offset, row_indices, id);
+          });
 
       sample_processing_time += get_time();
-      // LOG_DEBUG("after processing");
+      // LOG_DEBUG("sample_one layer %d processing done", i);
 
       // whole_graph->SyncAndLog("sample_processing");
       sample_post_time -= get_time();
       ssg->sample_postprocessing(sample_bits, i);
       // ssg->sample_postprocessing();
       sample_post_time += get_time();
-      // for (int i = 0; i < 2; ++i) {
-      // LOG_DEBUG("layer %d, dst %d src %d, edges %d", i, csc_layer->v_size, csc_layer->src_size, csc_layer->e_size);
-
-      // }
-
-      // LOG_DEBUG("after postprocessing");
-
+      // LOG_DEBUG("sample_one layer %d post_processing done", i);
       // LOG_DEBUG("sample_post %.3f", sample_post);
-      // whole_graph->SyncAndLog("sample_postprocessing");
       layer_time += get_time();
-      // csc_layer->compute_weight_forward(whole_graph->graph_);
-      // printf("sample layer time %.3f\n", layer_time);
     }
     work_offset += actl_batch_size;
     // LOG_DEBUG("layer %.3f, pre_time %.3f, load_dst_time %.3f, init_co %.3f, processing %.3f, post_time %.3f,",
@@ -364,8 +354,8 @@ class Sampler {
     }
   }
 
-  void NeighborUniformSample_reservoir(VertexId fanout_i, VertexId dst, std::vector<VertexId>& column_offset,
-                                       std::vector<VertexId>& row_indices, VertexId id) {
+  void NeighborUniformSample_reservoir(VertexId fanout_i, VertexId dst, VertexId* column_offset, VertexId* row_indices,
+                                       VertexId id) {
     for (VertexId src_idx = whole_graph->column_offset[dst]; src_idx < whole_graph->column_offset[dst + 1]; src_idx++) {
       // ReservoirSampling
       VertexId write_pos = (src_idx - whole_graph->column_offset[dst]);
@@ -388,8 +378,8 @@ class Sampler {
     }
   }
 
-  void NeighborUniformSample(VertexId fanout_i, VertexId dst, std::vector<VertexId>& column_offset,
-                             std::vector<VertexId>& row_indices, VertexId id) {
+  void NeighborUniformSample(VertexId fanout_i, VertexId dst, VertexId* column_offset, VertexId* row_indices,
+                             VertexId id) {
     auto whole_offset = whole_graph->column_offset;
     auto whole_indices = whole_graph->row_indices;
     size_t edge_nums = whole_offset[dst + 1] - whole_offset[dst];

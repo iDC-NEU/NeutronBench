@@ -265,33 +265,35 @@ class GCN_CPU_NEIGHBOR_impl {
     }
 
     for (VertexId i = 0; i < sampler->batch_nums; ++i) {
-      // LOG_DEBUG("batch %d", i);
       sample_cost -= get_time();
       sampler->sample_one(graph->config->batch_type, ctx->is_train());
       sample_cost += get_time();
+      // LOG_DEBUG("batch %d sample_one done", i);
+
       auto ssg = sampler->work_queue[0];
       if (graph->config->mini_pull > 0) {  // generate csr structure for backward of pull mode
         generate_csr_time -= get_time();
         for (auto p : ssg->sampled_sgs) {
           convert_time -= get_time();
-          // LOG_DEBUG("start generate csr");
+          // LOG_DEBUG("batch %d start generate csr done", i);
           p->generate_csr_from_csc();
-          // p->compute_weight_backward(graph);
-          // LOG_DEBUG("end generate csr");
+          // LOG_DEBUG("batch %d generate csr done", i);
           convert_time += get_time();
           debug_time -= get_time();
-          p->debug_generate_csr_from_csc();
+          // p->debug_generate_csr_from_csc();
+          // LOG_DEBUG("batch %d debug csr done", i);
           debug_time += get_time();
         }
         // }
         generate_csr_time += get_time();
+        // LOG_DEBUG("batch %d pull gemnerate csr done", i);
       }
-      // LOG_DEBUG("after sample");
 
       if (type == 0 && graph->rtminfo->epoch >= 3) train_sample_time += sample_cost;
 
-      // std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
-      sampler->reverse_sgs();
+      // sampler->reverse_sgs();
+      std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
+
       train_cost -= get_time();
       forward_other_cost -= get_time();
       if (ctx->training == true) zero_grad();  // should zero grad after every mini batch compute
@@ -301,41 +303,40 @@ class GCN_CPU_NEIGHBOR_impl {
       forward_other_cost += get_time();
       // rpc.keep_running();
       get_feature_cost -= get_time();
-      // LOG_DEBUG("start getfaeture");
       if (hosts > 1) {
-        X[0] = nts::op::get_feature_from_global(*rpc, ssg->sampled_sgs[0]->src(), F, graph);
+        X[0] =
+            nts::op::get_feature_from_global(*rpc, ssg->sampled_sgs[0]->src(), ssg->sampled_sgs[0]->src_size, F, graph);
         // if (type == 0 && graph->rtminfo->epoch >= 3) rpc_comm_time += tmp_time;
       } else {
         X[0] = nts::op::get_feature(ssg->sampled_sgs[0]->src(), ssg->sampled_sgs[0]->src_size, F, graph);
       }
       get_feature_cost += get_time();
-      // LOG_DEBUG("gert feature done!");
+      // LOG_DEBUG("batch %d get feature done!", i);
 
       get_label_cost -= get_time();
       NtsVar target_lab =
           nts::op::get_label(ssg->sampled_sgs.back()->dst(), ssg->sampled_sgs.back()->v_size, L_GT_C, graph);
       get_label_cost += get_time();
-      // LOG_DEBUG("gert labels done!");
+      // LOG_DEBUG("batch %d get label done!", i);
 
       for (int l = 0; l < layers; l++) {  // forward
-        // LOG_DEBUG("start compute layer %d", l);
         graph->rtminfo->curr_layer = l;
         forward_graph_cost -= get_time();
         NtsVar Y_i = ctx->runGraphOp<nts::op::MiniBatchFuseOp>(ssg, graph, l, X[l]);
         forward_graph_cost += get_time();
-        // LOG_DEBUG("after graph op !!!!!!!!!!!!!!!!!!!!!");
+        // LOG_DEBUG("\tbatch %d layer graph compute done", i);
 
         forward_nn_cost -= get_time();
         X[l + 1] = ctx->runVertexForward([&](NtsVar n_i) { return vertexForward(n_i); }, Y_i);
         forward_nn_cost += get_time();
+        // LOG_DEBUG("\tbatch %d layer nn compute done", i);
       }
-      // LOG_DEBUG("after nn op !!!!!!!!!!!!!!!!!!!!!");
 
       forward_loss_cost -= get_time();
       auto loss_ = Loss(X[layers], target_lab, graph->config->classes == 1);
       loss_epoch += loss_.item<float>();
       forward_loss_cost += get_time();
-      // LOG_DEBUG("loss done %.3f", loss_epoch);
+      // LOG_DEBUG("batch %d loss compute done", i);
 
       if (ctx->training == true) {
         forward_append_cost -= get_time();
@@ -347,10 +348,12 @@ class GCN_CPU_NEIGHBOR_impl {
         ctx->self_backward(false);
         backward_nn_time += ctx->b_nn_time;
         backward_cost += get_time();
+        // LOG_DEBUG("batch %d backward done", i);
 
         update_cost -= get_time();
         Update();
         update_cost += get_time();
+        // LOG_DEBUG("batch %d update done", i);
       }
 
       forward_acc_cost -= get_time();
@@ -361,14 +364,15 @@ class GCN_CPU_NEIGHBOR_impl {
         f1_epoch += f1_score(X[layers], target_lab, graph->config->classes == 1);
       }
       forward_acc_cost += get_time();
+      // LOG_DEBUG("batch %d acc compute done", i);
 
       train_cost += get_time();
-      // std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
-      sampler->reverse_sgs();
+      std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
+      // sampler->reverse_sgs();
     }
     loss_epoch /= sampler->batch_nums;
-    LOG_DEBUG("sample_cost %.3f", sample_cost);
-    LOG_DEBUG("generate_csr %.3f, convert %.3f debug %.3f ", generate_csr_time, convert_time, debug_time);
+    // LOG_DEBUG("sample_cost %.3f", sample_cost);
+    // LOG_DEBUG("generate_csr %.3f, convert %.3f debug %.3f ", generate_csr_time, convert_time, debug_time);
 
     if (hosts > 1) {
       if (type == 0 && graph->rtminfo->epoch >= 3) rpc_wait_time -= get_time();
@@ -383,14 +387,14 @@ class GCN_CPU_NEIGHBOR_impl {
     sampler->restart();
 
     if (type == 0) {
-      LOG_DEBUG("trainning cost %.3f", train_cost);
+      LOG_INFO("trainning cost %.3f", train_cost);
     } else {
-      LOG_DEBUG("evaluation cost %.3f", train_cost);
+      LOG_INFO("evaluation cost %.3f", train_cost);
     }
-    LOG_DEBUG("  get_feature/lable (%.3f/%.3f)", get_feature_cost, get_label_cost);
-    LOG_DEBUG("  forward: graph %.3f, nn %.3f, loss %.3f, acc %.3f, update %.3f", forward_graph_cost, forward_nn_cost,
-              forward_loss_cost, forward_acc_cost, update_cost);
-    LOG_DEBUG("  backward cost %.3f, b_nn_time %.3f", backward_cost, backward_nn_time);
+    LOG_INFO("  get_feature/lable (%.3f/%.3f)", get_feature_cost, get_label_cost);
+    LOG_INFO("  forward: graph %.3f, nn %.3f, loss %.3f, acc %.3f, update %.3f", forward_graph_cost, forward_nn_cost,
+             forward_loss_cost, forward_acc_cost, update_cost);
+    LOG_INFO("  backward cost %.3f, b_nn_time %.3f", backward_cost, backward_nn_time);
     // LOG_DEBUG("forward other %.3f, append %.3f, backward cost %.3f train cost %.3f", forward_other_cost,
     // forward_append_cost, backward_cost, train_cost); LOG_DEBUG("forward other %.3f, backward cost %.3f train cost
     // %.3f", forward_other_cost, backward_cost, train_cost); LOG_DEBUG("forward all %.3f", forward_graph_cost +
@@ -476,6 +480,7 @@ class GCN_CPU_NEIGHBOR_impl {
     Sampler* train_sampler = new Sampler(fully_rep_graph, train_nids);
     Sampler* eval_sampler = new Sampler(fully_rep_graph, val_nids);
     Sampler* test_sampler = new Sampler(fully_rep_graph, test_nids);
+    // LOG_DEBUG("sampler contructor is done");
     pre_time += get_time();
 
     double train_time = 0;
@@ -491,6 +496,7 @@ class GCN_CPU_NEIGHBOR_impl {
       float train_acc = Forward(train_sampler, 0);
       float train_loss = loss_epoch;
       if (i_i >= graph->config->time_skip) train_time += get_time();
+      // LOG_DEBUG("epoch %d train Forward() done", i_i);
 
       ctx->eval();
       if (i_i >= graph->config->time_skip) val_time -= get_time();
@@ -498,6 +504,7 @@ class GCN_CPU_NEIGHBOR_impl {
       float val_loss = loss_epoch;
       best_val_acc = std::max(best_val_acc, val_acc);
       if (i_i >= graph->config->time_skip) val_time += get_time();
+      // LOG_DEBUG("epoch %d eval Forward() done", i_i);
 
       // std::cout << "start test" << std::endl;
       // if (i_i >= graph->config->time_skip) test_time -= get_time();

@@ -95,11 +95,12 @@ class SampledSubgraph {
       // assert(outs[i] == 0);
       // assert(ins[i] == 0);
     }
-    for (auto src : sampled_sgs[layer]->src()) {
-      outs[src]++;
+    auto csc_layer = sampled_sgs[layer];
+    for (int i = 0; i < csc_layer->src_size; ++i) {
+      outs[csc_layer->src()[i]]++;
     }
-    for (auto dst : sampled_sgs[layer]->dst()) {
-      ins[dst]++;
+    for (int i = 0; i < csc_layer->v_size; ++i) {
+      ins[csc_layer->dst()[i]]++;
     }
 
     // for (int i = 0; i < graph->vertices; ++i) {
@@ -128,7 +129,8 @@ class SampledSubgraph {
     // assert(layer==sampled_sgs.size()-1);
   }
   void sample_load_destination(std::function<void(std::vector<VertexId> &destination)> dst_select, VertexId layer) {
-    dst_select(sampled_sgs[layer]->dst());  // init destination;
+    assert(false);
+    // dst_select(sampled_sgs[layer]->dst());  // init destination;
   }
 
   void init_co(std::function<VertexId(VertexId dst)> get_nbr_size, VertexId layer) {
@@ -153,15 +155,14 @@ class SampledSubgraph {
   //     std::uniform_int_distribution<int> distribution(min, max);
   //     return distribution(generator);
   // }
-  void sample_processing(std::function<void(VertexId fanout_i, VertexId dst, std::vector<VertexId> &column_offset,
-                                            std::vector<VertexId> &row_indices, VertexId id)>
-                             vertex_sample) {
-    {
-      // random_gen_seed();
-      // threads=30;
-      omp_set_num_threads(threads);
-      // LOG_DEBUG("thrads %d", threads);
-      // LOG_DEBUG("processing %d %d layer %d, fanout %d", 0, curr_dst_size, curr_layer, fanout[curr_layer]);
+  void sample_processing(
+      std::function<void(VertexId fanout_i, VertexId dst, VertexId *column_offset, VertexId *row_indices, VertexId id)>
+          vertex_sample) {
+    // random_gen_seed();
+    // threads=30;
+    omp_set_num_threads(threads);
+    // LOG_DEBUG("thrads %d", threads);
+    // LOG_DEBUG("processing %d %d layer %d, fanout %d", 0, curr_dst_size, curr_layer, fanout[curr_layer]);
 #pragma omp parallel for num_threads(threads)
       for (VertexId begin_v_i = 0; begin_v_i < curr_dst_size; begin_v_i += 1) {
         // for every vertex, apply the sparse_slot at the partition
@@ -169,7 +170,6 @@ class SampledSubgraph {
         vertex_sample(fanout[curr_layer], sampled_sgs[curr_layer]->dst()[begin_v_i], sampled_sgs[curr_layer]->c_o(),
                       sampled_sgs[curr_layer]->r_i(), begin_v_i);
       }
-    }
   }
 
   // void sample_postprocessing(){
@@ -191,8 +191,7 @@ class SampledSubgraph {
   }
 
   void compute_one_layer(
-      std::function<void(VertexId local_dst, std::vector<VertexId> &column_offset, std::vector<VertexId> &row_indices)>
-          sparse_slot,
+      std::function<void(VertexId local_dst, VertexId *column_offset, VertexId *row_indices)> sparse_slot,
       VertexId layer) {
     //  void compute_one_layer(std::function<void(VertexId local_dst,
     //                 VertexId* column_offset, VertexId* row_indices)>sparse_slot,VertexId layer){
@@ -206,8 +205,7 @@ class SampledSubgraph {
   }
 
   void compute_one_layer_backward(
-      std::function<void(VertexId local_dst, std::vector<VertexId> &column_offset, std::vector<VertexId> &row_indices)>
-          sparse_slot,
+      std::function<void(VertexId local_dst, VertexId *column_offset, VertexId *row_indices)> sparse_slot,
       VertexId layer) {
     //   void compute_one_layer_backward(std::function<void(VertexId local_dst,
     //                     VertexId* column_offset, VertexId* row_indices)>sparse_slot,VertexId layer){

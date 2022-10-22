@@ -15,6 +15,11 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 */
 #ifndef NEUTRONSTAR_HPP
 #define NEUTRONSTAR_HPP
+
+// #undef NDEBUG
+// #endif
+// LOG_LEVEL = LOG_LEVEL_INFO;
+
 #include "comm/logger.h"
 #include "core/NtsEdgeTensor.hpp"
 #include "core/PartitionedGraph.hpp"
