@@ -198,10 +198,8 @@ class MiniBatchFuseOp : public ntsGraphOp {
               VertexId local_src = subgraphs->sampled_sgs[layer]->r_i(src_offset);
               VertexId src = subgraphs->sampled_sgs[layer]->src()[local_src];
               ValueType *local_output = f_input_grad_buffer + local_src * feature_size;
-              // push version of backward
-              // nts_acc(local_output, local_input, nts_norm_degree(graph_, src,
-              // dst), feature_size);
-              nts_comp(local_output, local_input, this->subgraphs->sampled_sgs[layer]->edge_weight_forward[src_offset],
+              // nts_acc(local_output, local_input, nts_norm_degree(graph_, src, dst), feature_size);
+              nts_comp(local_output, local_input, subgraphs->sampled_sgs[layer]->edge_weight_forward[src_offset],
                        feature_size);
             }
           },
@@ -259,91 +257,79 @@ class SingleGPUSampleGraphOp : public ntsGraphOp {
     ValueType *f_input_buffer = graph_->Nts->getWritableBuffer(f_input, torch::DeviceType::CUDA);
     ValueType *f_output_buffer = graph_->Nts->getWritableBuffer(f_output, torch::DeviceType::CUDA);
     // LOG_DEBUG("forward pull version");
-    this->subgraphs->sampled_sgs[layer]->update_degree(graph_);
+    subgraphs->sampled_sgs[layer]->update_degree(graph_);
+    subgraphs->sampled_sgs[layer]->compute_weight_forward(graph_);
+    subgraphs->sampled_sgs[layer]->copy_ewf_to_device();
+    ValueType *weight_forward = subgraphs->sampled_sgs[layer]->dev_ewf();
+    VertexId *row_indices = subgraphs->sampled_sgs[layer]->dev_r_i();
+    VertexId *column_offset = subgraphs->sampled_sgs[layer]->dev_c_o();
+    VertexId edge_size = subgraphs->sampled_sgs[layer]->e_size;
+    VertexId batch_size = subgraphs->sampled_sgs[layer]->v_size;
 
-    this->subgraphs->compute_one_layer(
-        [&](VertexId local_dst, VertexId *column_offset, VertexId *row_indices) {
-          // assert(&row_indices == &subgraphs->sampled_sgs[layer]->r_i());
-          VertexId src_start = column_offset[local_dst];
-          VertexId src_end = column_offset[local_dst + 1];
-          VertexId dst = subgraphs->sampled_sgs[layer]->dst()[local_dst];
-          ValueType *local_output = f_output_buffer + local_dst * feature_size;
-          for (VertexId src_offset = src_start; src_offset < src_end; src_offset++) {
-            VertexId local_src = row_indices[src_offset];
-            VertexId src = subgraphs->sampled_sgs[layer]->src()[local_src];
-            ValueType *local_input = f_input_buffer + local_src * feature_size;
-            nts_comp(local_output, local_input, nts_norm_degree(graph_, src, dst), feature_size);
-          }
-        },
-        layer);
+    if (feature_size <= 512 && false) {
+      cuda_stream->Gather_By_Dst_From_Src_Optim(f_input_buffer, f_output_buffer, weight_forward,  // data
+                                                row_indices, column_offset, 0, 0, 0, 0, edge_size, batch_size,
+                                                feature_size, true, false);
+    } else {
+      cuda_stream->Gather_By_Dst_From_Src(f_input_buffer, f_output_buffer, weight_forward,  // data
+                                          row_indices, column_offset, 0, 0, 0, 0, edge_size, batch_size, feature_size,
+                                          true, false);
+    }
+    cuda_stream->CUDA_DEVICE_SYNCHRONIZE();
+
     return f_output;
   }
   NtsVar backward(NtsVar &f_output_grad) {
     int feature_size = f_output_grad.size(1);
     NtsVar f_input_grad =
-        graph_->Nts->NewLeafTensor({subgraphs->sampled_sgs[layer]->src_size, feature_size}, torch::DeviceType::CPU);
-    ValueType *f_input_grad_buffer = graph_->Nts->getWritableBuffer(f_input_grad, torch::DeviceType::CPU);
-    ValueType *f_output_grad_buffer = graph_->Nts->getWritableBuffer(f_output_grad, torch::DeviceType::CPU);
+        graph_->Nts->NewLeafTensor({subgraphs->sampled_sgs[layer]->src_size, feature_size}, torch::DeviceType::CUDA);
+    ValueType *f_input_grad_buffer = graph_->Nts->getWritableBuffer(f_input_grad, torch::DeviceType::CUDA);
+    ValueType *f_output_grad_buffer = graph_->Nts->getWritableBuffer(f_output_grad, torch::DeviceType::CUDA);
+    subgraphs->sampled_sgs[layer]->update_degree(graph_);
+
+    VertexId edge_size = subgraphs->sampled_sgs[layer]->e_size;
+    VertexId batch_size = subgraphs->sampled_sgs[layer]->src_size;
+    ValueType *weight_backward = nullptr;
+    // std::cout << "after init parameters" << std::endl;
     if (graph_->config->mini_pull == 0) {
+      VertexId *column_offset = subgraphs->sampled_sgs[layer]->dev_c_o();
+      VertexId *row_indices = subgraphs->sampled_sgs[layer]->dev_r_i();
+      subgraphs->sampled_sgs[layer]->compute_weight_forward(graph_);
+      subgraphs->sampled_sgs[layer]->copy_ewf_to_device();
+      weight_backward = subgraphs->sampled_sgs[layer]->dev_ewf();
       // LOG_DEBUG("use push version of backward");
-      this->subgraphs->sampled_sgs[layer]->update_degree(graph_);
-      this->subgraphs->compute_one_layer(
-          [&](VertexId local_dst, VertexId *column_offset, VertexId *row_indices) {
-            VertexId src_start = column_offset[local_dst];
-            VertexId src_end = column_offset[local_dst + 1];
-            VertexId dst = subgraphs->sampled_sgs[layer]->dst()[local_dst];
-            ValueType *local_input = f_output_grad_buffer + local_dst * feature_size;
-            for (VertexId src_offset = src_start; src_offset < src_end; src_offset++) {
-              VertexId local_src = subgraphs->sampled_sgs[layer]->r_i(src_offset);
-              VertexId src = subgraphs->sampled_sgs[layer]->src()[local_src];
-              ValueType *local_output = f_input_grad_buffer + local_src * feature_size;
-              // push version of backward
-              nts_acc(local_output, local_input, nts_norm_degree(graph_, src, dst), feature_size);
-            }
-          },
-          layer);
+      if (feature_size <= 512 && false) {
+        cuda_stream->Gather_By_Dst_From_Src_Optim(f_output_grad_buffer, f_input_grad_buffer, weight_backward,
+                                                  row_indices, column_offset, 0, 0, 0, 0, edge_size, batch_size,
+                                                  feature_size, true, false);
+      } else {
+        // LOG_DEBUG("start compute backward()");
+        cuda_stream->Gather_By_Dst_From_Src(f_output_grad_buffer, f_input_grad_buffer, weight_backward, row_indices,
+                                            column_offset,  // graph
+                                            0, 0, 0, 0, edge_size, batch_size, feature_size, true, false);
+        // LOG_DEBUG("after compute backward()");
+      }
     } else {  // pull
-      this->subgraphs->sampled_sgs[layer]->update_degree(graph_);
+      VertexId *row_offset = subgraphs->sampled_sgs[layer]->dev_r_o();
+      VertexId *column_indices = subgraphs->sampled_sgs[layer]->dev_c_i();
+      subgraphs->sampled_sgs[layer]->compute_weight_backward(graph_);
+      subgraphs->sampled_sgs[layer]->copy_ewb_to_device();
+      weight_backward = subgraphs->sampled_sgs[layer]->dev_ewb();
       // LOG_DEBUG("use pull version of backward");
-      this->subgraphs->compute_one_layer_backward(
-          [&](VertexId local_src, VertexId *row_offset, VertexId *column_indices) {
-            // assert(&column_indices == &subgraphs->sampled_sgs[layer]->c_i());
-            VertexId dst_start = row_offset[local_src];
-            VertexId dst_end = row_offset[local_src + 1];
-            VertexId src = subgraphs->sampled_sgs[layer]->src()[local_src];
-            ValueType *local_input = f_input_grad_buffer + local_src * feature_size;
-            for (VertexId dst_offset = dst_start; dst_offset < dst_end; dst_offset++) {
-              VertexId local_dst = column_indices[dst_offset];
-              VertexId dst = subgraphs->sampled_sgs[layer]->dst()[local_dst];
-              ValueType *local_output = f_output_grad_buffer + local_dst * feature_size;
-              // nts_acc(, src, dst), ); // if update_degree_csc
-              nts_comp(local_input, local_output, nts_norm_degree(graph_, src, dst), feature_size);
-              // nts_acc(local_input, local_output, nts_norm_degree(graph_, dst, src), feature_size);
-            }
-          },
-          layer
-          // ,12//compute thread num;
-      );
-
-      // this->subgraphs->compute_one_layer(
-      //     [&](VertexId local_dst, std::vector<VertexId>&column_offset,
-      //         std::vector<VertexId>&row_indices){
-      //         VertexId src_start=column_offset[local_dst];
-      //         VertexId src_end=column_offset[local_dst+1];
-      //         VertexId dst=subgraphs->sampled_sgs[layer]->dst()[local_dst];
-      //         ValueType *local_input=f_output_grad_buffer+local_dst*feature_size;
-      //         for(VertexId src_offset=src_start;
-      //                 src_offset<src_end;src_offset++){
-      //             VertexId local_src=subgraphs->sampled_sgs[layer]->r_i(src_offset);
-      //             VertexId src=subgraphs->sampled_sgs[layer]->src()[local_src];
-      //             ValueType *local_output=f_input_grad_buffer+local_src*feature_size;
-      //             nts_acc(local_output, local_input,nts_norm_degree(graph_,src, dst), feature_size);
-
-      //         }
-      //       },
-      //     layer
-      // );
+      if (feature_size <= 512 && false) {
+        cuda_stream->Gather_By_Src_From_Dst_Optim(f_output_grad_buffer, f_input_grad_buffer, weight_backward,
+                                                  row_offset,  // graph
+                                                  column_indices, 0, 0, 0, 0, edge_size, batch_size, feature_size, true,
+                                                  false);
+      } else {
+        cuda_stream->Gather_By_Src_From_Dst(f_output_grad_buffer, f_input_grad_buffer, weight_backward,
+                                            row_offset,  // graph
+                                            column_indices, 0, 0, 0, 0, edge_size, batch_size, feature_size, true,
+                                            false);
+      }
     }
+
+    cuda_stream->CUDA_DEVICE_SYNCHRONIZE();
 
     return f_input_grad;
   }

@@ -28,45 +28,90 @@ class sampCSC {
   sampCSC() {
     v_size = 0;
     e_size = 0;
-    column_indices = nullptr;
-    row_offset = nullptr;
-    row_indices = nullptr;
-    column_offset = nullptr;
-    source = nullptr;
-    destination = nullptr;
+    size_dev_src = 0;
+    size_dev_dst = 0;
+    size_dev_src_max = 0;
+    size_dev_dst_max = 0;
+    size_dev_edge = 0;
+    size_dev_edge_max = 0;
+    // column_offset.clear();
+    // row_indices.clear();
+    // src_index.clear();
+    // destination.clear();
+    // source.clear();
+    // column_indices = nullptr;
+    // row_offset = nullptr;
+    // row_indices = nullptr;
+    // column_offset = nullptr;
+    // source = nullptr;
+    // destination = nullptr;
+    // node_idx = nullptr;
+  }
+  sampCSC(VertexId v_) {
+    v_size = v_;
+    e_size = 0;
+    size_dev_src = 0;
+    size_dev_dst = 0;
+    size_dev_src_max = 0;
+    size_dev_dst_max = 0;
+    size_dev_edge = 0;
+    size_dev_edge_max = 0;
+    column_offset.resize(v_ + 1);
+    destination.resize(v_);
     node_idx = nullptr;
   }
+
   sampCSC(VertexId v_, VertexId e_) {
     v_size = v_;
     e_size = e_;
-    // column_offset.resize(v_ + 1);
-    // row_indices.resize(e_);
-    // row_offset.resize(e_);
-    // column_indices.resize(e_);
-    // destination.resize(v_);
+    size_dev_src = 0;
+    size_dev_dst = 0;
+    size_dev_src_max = 0;
+    size_dev_dst_max = 0;
+    size_dev_edge = 0;
+    size_dev_edge_max = 0;
     // source.resize(e_);
-    source = new VertexId[e_];
-    destination = new VertexId[v_];
-    column_offset = new VertexId[v_ + 1];
-    column_indices = new VertexId[e_];
-    row_offset = new VertexId[e_ + 1];
-    row_indices = new VertexId[e_];
-    edge_weight_forward = new ValueType[e_];
-    edge_weight_backward = new ValueType[e_];
+    destination.resize(v_);
+    column_offset.resize(v_ + 1);
+    column_indices.resize(e_);
+    // row_offset.resize(e_);
+    row_indices.resize(e_);
+    edge_weight_backward.resize(e_);
+    edge_weight_forward.resize(e_);
+
+    // source = new VertexId[e_];
+    // destination = new VertexId[v_];
+    // column_offset = new VertexId[v_ + 1];
+    // column_indices = new VertexId[e_];
+    // row_offset = new VertexId[e_ + 1];
+    // row_indices = new VertexId[e_];
+    // edge_weight_forward = new ValueType[e_];
+    // edge_weight_backward = new ValueType[e_];
     node_idx = nullptr;
   }
 
-  void init(std::vector<VertexId>& column_offset, std::vector<VertexId>& row_indices, std::vector<VertexId>& source,
-            std::vector<VertexId>& destination) {
-    assert(false);
-    // this->column_offset = column_offset;
-    // this->row_indices = row_indices;
-    // this->source = source;
-    // this->destination = destination;
+  ~sampCSC() {
+    column_offset.clear();
+    row_indices.clear();
+    destination.clear();
+    source.clear();
+    row_offset.clear();
+    column_indices.clear();
+    delete[] node_idx;
   }
 
+  // void init(std::vector<VertexId>& column_offset, std::vector<VertexId>& row_indices, std::vector<VertexId>& source,
+  //           std::vector<VertexId>& destination) {
+  //   assert(false);
+  //   // this->column_offset = column_offset;
+  //   // this->row_indices = row_indices;
+  //   // this->source = source;
+  //   // this->destination = destination;
+  // }
+
   // TODO(sanzo): use memcpy, need arr size arg
-  void init(VertexId* column_offset, VertexId* row_indices, VertexId* source, VertexId* destination) {
+  void init(std::vector<VertexId>& column_offset, std::vector<VertexId>& row_indices, std::vector<VertexId>& source,
+            std::vector<VertexId>& destination) {
     this->column_offset = column_offset;
     this->row_indices = row_indices;
     this->source = source;
@@ -74,6 +119,9 @@ class sampCSC {
   }
 
   void compute_weight_forward(Graph<Empty>* graph) {
+    edge_weight_forward.resize(e_size);
+    assert(e_size == column_offset.back());
+    assert(v_size + 1 == column_offset.size());
 #pragma omp parallel for
     for (VertexId i = 0; i < v_size; ++i) {
       for (VertexId j = column_offset[i]; j < column_offset[i + 1]; ++j) {
@@ -85,6 +133,8 @@ class sampCSC {
   }
 
   void compute_weight_backward(Graph<Empty>* graph) {
+    edge_weight_backward.resize(e_size);
+    assert(src_size + 1 == row_offset.size());
 #pragma omp parallel for
     for (VertexId i = 0; i < src_size; ++i) {
       for (VertexId j = row_offset[i]; j < row_offset[i + 1]; ++j) {
@@ -93,30 +143,6 @@ class sampCSC {
         edge_weight_backward[j] = nts::op::nts_norm_degree(graph, src_id, dst_id);
       }
     }
-  }
-
-  sampCSC(VertexId v_) {
-    v_size = v_;
-    e_size = 0;
-    column_offset = new VertexId[v_ + 1]{};
-    row_indices = nullptr;
-    row_offset = nullptr;
-    column_indices = nullptr;
-    node_idx = nullptr;
-    destination = new VertexId[v_];
-    source = nullptr;
-  }
-  // void alloc_index_table(VertexId size) {
-  //     node_idx[]
-  // }
-  ~sampCSC() {
-    delete[] column_offset;
-    delete[] row_indices;
-    delete[] node_idx;
-    delete[] destination;
-    delete[] source;
-    delete[] row_offset;
-    delete[] column_indices;
   }
 
   // void update_degree_of_csc(Graph<Empty>* graph) {
@@ -175,8 +201,9 @@ class sampCSC {
 
     int dst_size = v_size;
     int edge_size = e_size;
-    // assert(row_offset.size() >= src_size + 1);
-    memset(row_offset, 0, sizeof(VertexId) * (src_size + 1));
+    row_offset.resize(src_size + 1);
+    memset(row_offset.data(), 0, sizeof(VertexId) * (src_size + 1));
+    assert(dst_size + 1 == column_offset.size());
 #pragma omp parallel for
     for (int i = 0; i < src_size + 1; ++i) {
       assert(row_offset[i] == 0);
@@ -193,7 +220,9 @@ class sampCSC {
     }
     assert(row_offset[src_size] == column_offset[v_size]);
     assert(row_offset[src_size] == e_size);
-    std::vector<int> tmp_row_offset(row_offset, row_offset + src_size + 1);
+    assert(row_offset.size() == src_size + 1);
+    std::vector<int> tmp_row_offset(row_offset.begin(), row_offset.end());
+    column_indices.resize(e_size);
 
     // #pragma omp parallel for
     for (int i = 0; i < dst_size; ++i) {
@@ -246,27 +275,30 @@ class sampCSC {
 
     // assert(st.size() == bits->get_ones());
     //////////////////////////////
+    VertexId all_node_num = bits->get_size();
+    VertexId unique_node_num = bits->get_ones();
 
     if (!node_idx) {
-      node_idx = new VertexId[bits->get_size()]{};
-      // LOG_DEBUG("alloc node_idx in first call, size %d", bits->get_size());
+      node_idx = new VertexId[all_node_num]{};
     }
 #pragma omp parallel for
-    for (int i = 0; i < bits->get_size(); ++i) {
+    for (int i = 0; i < all_node_num; ++i) {
       node_idx[i] = -1;
     }
 
     // std::vector<int> node_idx(bits->size, -1);
+    source.resize(unique_node_num);
 
     src_size = 0;
-    for (int i = 0; i < bits->size; ++i) {
+    for (int i = 0; i < all_node_num; ++i) {
       if (bits->get_bit(i) > 0) {
         // source.push_back(i); // TODO(pre-alloc)
         source[src_size] = i;
         node_idx[i] = src_size++;
       }
     }
-
+    assert(src_size == source.size());
+    /////////// check
 #pragma omp parallel for
     // for (size_t i = 0; i < row_indices.size(); ++i) {
     for (VertexId i = 0; i < e_size; ++i) {
@@ -279,11 +311,14 @@ class sampCSC {
   }
 
   void allocate_vertex() {
-    destination = new VertexId[v_size]{};
-    column_offset = new VertexId[v_size + 1]{};
+    // destination = new VertexId[v_size]{};
+    // column_offset = new VertexId[v_size + 1]{};
+    destination.resize(v_size);
+    column_offset.resize(v_size + 1);
   }
 
-  void init_dst(VertexId* dst) { memcpy(destination, dst, sizeof(VertexId) * v_size); }
+  void init_dst(VertexId* dst) { memcpy(destination.data(), dst, sizeof(VertexId) * v_size); }
+  void init_dst(std::vector<VertexId>& dst) { memcpy(destination.data(), dst.data(), sizeof(VertexId) * v_size); }
   void allocate_co_from_dst() {
     assert(false);
     // v_size = destination.size();
@@ -296,25 +331,42 @@ class sampCSC {
   void allocate_edge(VertexId e_size) {
     assert(false);
     this->e_size = e_size;
-    // row_indices.resize(e_size, 0);
-    row_indices = new VertexId[e_size]{};
+    // row_indices = new VertexId[e_size]{};
+    row_indices.resize(e_size);
   }
   void update_edges(VertexId e_size) { this->e_size = e_size; }
+  void alloc_edges(VertexId e_size) {
+    this->e_size = e_size;
+    row_indices.resize(e_size);
+  }
   void update_vertices(VertexId v_size) { this->v_size = v_size; }
+  void alloc_vertices(VertexId v_size) {
+    this->v_size = v_size;
+    destination.resize(v_size);
+    column_offset.resize(v_size + 1);
+  }
   void allocate_all() {
     allocate_vertex();
     allocate_edge();
   }
+
   VertexId c_o(VertexId vid) { return column_offset[vid]; }
   VertexId r_i(VertexId vid) { return row_indices[vid]; }
   VertexId c_i(VertexId vid) { return column_indices[vid]; }
   VertexId r_o(VertexId vid) { return row_offset[vid]; }
-  VertexId* dst() { return destination; }
-  VertexId* src() { return source; }
-  VertexId* c_o() { return column_offset; }
-  VertexId* r_i() { return row_indices; }
-  VertexId* r_o() { return row_offset; }
-  VertexId* c_i() { return column_indices; }
+  std::vector<VertexId>& dst() { return destination; }
+  std::vector<VertexId>& src() { return source; }
+  std::vector<VertexId>& c_o() { return column_offset; }
+  std::vector<VertexId>& r_i() { return row_indices; }
+  std::vector<VertexId>& r_o() { return row_offset; }
+  std::vector<VertexId>& c_i() { return column_indices; }
+  ValueType* dev_ewf() { return dev_edge_weight_forward; }
+  ValueType* dev_ewb() { return dev_edge_weight_backward; }
+  VertexId* dev_c_o() { return dev_column_offset; }
+  VertexId* dev_r_o() { return dev_row_offset; }
+  VertexId* dev_c_i() { return dev_column_indices; }
+  VertexId* dev_r_i() { return dev_row_indices; }
+
   VertexId get_distinct_src_size() { return src_size; }
   void debug() {
     assert(false);
@@ -379,33 +431,93 @@ class sampCSC {
     // assert(false);
   }
 
-  void allocate_dev_array(VertexId vtx_size, VertexId edge_size) {
-    // column_offset = (VertexId *)cudaMallocPinned((vtx_size + 1) * sizeof(VertexId));
-    // dev_column_offset = (VertexId *)cudaMallocGPU((vtx_size + 1) * sizeof(VertexId));
-    // row_offset = (VertexId *)cudaMallocPinned((edge_size + 1) * sizeof(VertexId));
-    // dev_row_offset = (VertexId *)cudaMallocGPU((edge_size + 1) * sizeof(VertexId));
+  void alloc_dev_array(bool pull = true) {
+    //////// TODO(Sanzo): (realloc)
+    const int mem_factor = 2;
+    if (v_size + 1 > size_dev_dst_max) {
+      if (size_dev_dst_max > 0) {
+        // free_gpu_data(dev_column_offset);
+        // free_gpu_data(dev_destination);
+        FreeEdge(dev_destination);
+        FreeEdge(dev_column_offset);
+      }
+      size_dev_dst_max = (v_size + 1) * mem_factor;
+      // alloc_gpu_data(&dev_destination, size_dev_dst_max);
+      // alloc_gpu_data(&dev_column_offset, size_dev_dst_max);
+      allocate_gpu_edge(&dev_destination, size_dev_dst_max);
+      allocate_gpu_edge(&dev_column_offset, size_dev_dst_max);
 
-    // row_indices = (VertexId *)cudaMallocPinned((edge_size + 1) * sizeof(VertexId));
-    // edge_weight_forward = (ValueType *)cudaMallocPinned((edge_size + 1) * sizeof(ValueType));
-    // dev_row_indices = (VertexId *)cudaMallocGPU((edge_size + 1) * sizeof(VertexId));
-    // dev_edge_weight_forward = (ValueType *)cudaMallocGPU((edge_size + 1) * sizeof(ValueType));
+      size_dev_dst = v_size;
+    } else {
+      size_dev_dst = v_size;
+    }
 
-    // column_indices = (VertexId *)cudaMallocPinned((edge_size + 1) * sizeof(VertexId));
-    // edge_weight_backward = (ValueType *)cudaMallocPinned((edge_size + 1) * sizeof(ValueType));
-    // dev_column_indices = (VertexId *)cudaMallocGPU((edge_size + 1) * sizeof(VertexId));
-    // dev_edge_weight_backward = (ValueType *)cudaMallocGPU((edge_size + 1) * sizeof(ValueType));
+    if (src_size + 1 > size_dev_src_max) {
+      if (size_dev_src_max > 0) {
+        FreeEdge(dev_row_offset);
+        FreeEdge(dev_source);
+      }
+      size_dev_src_max = (src_size + 1) * mem_factor;
+      allocate_gpu_edge(&dev_source, size_dev_src_max);
+      allocate_gpu_edge(&dev_row_offset, size_dev_src_max);
+      size_dev_src = src_size;
+    } else {
+      size_dev_src = src_size;
+    }
+
+    if (e_size > size_dev_edge_max) {
+      if (size_dev_edge_max > 0) {
+        FreeEdge(dev_row_indices);
+        FreeEdge(dev_column_indices);
+        FreeBuffer(dev_edge_weight_backward);
+        FreeBuffer(dev_edge_weight_forward);
+      }
+      size_dev_edge_max = e_size * mem_factor;
+      allocate_gpu_edge(&dev_row_indices, size_dev_edge_max);
+      allocate_gpu_edge(&dev_column_indices, size_dev_edge_max);
+      allocate_gpu_buffer(&dev_edge_weight_forward, size_dev_edge_max);
+      allocate_gpu_buffer(&dev_edge_weight_backward, size_dev_edge_max);
+      size_dev_edge = e_size;
+    } else {
+      size_dev_edge = e_size;
+    }
+  }
+
+  void copy_data_to_device(bool pull = true) {
+    move_bytes_in(dev_column_offset, column_offset.data(), (v_size + 1) * sizeof(VertexId));
+    move_bytes_in(dev_row_indices, row_indices.data(), e_size * sizeof(VertexId));
+
+    move_bytes_in(dev_source, source.data(), src_size * sizeof(VertexId));
+    move_bytes_in(dev_destination, destination.data(), v_size * sizeof(VertexId));
+
+    if (pull) {
+      copy_csr_to_device();
+    }
+  }
+
+  void copy_ewf_to_device() {
+    move_bytes_in(dev_edge_weight_forward, edge_weight_forward.data(), e_size * sizeof(ValueType));
+  }
+
+  void copy_ewb_to_device() {
+    move_bytes_in(dev_edge_weight_backward, edge_weight_backward.data(), e_size * sizeof(ValueType));
+  }
+
+  void copy_csr_to_device() {
+    move_bytes_in(dev_row_offset, row_offset.data(), (src_size + 1) * sizeof(VertexId));
+    move_bytes_in(dev_column_indices, column_indices.data(), e_size * sizeof(VertexId));
   }
 
   // private:
-  VertexId* column_offset;
-  VertexId* row_offset;
-  VertexId* row_indices;     // local id
-  VertexId* column_indices;  // local id
-  VertexId* source;          // global id
-  VertexId* destination;     // global id
-
-  std::vector<VertexId> row_indices_debug;  // local id
-
+  // std::vector<VertexId> source;          // global id
+  // std::vector<VertexId> destination;     // global id
+  // std::vector<VertexId> row_offset;
+  // std::vector<VertexId> row_indices;     // local id
+  // std::vector<VertexId> column_offset;
+  // std::vector<VertexId> column_indices;  // local id
+  // std::vector<VertexId> edge_weight_forward;   // local id
+  // std::vector<VertexId> edge_weight_backward;  // local id
+  // std::vector<VertexId> row_indices_debug;  // local id
   // VertexId* source;
   // VertexId* destination;
 
@@ -416,21 +528,29 @@ class sampCSC {
   VertexId e_size;    // edge size
   VertexId src_size;  // distinct src size
 
-  ValueType* edge_weight_forward;   // local id
-  ValueType* edge_weight_backward;  // local id
-  ValueType* dev_edge_weight_forward;
-  ValueType* dev_edge_weight_backward;
+  std::vector<VertexId> source;       // global id
+  std::vector<VertexId> destination;  // global id
+  std::vector<VertexId> row_offset;
+  std::vector<VertexId> row_indices;  // local id
+  std::vector<VertexId> column_offset;
+  std::vector<VertexId> column_indices;         // local id
+  std::vector<ValueType> edge_weight_forward;   // local id
+  std::vector<ValueType> edge_weight_backward;  // local id
+  std::vector<VertexId> row_indices_debug;      // local id
 
   VertexId* dev_source;
   VertexId* dev_destination;
-
-  VertexId* dev_column_offset;
-  VertexId* dev_row_indices;
-  VertexId* dev_column_indices;
   VertexId* dev_row_offset;
+  VertexId* dev_row_indices;
+  VertexId* dev_column_offset;
+  VertexId* dev_column_indices;
+  ValueType* dev_edge_weight_forward;
+  ValueType* dev_edge_weight_backward;
 
+  VertexId size_dev_src, size_dev_dst, size_dev_src_max, size_dev_dst_max;
   VertexId size_dev_co, size_dev_ri, size_dev_ewf;
   VertexId size_dev_ci, size_dev_ro, size_dev_ewb;
+  VertexId size_dev_edge, size_dev_edge_max = 0;
 };
 
 #endif

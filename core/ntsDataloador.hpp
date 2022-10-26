@@ -33,6 +33,11 @@ class GNNDatum {
   GNNContext *gnnctx;
   Graph<Empty> *graph;
   ValueType *local_feature;  // features of local partition
+  ValueType *dev_local_feature;
+  // ValueType *local_embedding;
+  // ValueType *dev_local_embedding;
+  long *dev_local_label;
+
   long *local_label;         // labels of local partition
   long *global_label;        // labels of global partition
   int *local_mask;           // mask(indicate whether data is for train, eval or test) of
@@ -53,7 +58,11 @@ class GNNDatum {
    */
   GNNDatum(GNNContext *_gnnctx, Graph<Empty> *graph_) {
     gnnctx = _gnnctx;
-    local_feature = new ValueType[gnnctx->l_v_num * gnnctx->layer_size[0]];
+    // local_feature = new ValueType[gnnctx->l_v_num * gnnctx->layer_size[0]];
+    local_feature =
+        (ValueType *)cudaMallocPinned((long)(gnnctx->l_v_num) * (gnnctx->layer_size[0]) * sizeof(ValueType));
+    // local_embedding =
+    // (ValueType*)cudaMallocPinned((long)(gnnctx->l_v_num)*(gnnctx->layer_size[0])*sizeof(ValueType));
     local_label = new long[gnnctx->l_v_num * graph_->config->classes];
     global_label = new long[graph_->partition_offset[graph_->partitions] * graph_->config->classes];
     memset(local_label, 0, sizeof(long) * gnnctx->l_v_num * graph_->config->classes);
@@ -64,6 +73,13 @@ class GNNDatum {
     // std::cout << "parts " << graph_->partitions<< " " << graph_->partition_offset[graph_->partitions] << std::endl;
     memset(local_mask, 1, sizeof(int) * gnnctx->l_v_num);
     graph = graph_;
+  }
+
+  void generate_gpu_data() {
+    dev_local_label = (long *)cudaMallocGPU(gnnctx->l_v_num * sizeof(long) * graph->config->classes);
+    dev_local_feature = (ValueType *)getDevicePointer(local_feature);
+    // dev_local_embedding = (ValueType*) getDevicePointer(local_embedding);
+    move_bytes_in(dev_local_label, local_label, gnnctx->l_v_num * sizeof(long) * graph->config->classes);
   }
 
   /**

@@ -62,6 +62,9 @@ class SampledSubgraph {
     // threads = std::max(1, numa_num_configured_cpus() - 1);
     // threads = std::max(1, numa_num_configured_cpus() / 2);
     // seeds = new unsigned[threads];
+    for (int i = 0; i < layers; ++i) {
+      sampled_sgs.push_back(new sampCSC(0));
+    }
   }
 
   ~SampledSubgraph() {
@@ -115,6 +118,16 @@ class SampledSubgraph {
     }
   }
 
+  void trans_to_gpu(bool pull = true) {
+    for (int i = 0; i < layers; ++i) {
+      // TODO(sanzo): not alloc memory fo csr in push version
+      sampled_sgs[i]->alloc_dev_array(pull);
+      // LOG_DEBUG("alloc dev arry done");
+      sampled_sgs[i]->copy_data_to_device(pull);
+      // LOG_DEBUG("copy_data_to device done");
+    }
+  }
+
   void sample_preprocessing(VertexId layer) {
     curr_layer = layer;
     if (0 == layer) {
@@ -141,7 +154,8 @@ class SampledSubgraph {
     }
     // std::cout << std::endl;
     sampled_sgs[layer]->c_o()[curr_dst_size] = offset;
-    sampled_sgs[layer]->update_edges(offset);
+    // sampled_sgs[layer]->update_edges(offset);
+    sampled_sgs[layer]->alloc_edges(offset);
   }
 
   void sample_load_destination(VertexId layer) {
@@ -167,8 +181,8 @@ class SampledSubgraph {
       for (VertexId begin_v_i = 0; begin_v_i < curr_dst_size; begin_v_i += 1) {
         // for every vertex, apply the sparse_slot at the partition
         // corresponding to the step
-        vertex_sample(fanout[curr_layer], sampled_sgs[curr_layer]->dst()[begin_v_i], sampled_sgs[curr_layer]->c_o(),
-                      sampled_sgs[curr_layer]->r_i(), begin_v_i);
+        vertex_sample(fanout[curr_layer], sampled_sgs[curr_layer]->dst()[begin_v_i],
+                      sampled_sgs[curr_layer]->c_o().data(), sampled_sgs[curr_layer]->r_i().data(), begin_v_i);
       }
   }
 
@@ -186,7 +200,7 @@ class SampledSubgraph {
 
   void sample_postprocessing(Bitmap *bits, int layer) {
     sampled_sgs[layer]->postprocessing(bits);
-    curr_dst_size = sampled_sgs[layer]->get_distinct_src_size();
+    curr_dst_size = sampled_sgs[layer]->src_size;
     // curr_layer++;
   }
 
@@ -200,7 +214,7 @@ class SampledSubgraph {
     omp_set_num_threads(threads);
 #pragma omp parallel for num_threads(threads)
     for (VertexId begin_v_i = 0; begin_v_i < sampled_sgs[layer]->v_size; begin_v_i += 1) {
-      sparse_slot(begin_v_i, sampled_sgs[layer]->c_o(), sampled_sgs[layer]->r_i());
+      sparse_slot(begin_v_i, sampled_sgs[layer]->c_o().data(), sampled_sgs[layer]->r_i().data());
     }
   }
 
@@ -213,7 +227,7 @@ class SampledSubgraph {
     omp_set_num_threads(threads);
 #pragma omp parallel for num_threads(threads)
     for (VertexId begin_v_i = 0; begin_v_i < sampled_sgs[layer]->src_size; begin_v_i += 1) {
-      sparse_slot(begin_v_i, sampled_sgs[layer]->r_o(), sampled_sgs[layer]->c_i());
+      sparse_slot(begin_v_i, sampled_sgs[layer]->r_o().data(), sampled_sgs[layer]->c_i().data());
     }
     // LOG_DEBUG("end backward");
   }

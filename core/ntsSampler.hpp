@@ -28,6 +28,7 @@ enum Device { CPU, GPU };
 class Sampler {
  public:
   std::vector<SampledSubgraph*> work_queue;  // excepted to be single write multi read
+  SampledSubgraph* subgraph;
   std::mutex queue_start_lock;
   int queue_start;
   std::mutex queue_end_lock;
@@ -43,7 +44,7 @@ class Sampler {
   VertexId batch_size;
   VertexId batch_nums;
   VertexId layers;
-  // VertexId all_nodes;
+  Cuda_Stream* cs;
 
   double sample_pre_time = 0;
   double sample_load_dst = 0;
@@ -76,6 +77,7 @@ class Sampler {
   // std::default_random_engine rng_;
 
   Sampler(FullyRepGraph* whole_graph_, VertexId work_start, VertexId work_end) {
+    cs = new Cuda_Stream();
     whole_graph = whole_graph_;
     queue_start = -1;
     queue_end = 0;
@@ -85,9 +87,11 @@ class Sampler {
     work_queue.clear();
     sample_bits = new Bitmap(whole_graph->global_vertices);
   }
-  Sampler(FullyRepGraph* whole_graph_, std::vector<VertexId>& index, Device dev = CPU, int gpu_id = 0) {
-    this->device = dev;
-    this->gpu_id = gpu_id;
+  Sampler(FullyRepGraph* whole_graph_, std::vector<VertexId>& index) {
+    // Sampler(FullyRepGraph* whole_graph_, std::vector<VertexId>& index, Device dev = CPU, int gpu_id = 0) {
+    // this->device = dev;
+    // this->gpu_id = gpu_id;
+    cs = new Cuda_Stream();
     // assert(index.size() > 0);
     sample_nids.assign(index.begin(), index.end());
     assert(sample_nids.size() == index.size());
@@ -113,14 +117,73 @@ class Sampler {
     //     work_queue.back()->allocate_memory(actl_size);
     // }
     work_queue.clear();
-    pre_alloc_one();
+    subgraph = new SampledSubgraph(layers, fanout);
+    // pre_alloc_one();
     // assert (false);
+  }
+
+  void trans_to_gpu() {
+    auto sub_graph = subgraph;
+    for (int i = 0; i < layers; ++i) {
+      sub_graph->sampled_sgs[i]->alloc_dev_array();
+      sub_graph->sampled_sgs[i]->copy_data_to_device();
+    }
   }
 
   void pre_alloc_one() {
     work_queue.push_back(new SampledSubgraph(layers, fanout));
     work_queue.back()->alloc_memory(batch_size);
   }
+
+  void load_feature_gpu(NtsVar& local_feature, ValueType* global_feature_buffer) {
+    auto csc_layer = subgraph->sampled_sgs[0];
+    if (local_feature.size(0) < csc_layer->src_size) {
+      local_feature.resize_({csc_layer->src_size, local_feature.size(1)});
+    }
+    ValueType* local_feature_buffer =
+        whole_graph->graph_->Nts->getWritableBuffer(local_feature, torch::DeviceType::CUDA);
+    cs->zero_copy_feature_move_gpu(local_feature_buffer, global_feature_buffer, csc_layer->dev_source,
+                                   local_feature.size(1), csc_layer->src_size);
+  }
+
+  void load_label_gpu(NtsVar& local_label, long* global_label_buffer) {
+    auto csc_layer = subgraph->sampled_sgs[layers - 1];
+    auto classes = whole_graph->graph_->config->classes;
+    assert(classes > 0);
+    if (classes > 1 && (local_label.size(0) != csc_layer->v_size || local_label.size(1) != classes)) {
+      local_label.resize_({csc_layer->v_size, classes});
+    }
+
+    if (classes == 1 && local_label.size(0) != csc_layer->v_size) {
+      local_label.resize_({csc_layer->v_size});
+    }
+
+    long* local_label_buffer =
+        whole_graph->graph_->Nts->getWritableBuffer1d<long>(local_label, torch::DeviceType::CUDA);
+    if (classes > 1) {
+      cs->global_copy_mulilabel_move_gpu(local_label_buffer, global_label_buffer, csc_layer->dev_destination,
+                                         csc_layer->v_size, classes);
+    } else {
+      cs->global_copy_label_move_gpu(local_label_buffer, global_label_buffer, csc_layer->dev_destination,
+                                     csc_layer->v_size);
+    }
+  }
+
+  NtsVar get_label(VertexId* dst, VertexId dst_size, NtsVar& whole, Graph<Empty>* graph) {
+    NtsVar f_output;
+    if (graph->config->classes > 1) {
+      f_output = graph->Nts->NewLeafKLongTensor({dst_size, graph->config->classes});
+    } else {
+      f_output = graph->Nts->NewLeafKLongTensor({dst_size});
+    }
+
+#pragma omp parallel for
+    for (int i = 0; i < dst_size; i++) {
+      f_output[i] = whole[dst[i] - graph->partition_offset[graph->partition_id]];
+    }
+    return f_output;
+  }
+
   ~Sampler() { clear_queue(); }
   bool has_rest_safe() {
     bool condition = false;
@@ -234,7 +297,7 @@ class Sampler {
     // LOG_DEBUG("actl_batch %d", actl_batch_size);
     // SampledSubgraph* ssg=new SampledSubgraph(layers,fanout_);
     // auto ssg = work_queue[work_offset / batch_size_];
-    auto ssg = work_queue[0];
+    auto ssg = subgraph;
     // LOG_DEBUG("fuck batch_size %d", actl_batch_size);
     ssg->curr_dst_size = actl_batch_size;
     for (int i = 0; i < layers; i++) {
@@ -242,13 +305,15 @@ class Sampler {
       sample_load_dst -= get_time();
       auto csc_layer = ssg->sampled_sgs[i];
       // LOG_DEBUG("sample_one layer %d update_vertices done, dst_size %d", i, ssg->curr_dst_size);
-      csc_layer->update_vertices(ssg->curr_dst_size);
+      // csc_layer->update_vertices(ssg->curr_dst_size);
+      csc_layer->alloc_vertices(ssg->curr_dst_size);
       if (i == 0) {
         csc_layer->init_dst(sample_nids.data() + work_offset);
         // LOG_DEBUG("dst size %d", csc_layer->v_size);
-        for (int j = 0; j < csc_layer->v_size; ++j) {
-          assert(csc_layer->dst()[j] == sample_nids[j + work_offset]);
-        }
+        /////////////// check
+        // for (int j = 0; j < csc_layer->v_size; ++j) {
+        //   assert(csc_layer->dst()[j] == sample_nids[j + work_offset]);
+        // }
         // LOG_DEBUG("layer 0 src size %d", csc_layer->src().size());
       } else {
         csc_layer->init_dst(ssg->sampled_sgs[i - 1]->src());
@@ -304,6 +369,7 @@ class Sampler {
       // LOG_DEBUG("sample_post %.3f", sample_post);
       layer_time += get_time();
     }
+    std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
     work_offset += actl_batch_size;
     // LOG_DEBUG("layer %.3f, pre_time %.3f, load_dst_time %.3f, init_co %.3f, processing %.3f, post_time %.3f,",
     // layer_time, sample_pre_time, sample_load_dst, sample_init_co, sample_processing_time, sample_post_time);

@@ -414,6 +414,17 @@ class NtsScheduler {
   inline torch::Tensor NewLeafKIntTensor(int *data, at::IntArrayRef size) {
     return torch::from_blob(data, size, at::TensorOptions().dtype(torch::kInt32));
   }
+  inline torch::Tensor NewLabelTensor(at::IntArrayRef size, torch::DeviceType location = torch::DeviceType::CUDA,
+                                      int device_id = 0) {
+#if CUDA_ENABLE
+    if (torch::DeviceType::CUDA == location) {
+      return torch::zeros(size, at::TensorOptions().device_index(device_id).dtype(torch::kLong));
+    } else
+#endif
+    {
+      return torch::zeros(size, at::TensorOptions().dtype(torch::kLong).pinned_memory(true));
+    }
+  }
   inline torch::Tensor NewOnesTensor(at::IntArrayRef size, torch::DeviceType location = torch::DeviceType::CUDA,
                                      int device_id = 0) {
 #if CUDA_ENABLE
@@ -425,6 +436,7 @@ class NtsScheduler {
       return torch::ones(size, at::TensorOptions().dtype(torch::kFloat));
     }
   }
+
   inline ValueType *getWritableBuffer(torch::Tensor &T_var, torch::DeviceType location = torch::DeviceType::CUDA) {
 #if CUDA_ENABLE
     if (torch::DeviceType::CUDA == location) {
@@ -433,6 +445,30 @@ class NtsScheduler {
 #endif
     {
       return T_var.accessor<ValueType, 2>().data();
+    }
+  }
+
+  template <typename T>
+  inline T *getWritableBuffer2d(torch::Tensor &T_var, torch::DeviceType location = torch::DeviceType::CUDA) {
+#if CUDA_ENABLE
+    if (torch::DeviceType::CUDA == location) {
+      return T_var.packed_accessor<T, 2>().data();
+    } else
+#endif
+    {
+      return T_var.accessor<T, 2>().data();
+    }
+  }
+
+  template <typename T>
+  inline T *getWritableBuffer1d(torch::Tensor &T_var, torch::DeviceType location = torch::DeviceType::CUDA) {
+#if CUDA_ENABLE
+    if (torch::DeviceType::CUDA == location) {
+      return T_var.packed_accessor<T, 1>().data();
+    } else
+#endif
+    {
+      return T_var.accessor<T, 1>().data();
     }
   }
 
@@ -676,6 +712,7 @@ struct Parameter : torch::nn::Module {
     NtsVar M_t = M / (1 - beta1_t);
     NtsVar V_t = V / (1 - beta2_t);
     NtsVar g_t = alpha * M_t / (torch::sqrt(V_t) + epsilon);
+    // std::cout << g_t << std::endl;
     W.set_data(W - g_t);
   }
 
@@ -722,6 +759,7 @@ struct Parameter : torch::nn::Module {
     // W.set_data(W - alpha * M_GPU / (torch::sqrt(V_GPU) + epsilon));
 
     W_g.set_data(W);
+    // LOG_DEBUG("W_g %s W %s", W_g.device(), W.device());
     W_g = W_gradient.cuda() + weight_decay * W_g;
     M_GPU = beta1 * M_GPU + (1 - beta1) * W_g;
     V_GPU = beta2 * V_GPU + (1 - beta2) * torch::square(W_g);

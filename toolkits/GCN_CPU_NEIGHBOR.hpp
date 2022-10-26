@@ -270,18 +270,18 @@ class GCN_CPU_NEIGHBOR_impl {
       sample_cost += get_time();
       // LOG_DEBUG("batch %d sample_one done", i);
 
-      auto ssg = sampler->work_queue[0];
+      auto ssg = sampler->subgraph;
       if (graph->config->mini_pull > 0) {  // generate csr structure for backward of pull mode
         generate_csr_time -= get_time();
         for (auto p : ssg->sampled_sgs) {
           convert_time -= get_time();
-          // LOG_DEBUG("batch %d start generate csr done", i);
+          // LOG_DEBUG("batch %d start generate csr %p", i, p);
           p->generate_csr_from_csc();
           // LOG_DEBUG("batch %d generate csr done", i);
           convert_time += get_time();
           debug_time -= get_time();
+          /////////// check
           // p->debug_generate_csr_from_csc();
-          // LOG_DEBUG("batch %d debug csr done", i);
           debug_time += get_time();
         }
         // }
@@ -292,44 +292,51 @@ class GCN_CPU_NEIGHBOR_impl {
       if (type == 0 && graph->rtminfo->epoch >= 3) train_sample_time += sample_cost;
 
       // sampler->reverse_sgs();
-      std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
+      // std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
 
       train_cost -= get_time();
       forward_other_cost -= get_time();
       if (ctx->training == true) zero_grad();  // should zero grad after every mini batch compute
-      std::vector<NtsVar> X;
-      NtsVar d;
-      X.resize(graph->gnnctx->layer_size.size(), d);
+      // std::vector<NtsVar> X;
+      // NtsVar d;
+      // X.resize(graph->gnnctx->layer_size.size(), d);
       forward_other_cost += get_time();
       // rpc.keep_running();
       get_feature_cost -= get_time();
       if (hosts > 1) {
-        X[0] =
-            nts::op::get_feature_from_global(*rpc, ssg->sampled_sgs[0]->src(), ssg->sampled_sgs[0]->src_size, F, graph);
+        X[0] = nts::op::get_feature_from_global(*rpc, ssg->sampled_sgs[0]->src().data(), ssg->sampled_sgs[0]->src_size,
+                                                F, graph);
         // if (type == 0 && graph->rtminfo->epoch >= 3) rpc_comm_time += tmp_time;
       } else {
-        X[0] = nts::op::get_feature(ssg->sampled_sgs[0]->src(), ssg->sampled_sgs[0]->src_size, F, graph);
+        X[0] = nts::op::get_feature(ssg->sampled_sgs[0]->src().data(), ssg->sampled_sgs[0]->src_size, F, graph);
       }
+      // LOG_DEBUG("X.size() %d %d", X[0].size(0), X[0].size(1));
       get_feature_cost += get_time();
+      // std::cout << X[0][0] << std::endl;
       // LOG_DEBUG("batch %d get feature done!", i);
 
       get_label_cost -= get_time();
       NtsVar target_lab =
-          nts::op::get_label(ssg->sampled_sgs.back()->dst(), ssg->sampled_sgs.back()->v_size, L_GT_C, graph);
+          nts::op::get_label(ssg->sampled_sgs.back()->dst().data(), ssg->sampled_sgs.back()->v_size, L_GT_C, graph);
       get_label_cost += get_time();
       // LOG_DEBUG("batch %d get label done!", i);
+      // LOG_DEBUG("label.size() %d", target_lab.size(0));
+      // std::cout << target_lab << std::endl;
+      // assert(false);
 
       for (int l = 0; l < layers; l++) {  // forward
         graph->rtminfo->curr_layer = l;
         forward_graph_cost -= get_time();
         NtsVar Y_i = ctx->runGraphOp<nts::op::MiniBatchFuseOp>(ssg, graph, l, X[l]);
         forward_graph_cost += get_time();
-        // LOG_DEBUG("\tbatch %d layer graph compute done", i);
+        // LOG_DEBUG("\tbatch %d layer %d graph compute done", i, l);
+        // std::cout << Y_i << std::endl;
+        // assert(false);
 
         forward_nn_cost -= get_time();
         X[l + 1] = ctx->runVertexForward([&](NtsVar n_i) { return vertexForward(n_i); }, Y_i);
         forward_nn_cost += get_time();
-        // LOG_DEBUG("\tbatch %d layer nn compute done", i);
+        // LOG_DEBUG("\tbatch %d layer %d nn compute done", i, l);
       }
 
       forward_loss_cost -= get_time();
@@ -367,7 +374,7 @@ class GCN_CPU_NEIGHBOR_impl {
       // LOG_DEBUG("batch %d acc compute done", i);
 
       train_cost += get_time();
-      std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
+      // std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
       // sampler->reverse_sgs();
     }
     loss_epoch /= sampler->batch_nums;

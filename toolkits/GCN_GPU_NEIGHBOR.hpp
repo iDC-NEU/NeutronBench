@@ -25,6 +25,7 @@ class GCN_GPU_NEIGHBOR_impl {
   NtsVar L_GT_C;
   NtsVar L_GT_G;
   NtsVar MASK;
+  NtsVar MASK_gpu;
   // GraphOperation *gt;
   PartitionedGraph* partitioned_graph;
   // Variables
@@ -138,18 +139,26 @@ class GCN_GPU_NEIGHBOR_impl {
       gnndatum->registLabel(L_GT_C);
     }
     gnndatum->registMask(MASK);
+    MASK_gpu = MASK.cuda();
+    gnndatum->generate_gpu_data();
+
+    torch::Device GPU(torch::kCUDA, 0);
 
     for (int i = 0; i < layers; i++) {
       P.push_back(new Parameter(graph->gnnctx->layer_size[i], graph->gnnctx->layer_size[i + 1], alpha, beta1, beta2,
                                 epsilon, weight_decay));
       if (graph->config->batch_norm && i < layers - 1) {
         bn1d.push_back(torch::nn::BatchNorm1d(graph->gnnctx->layer_size[i]));
+        // bn1d.back().to(GPU);
+        // bn1d.back().cuda();
       }
     }
 
     for (int i = 0; i < P.size(); i++) {
       P[i]->init_parameter();
       P[i]->set_decay(decay_rate, decay_epoch);
+      P[i]->to(GPU);
+      P[i]->Adam_to_GPU();
     }
 
     // drpmodel = torch::nn::Dropout(torch::nn::DropoutOptions().p(drop_rate).inplace(true));
@@ -196,7 +205,7 @@ class GCN_GPU_NEIGHBOR_impl {
       }
       if (ctx->is_train() && graph->rtminfo->epoch >= 3) mpi_comm_time += get_time();
       // update parameters with Adam optimizer
-      P[i]->learnC2C_with_decay_Adam();
+      P[i]->learnC2G_with_decay_Adam();
       // P[i]->learnC2C_with_Adam();
       P[i]->next();
     }
@@ -214,7 +223,10 @@ class GCN_GPU_NEIGHBOR_impl {
       return P[l]->forward(n_i);
     } else {
       if (graph->config->batch_norm) {
+        // std::cout << n_i.device() << std::endl;
+        // std::cout << this->bn1d[l].device() << std::endl;
         n_i = this->bn1d[l](n_i);  // for arxiv dataset
+        // n_i = torch::batch_norm(n_i);
       }
       return torch::dropout(torch::relu(P[l]->forward(n_i)), drop_rate, ctx->is_train());
     }
@@ -247,6 +259,7 @@ class GCN_GPU_NEIGHBOR_impl {
     double forward_append_cost = 0;
     double backward_nn_time = 0;
     double update_cost = 0;
+    double trans_to_gpu_cost = 0;
 
     double train_cost = 0;
     double inner_cost = 0;
@@ -264,85 +277,86 @@ class GCN_GPU_NEIGHBOR_impl {
       max_batch_num = batch_num;
     }
 
+    X[0] = graph->Nts->NewLeafTensor({1000, F.size(1)}, torch::DeviceType::CUDA);
+    NtsVar target_lab = graph->Nts->NewLabelTensor({graph->config->batch_size}, torch::DeviceType::CUDA);
+
     for (VertexId i = 0; i < sampler->batch_nums; ++i) {
       sample_cost -= get_time();
       sampler->sample_one(graph->config->batch_type, ctx->is_train());
       sample_cost += get_time();
-      // LOG_DEBUG("batch %d sample_one done", i);
+      auto ssg = sampler->subgraph;
+      // LOG_DEBUG("batch %d sample one done", i);
 
-      auto ssg = sampler->work_queue[0];
       if (graph->config->mini_pull > 0) {  // generate csr structure for backward of pull mode
         generate_csr_time -= get_time();
         for (auto p : ssg->sampled_sgs) {
           convert_time -= get_time();
-          // LOG_DEBUG("batch %d start generate csr done", i);
           p->generate_csr_from_csc();
-          // LOG_DEBUG("batch %d generate csr done", i);
           convert_time += get_time();
           debug_time -= get_time();
           // p->debug_generate_csr_from_csc();
-          // LOG_DEBUG("batch %d debug csr done", i);
           debug_time += get_time();
         }
-        // }
         generate_csr_time += get_time();
-        // LOG_DEBUG("batch %d pull gemnerate csr done", i);
+        // LOG_DEBUG("batch %d generate csr done", i);
       }
 
       if (type == 0 && graph->rtminfo->epoch >= 3) train_sample_time += sample_cost;
 
-      // sampler->reverse_sgs();
-      std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
+      // std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
+      trans_to_gpu_cost -= -get_time();
+      ssg->trans_to_gpu(graph->config->mini_pull > 0);  // wheather trans csr data to gpu
+      trans_to_gpu_cost += -get_time();
+      // LOG_DEBUG("batch %d tarns_to_gpu done", i);
 
       train_cost -= get_time();
       forward_other_cost -= get_time();
       if (ctx->training == true) zero_grad();  // should zero grad after every mini batch compute
-      std::vector<NtsVar> X;
-      NtsVar d;
-      X.resize(graph->gnnctx->layer_size.size(), d);
+
       forward_other_cost += get_time();
       // rpc.keep_running();
       get_feature_cost -= get_time();
-      if (hosts > 1) {
-        X[0] =
-            nts::op::get_feature_from_global(*rpc, ssg->sampled_sgs[0]->src(), ssg->sampled_sgs[0]->src_size, F, graph);
-        // if (type == 0 && graph->rtminfo->epoch >= 3) rpc_comm_time += tmp_time;
-      } else {
-        X[0] = nts::op::get_feature(ssg->sampled_sgs[0]->src(), ssg->sampled_sgs[0]->src_size, F, graph);
-      }
+      sampler->load_feature_gpu(X[0], gnndatum->dev_local_feature);
       get_feature_cost += get_time();
-      // LOG_DEBUG("batch %d get feature done!", i);
+
+      // if (hosts > 1) {
+      //   X[0] = nts::op::get_feature_from_global(*rpc, ssg->sampled_sgs[0]->src(), F, graph);
+      //   // if (type == 0 && graph->rtminfo->epoch >= 3) rpc_comm_time += tmp_time;
+      // } else {
+      //   X[0] = nts::op::get_feature(ssg->sampled_sgs[0]->src(), ssg->sampled_sgs[0]->src_size, F, graph);
+      // }
 
       get_label_cost -= get_time();
-      NtsVar target_lab =
-          nts::op::get_label(ssg->sampled_sgs.back()->dst(), ssg->sampled_sgs.back()->v_size, L_GT_C, graph);
+      sampler->load_label_gpu(target_lab, gnndatum->dev_local_label);
       get_label_cost += get_time();
-      // LOG_DEBUG("batch %d get label done!", i);
 
       for (int l = 0; l < layers; l++) {  // forward
+        // LOG_DEBUG("start compute layer %d", l);
         graph->rtminfo->curr_layer = l;
         forward_graph_cost -= get_time();
-        NtsVar Y_i = ctx->runGraphOp<nts::op::MiniBatchFuseOp>(ssg, graph, l, X[l]);
+        NtsVar Y_i = ctx->runGraphOp<nts::op::SingleGPUSampleGraphOp>(ssg, graph, l, X[l]);
         forward_graph_cost += get_time();
-        // LOG_DEBUG("\tbatch %d layer graph compute done", i);
+        // LOG_DEBUG("  batch %d layer %d graph compute done", i, l);
 
         forward_nn_cost -= get_time();
         X[l + 1] = ctx->runVertexForward([&](NtsVar n_i) { return vertexForward(n_i); }, Y_i);
         forward_nn_cost += get_time();
-        // LOG_DEBUG("\tbatch %d layer nn compute done", i);
+        // LOG_DEBUG("  batch %d layer %d nn compute done", i, l);
       }
 
       forward_loss_cost -= get_time();
+      // std::cout << "X.size " << X[layers].size(0) << " label size " << target_lab.size(0) << std::endl;
       auto loss_ = Loss(X[layers], target_lab, graph->config->classes == 1);
       loss_epoch += loss_.item<float>();
       forward_loss_cost += get_time();
-      // LOG_DEBUG("batch %d loss compute done", i);
+      // LOG_DEBUG("loss done %.3f", loss_epoch);
 
       if (ctx->training == true) {
         forward_append_cost -= get_time();
         ctx->appendNNOp(X[layers], loss_);
         forward_append_cost += get_time();
 
+        // LOG_DEBUG("start backward done");
         backward_cost -= get_time();
         ctx->b_nn_time = 0;
         ctx->self_backward(false);
@@ -367,12 +381,12 @@ class GCN_GPU_NEIGHBOR_impl {
       // LOG_DEBUG("batch %d acc compute done", i);
 
       train_cost += get_time();
-      std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
-      // sampler->reverse_sgs();
+      // std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
+      sampler->reverse_sgs();
     }
     loss_epoch /= sampler->batch_nums;
-    // LOG_DEBUG("sample_cost %.3f", sample_cost);
-    // LOG_DEBUG("generate_csr %.3f, convert %.3f debug %.3f ", generate_csr_time, convert_time, debug_time);
+    LOG_INFO("sample_cost %.3f", sample_cost);
+    LOG_INFO("generate_csr %.3f, convert %.3f debug %.3f ", generate_csr_time, convert_time, debug_time);
 
     if (hosts > 1) {
       if (type == 0 && graph->rtminfo->epoch >= 3) rpc_wait_time -= get_time();

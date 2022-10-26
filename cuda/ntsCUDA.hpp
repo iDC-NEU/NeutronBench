@@ -41,6 +41,10 @@ void FreeEdge(VertexId_CUDA *buffer);
 void zero_buffer(float *buffer, int size);
 void CUDA_DEVICE_SYNCHRONIZE();
 void ResetDevice();
+template <typename T>
+void free_gpu_data(T *data);
+template <typename T>
+void alloc_gpu_data(T **input, int size);
 
 class deviceCSC {
  public:
@@ -154,6 +158,15 @@ class Cuda_Stream {
   void Edge_Softmax_Backward_Block(float *msg_input_grad, float *msg_output_grad,  // data
                                    float *msg_cached, VertexId_CUDA *row_indices, VertexId_CUDA *column_offset,
                                    VertexId_CUDA batch_size, VertexId_CUDA feature_size);
+  void zero_copy_feature_move_gpu(float *dev_feature, float *pinned_host_feature, VertexId_CUDA *src_vertex,
+                                  VertexId_CUDA feature_size, VertexId_CUDA vertex_size);
+
+  void global_copy_mulilabel_move_gpu(long *dev_label, long *global_dev_label, VertexId_CUDA *dst_vertex,
+                                      VertexId_CUDA vertex_size, VertexId_CUDA label_size);
+  void global_copy_label_move_gpu(long *dev_label, long *global_dev_label, VertexId_CUDA *dst_vertex,
+                                  VertexId_CUDA vertex_size);
+  void zero_copy_embedding_move_gpu(float *dev_feature, float *pinned_host_feature, VertexId_CUDA feature_size,
+                                    VertexId_CUDA vertex_size);
 
   void Gather_By_Dst_From_Message(float *input, float *output,             // data
                                   VertexId_CUDA *src, VertexId_CUDA *dst,  // graph

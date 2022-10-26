@@ -4,7 +4,8 @@ add_definitions(-w)
 set(CMAKE_CUDA_COMPILER /usr/local/cuda/bin/nvcc)
 # please change this to the path where you put libtorch
 # TODO: torch path should not hard coded in cmake file
-list(APPEND CMAKE_PREFIX_PATH "./GPU_libtorch/libtorch-1-9/libtorch/")
+# list(APPEND CMAKE_PREFIX_PATH "./GPU_libtorch/libtorch-1-9/libtorch/")
+list(APPEND CMAKE_PREFIX_PATH "/home/sanzo/software/libtorch/")
 
 project(GNNmini)
 set(ENV{LANG} "C")
@@ -21,6 +22,11 @@ if (CUDA_ENABLE)
         endif()
         add_definitions(-DCUDA_ENABLE)
         add_subdirectory(cuda)
+endif()
+
+option (NDEBUG "DEFAULT NODEBUG MESSAGE" ON)
+if (NDEBUG)
+        # add_definitions(-DNDEBUG)
 endif()
 
 #exec_program("mpic++ -showme:compile" OUTPUT_VARIABLE MPI_COMPILE_FLAGS)
@@ -147,12 +153,12 @@ else()
 endif()
 
 
-add_executable(nts_test ${NEUTRONSTAR_TEST_SRC_FILES})
-if (CUDA_ENABLE)
-        target_link_libraries(nts_test  ${TORCH_LIBRARIES} ${MPI_LIBRARIES} numa ${CUDA_LIBRARIES} cuda_propagate ${NTS_LINKER_LIBS})
-else()
-        target_link_libraries(nts_test  ${TORCH_LIBRARIES} ${MPI_LIBRARIES} numa ${NTS_LINKER_LIBS})
-endif()
+# add_executable(nts_test ${NEUTRONSTAR_TEST_SRC_FILES})
+# if (CUDA_ENABLE)
+#         target_link_libraries(nts_test  ${TORCH_LIBRARIES} ${MPI_LIBRARIES} numa ${CUDA_LIBRARIES} cuda_propagate ${NTS_LINKER_LIBS})
+# else()
+#         target_link_libraries(nts_test  ${TORCH_LIBRARIES} ${MPI_LIBRARIES} numa ${NTS_LINKER_LIBS})
+# endif()
 
 
 # quick test for debugging purpose

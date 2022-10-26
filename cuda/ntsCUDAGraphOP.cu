@@ -343,6 +343,39 @@ void Cuda_Stream::Gather_Msg_to_Dst(float* dst_feature, float* message,  // data
 #endif
 }
 
+void Cuda_Stream::zero_copy_feature_move_gpu(float *dev_feature, float *host_pinned_feature, VertexId_CUDA* src_vertex, VertexId_CUDA feature_size, VertexId_CUDA vertex_size) {
+#if CUDA_ENABLE
+  zero_copy_feature_move_gpu_kernel<<<CUDA_NUM_BLOCKS, CUDA_NUM_THREADS, 0, stream>>>
+  (dev_feature, host_pinned_feature, src_vertex, feature_size, vertex_size);
+  this->CUDA_DEVICE_SYNCHRONIZE();
+#else
+  printf("CUDA DISABLED Cuda_Stream::zero_copy_feature_move_gpu\n");
+  exit(0);
+#endif
+}
+
+void Cuda_Stream::global_copy_mulilabel_move_gpu(long *dev_label, long *global_dev_label, VertexId_CUDA* dst_vertex, VertexId_CUDA vertex_size, VertexId_CUDA label_size) {
+#if CUDA_ENABLE
+  global_copy_mulilabel_move_gpu_kernel<<<CUDA_NUM_BLOCKS, CUDA_NUM_THREADS, 0, stream>>>
+  (dev_label, global_dev_label, dst_vertex, vertex_size, label_size);
+  this->CUDA_DEVICE_SYNCHRONIZE();
+#else
+  printf("CUDA DISABLED Cuda_Stream::zero_copy_feature_move_gpu\n");
+  exit(0);
+#endif
+}
+
+void Cuda_Stream::global_copy_label_move_gpu(long *dev_label, long *global_dev_label, VertexId_CUDA* dst_vertex, VertexId_CUDA vertex_size) {
+#if CUDA_ENABLE
+  global_copy_label_move_gpu_kernel<<<CUDA_NUM_BLOCKS, CUDA_NUM_THREADS, 0, stream>>>
+  (dev_label, global_dev_label, dst_vertex, vertex_size);
+  this->CUDA_DEVICE_SYNCHRONIZE();
+#else
+  printf("CUDA DISABLED Cuda_Stream::global_copy_label_move_gpu\n");
+  exit(0);
+#endif
+}
+
 void Cuda_Stream::Edge_Softmax_Forward_Block(float* msg_output, float* msg_input,  // data
                                              float* msg_cached, VertexId_CUDA* row_indices,
                                              VertexId_CUDA* column_offset, VertexId_CUDA batch_size,
@@ -463,6 +496,26 @@ void zero_buffer(float* buffer, int size) {
 #endif
 }
 
+template<typename T>
+void free_gpu_data(T* data) {
+#if CUDA_ENABLE
+  cudaFree(data);
+#else
+  printf("CUDA DISABLED free_gpu_data\n");
+  exit(0);
+#endif
+}
+
+template<typename T>
+void alloc_gpu_data(T** input, int size) {
+#if CUDA_ENABLE
+  CHECK_CUDA_RESULT(cudaMalloc(input, sizeof(T) * (size)));
+#else
+  printf("CUDA DISABLED Cuda_Stream::Gather_By_Dst_From_Message\n");
+  exit(0);
+#endif
+}
+
 void allocate_gpu_buffer(float** input, int size) {
 #if CUDA_ENABLE
   CHECK_CUDA_RESULT(cudaMalloc(input, sizeof(float) * (size)));
@@ -471,6 +524,7 @@ void allocate_gpu_buffer(float** input, int size) {
   exit(0);
 #endif
 }
+
 void allocate_gpu_edge(VertexId_CUDA** input, int size) {
 #if CUDA_ENABLE
   CHECK_CUDA_RESULT(cudaMalloc(input, sizeof(VertexId_CUDA) * (size)));
