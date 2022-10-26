@@ -150,7 +150,8 @@ class Sampler {
     auto csc_layer = subgraph->sampled_sgs[layers - 1];
     auto classes = whole_graph->graph_->config->classes;
     assert(classes > 0);
-    if (classes > 1 && (local_label.size(0) != csc_layer->v_size || local_label.size(1) != classes)) {
+    if (classes > 1 &&
+        (local_label.dim() != 2 || local_label.size(0) != csc_layer->v_size || local_label.size(1) != classes)) {
       local_label.resize_({csc_layer->v_size, classes});
     }
 
@@ -158,8 +159,14 @@ class Sampler {
       local_label.resize_({csc_layer->v_size});
     }
 
-    long* local_label_buffer =
-        whole_graph->graph_->Nts->getWritableBuffer1d<long>(local_label, torch::DeviceType::CUDA);
+    long* local_label_buffer = nullptr;
+    if (classes > 1) {
+      local_label_buffer = whole_graph->graph_->Nts->getWritableBuffer2d<long>(local_label, torch::DeviceType::CUDA);
+    } else {
+      local_label_buffer = whole_graph->graph_->Nts->getWritableBuffer1d<long>(local_label, torch::DeviceType::CUDA);
+    }
+    assert(local_label_buffer != nullptr);
+
     if (classes > 1) {
       cs->global_copy_mulilabel_move_gpu(local_label_buffer, global_label_buffer, csc_layer->dev_destination,
                                          csc_layer->v_size, classes);

@@ -278,7 +278,15 @@ class GCN_GPU_NEIGHBOR_impl {
     }
 
     X[0] = graph->Nts->NewLeafTensor({1000, F.size(1)}, torch::DeviceType::CUDA);
-    NtsVar target_lab = graph->Nts->NewLabelTensor({graph->config->batch_size}, torch::DeviceType::CUDA);
+    // NtsVar target_lab = graph->Nts->NewLabelTensor({graph->config->batch_size, graph->config->classes},
+    // torch::DeviceType::CUDA);
+    NtsVar target_lab;
+    if (graph->config->classes > 1) {
+      target_lab =
+          graph->Nts->NewLabelTensor({graph->config->batch_size, graph->config->classes}, torch::DeviceType::CUDA);
+    } else {
+      target_lab = graph->Nts->NewLabelTensor({graph->config->batch_size}, torch::DeviceType::CUDA);
+    }
 
     for (VertexId i = 0; i < sampler->batch_nums; ++i) {
       sample_cost -= get_time();
@@ -318,6 +326,7 @@ class GCN_GPU_NEIGHBOR_impl {
       get_feature_cost -= get_time();
       sampler->load_feature_gpu(X[0], gnndatum->dev_local_feature);
       get_feature_cost += get_time();
+      // LOG_DEBUG("load_feature done");
 
       // if (hosts > 1) {
       //   X[0] = nts::op::get_feature_from_global(*rpc, ssg->sampled_sgs[0]->src(), F, graph);
@@ -329,6 +338,20 @@ class GCN_GPU_NEIGHBOR_impl {
       get_label_cost -= get_time();
       sampler->load_label_gpu(target_lab, gnndatum->dev_local_label);
       get_label_cost += get_time();
+      // LOG_DEBUG("load_label done");
+
+      // print label
+      // long* local_label_buffer = nullptr;
+      // auto classes = graph->config->classes;
+      // if (classes > 1) {local_label_buffer = graph->Nts->getWritableBuffer2d<long>(target_lab,
+      // torch::DeviceType::CUDA);} else {local_label_buffer = graph->Nts->getWritableBuffer1d<long>(target_lab,
+      // torch::DeviceType::CUDA);} long* tmp = new long[classes * graph->config->batch_size]; cudaMemcpy ( tmp,
+      // local_label_buffer, classes * graph->config->batch_size * sizeof(long), cudaMemcpyDeviceToHost); for (int i =
+      // 0; i < 4; ++i) {
+      //   for (int j = 0; j < classes; ++j) {
+      //     printf("%d ", tmp[i * classes + j]);
+      //   }printf("\n");
+      // }
 
       for (int l = 0; l < layers; l++) {  // forward
         // LOG_DEBUG("start compute layer %d", l);
@@ -494,6 +517,7 @@ class GCN_GPU_NEIGHBOR_impl {
     Sampler* train_sampler = new Sampler(fully_rep_graph, train_nids);
     Sampler* eval_sampler = new Sampler(fully_rep_graph, val_nids);
     Sampler* test_sampler = new Sampler(fully_rep_graph, test_nids);
+    LOG_DEBUG("samper done");
     // LOG_DEBUG("sampler contructor is done");
     pre_time += get_time();
 
