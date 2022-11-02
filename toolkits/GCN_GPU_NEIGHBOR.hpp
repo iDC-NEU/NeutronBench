@@ -253,8 +253,8 @@ class GCN_GPU_NEIGHBOR_impl {
     // node sampling
     sampler->zero_debug_time();
     double sample_cost = 0;
-    double get_feature_cost = 0;
-    double get_label_cost = 0;
+    double trans_feature_cost = 0;
+    double trans_label_cost = 0;
     double forward_nn_cost = 0;
     double forward_acc_cost = 0;
     double forward_graph_cost = 0;
@@ -263,14 +263,14 @@ class GCN_GPU_NEIGHBOR_impl {
     double forward_append_cost = 0;
     double backward_nn_time = 0;
     double update_cost = 0;
-    double trans_to_gpu_cost = 0;
+    double trans_graph_cost = 0;
 
     double train_cost = 0;
     double inner_cost = 0;
     double generate_csr_time = 0;
     double convert_time = 0;
     double debug_time = 0;
-
+    double epoch_time = -get_time();
     int batch_num = sampler->batch_nums;
     if (hosts > 1) {
       if (type == 0 && graph->rtminfo->epoch >= 3) mpi_comm_time -= get_time();
@@ -294,6 +294,11 @@ class GCN_GPU_NEIGHBOR_impl {
 
     // LOG_DEBUG("epoch %d start compute", graph->rtminfo->epoch);
     double used_gpu_mem, total_gpu_mem;
+
+    // for (int i = 0; i < layers; ++i) {
+    //   sampler->subgraph->sampled_sgs[i]->zero_debug_time();
+    // }
+
     for (VertexId i = 0; i < sampler->batch_nums; ++i) {
       // LOG_DEBUG("batch id %d", i);
       double sample_one_cost = -get_time();
@@ -327,9 +332,9 @@ class GCN_GPU_NEIGHBOR_impl {
       if (type == 0 && graph->rtminfo->epoch >= 3) train_sample_time += sample_cost;
 
       // std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
-      trans_to_gpu_cost -= get_time();
+      trans_graph_cost -= get_time();
       ssg->trans_to_gpu(graph->config->mini_pull > 0);  // wheather trans csr data to gpu
-      trans_to_gpu_cost += get_time();
+      trans_graph_cost += get_time();
       // LOG_DEBUG("batch %d tarns_to_gpu done", i);
       // get_gpu_mem(used_gpu_mem, total_gpu_mem);
       // LOG_DEBUG("epoch %d batch %d tarns_to_gpu done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, used_gpu_mem,
@@ -341,9 +346,9 @@ class GCN_GPU_NEIGHBOR_impl {
 
       forward_other_cost += get_time();
       // rpc.keep_running();
-      get_feature_cost -= get_time();
+      trans_feature_cost -= get_time();
       sampler->load_feature_gpu(X[0], gnndatum->dev_local_feature);
-      get_feature_cost += get_time();
+      trans_feature_cost += get_time();
       // get_gpu_mem(used_gpu_mem, total_gpu_mem);
       // LOG_DEBUG("epoch %d batch %d get feature done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, used_gpu_mem,
       // total_gpu_mem); LOG_DEBUG("load_feature done");
@@ -355,9 +360,9 @@ class GCN_GPU_NEIGHBOR_impl {
       //   X[0] = nts::op::get_feature(ssg->sampled_sgs[0]->src(), ssg->sampled_sgs[0]->src_size, F, graph);
       // }
 
-      get_label_cost -= get_time();
+      trans_label_cost -= get_time();
       sampler->load_label_gpu(target_lab, gnndatum->dev_local_label);
-      get_label_cost += get_time();
+      trans_label_cost += get_time();
       // LOG_DEBUG("load_label done");
       // get_gpu_mem(used_gpu_mem, total_gpu_mem);
       // LOG_DEBUG("epoch %d batch %d get label done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, used_gpu_mem,
@@ -448,6 +453,10 @@ class GCN_GPU_NEIGHBOR_impl {
     }
     loss_epoch /= sampler->batch_nums;
 
+    // for (int i = 0; i < layers; ++i) {
+    //   sampler->subgraph->sampled_sgs[i]->print_debug_time();
+    // }
+
     if (hosts > 1) {
       if (type == 0 && graph->rtminfo->epoch >= 3) rpc_wait_time -= get_time();
       while (ctx->training && batch != max_batch_num) {
@@ -459,21 +468,30 @@ class GCN_GPU_NEIGHBOR_impl {
     }
 
     sampler->restart();
+
+    epoch_time += get_time();
     LOG_INFO("sample_cost %.3f", sample_cost);
     LOG_INFO("generate_csr %.3f, convert %.3f debug %.3f", generate_csr_time, convert_time, debug_time);
-    LOG_INFO("trans_cost %.3f", trans_to_gpu_cost);
+    LOG_INFO("trans_graph_cost %.3f", trans_graph_cost);
 
     if (type == 0) {
       LOG_INFO("trainning cost %.3f", train_cost);
     } else {
       LOG_INFO("evaluation cost %.3f", train_cost);
     }
-    LOG_INFO("  get_feature/lable (%.3f/%.3f)", get_feature_cost, get_label_cost);
+    LOG_INFO("  trans_feature/lable (%.3f/%.3f)", trans_feature_cost, trans_label_cost);
     LOG_INFO("  forward: graph %.3f, nn %.3f, loss %.3f, acc %.3f, update %.3f", forward_graph_cost, forward_nn_cost,
              forward_loss_cost, forward_acc_cost, update_cost);
     LOG_INFO("  backward cost %.3f, b_nn_time %.3f", backward_cost, backward_nn_time);
-    get_gpu_mem(used_gpu_mem, total_gpu_mem);
-    LOG_INFO("epoch %d (%.0fM/%.0fM)", graph->rtminfo->epoch, used_gpu_mem, total_gpu_mem);
+    if (type == 0) {
+      get_gpu_mem(used_gpu_mem, total_gpu_mem);
+      LOG_INFO("train_epoch %d cost %.3f, gpu mem:  (%.0fM/%.0fM)", graph->rtminfo->epoch, epoch_time, used_gpu_mem,
+               total_gpu_mem);
+    } else {
+      get_gpu_mem(used_gpu_mem, total_gpu_mem);
+      LOG_INFO("eval_epoch %d cost %.3f, gpu mem: (%.0fM/%.0fM)", graph->rtminfo->epoch, epoch_time, used_gpu_mem,
+               total_gpu_mem);
+    }
 
     // assert(false);
     // LOG_DEBUG("forward other %.3f, append %.3f, backward cost %.3f train cost %.3f", forward_other_cost,
@@ -481,7 +499,7 @@ class GCN_GPU_NEIGHBOR_impl {
     // %.3f", forward_other_cost, backward_cost, train_cost); LOG_DEBUG("forward all %.3f", forward_graph_cost +
     // forward_nn_cost + forward_loss_cost + forward_acc_cost + update_cost + forward_other_cost + forward_append_cost +
     // backward_cost
-    //           +get_feature_cost + get_label_cost);
+    //           +trans_feature_cost + trans_label_cost);
     printf("\n");
 
     if (graph->config->classes > 1) {

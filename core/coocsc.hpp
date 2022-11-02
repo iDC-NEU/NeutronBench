@@ -320,15 +320,70 @@ class sampCSC {
 
     assert(src_size == source.size());
     /////////// check
+//     VertexId *temp = new VertexId[e_size];
+// #pragma omp parallel for
+//   for (int i = 0; i < e_size; ++i) {
+//     temp[i] = row_indices[i];
+//   }
+
+//     method1 -= get_time();
+// #pragma omp parallel for
+//     // for (size_t i = 0; i < row_indices.size(); ++i) {
+//     for (VertexId i = 0; i < e_size; ++i) {
+//       int src = row_indices[i];
+//       assert(node_idx[src] != -1);
+//       row_indices[i] = node_idx[src];
+//       // row_indices[i] = node_idx[row_indices[i]];
+//     }
+//     method1 += get_time();
+
+// #pragma omp parallel for
+//   for (int i = 0; i < e_size; ++i) {
+//     row_indices[i] = temp[i];
+//   }
+// method2-= get_time();
+// for (size_t i = 0; i < row_indices.size(); ++i) {
 #pragma omp parallel for
-    // for (size_t i = 0; i < row_indices.size(); ++i) {
     for (VertexId i = 0; i < e_size; ++i) {
       int src = row_indices[i];
       assert(node_idx[src] != -1);
       row_indices[i] = node_idx[src];
+      // row_indices[i] = node_idx[row_indices[i]];
     }
+    // method2 += get_time();
+
+    // #pragma omp parallel for
+    // for (int i = 0; i < e_size; ++i) {
+    //   row_indices[i] = temp[i];
+    // }
+
+    // VertexId *temp2 = new VertexId[e_size];
+    //   method3 -= get_time();
+    //   // for (size_t i = 0; i < row_indices.size(); ++i) {
+    // #pragma omp parallel for
+    //   for (VertexId i = 0; i < e_size; ++i) {
+    //     temp2[i] = node_idx[row_indices[i]];
+    //         // row_indices[i] = node_idx[row_indices[i]];
+    //   }
+    // #pragma omp parallel for
+    //   for (VertexId i = 0; i < e_size; ++i) {
+    //     row_indices[i] = temp2[i];
+    //         // row_indices[i] = node_idx[row_indices[i]];
+    //   }
+    //   method3 += get_time();
+    // LOG_DEBUG("e_size %d single thread %.3f, read-write %.3f, temp %.3f", e_size, method2, method1, method3);
+
     // LOG_DEBUG("v_size %d e_size %d unique %d src-size %d dst.size %d src.size %d", v_size, e_size, cnt, src_size,
     // dst().size(), src().size());
+  }
+
+  void zero_debug_time() {
+    method1 = 0;
+    method2 = 0;
+    method3 = 0;
+  }
+  void print_debug_time() {
+    LOG_DEBUG("e_size %d single thread %.3f, read-write %.3f, temp %.3f", e_size, method2, method1, method3);
   }
 
   void allocate_vertex() {
@@ -338,8 +393,21 @@ class sampCSC {
     column_offset.resize(v_size + 1);
   }
 
-  void init_dst(VertexId* dst) { memcpy(destination.data(), dst, sizeof(VertexId) * v_size); }
-  void init_dst(std::vector<VertexId>& dst) { memcpy(destination.data(), dst.data(), sizeof(VertexId) * v_size); }
+  void init_dst(VertexId* dst) {
+#pragma omp parallel for
+    for (int i = 0; i < v_size; ++i) {
+      destination[i] = dst[i];
+    }
+
+    // memcpy(destination.data(), dst, sizeof(VertexId) * v_size);
+  }
+  void init_dst(std::vector<VertexId>& dst) {
+#pragma omp parallel for
+    for (int i = 0; i < v_size; ++i) {
+      destination[i] = dst[i];
+    }
+    // memcpy(destination.data(), dst.data(), sizeof(VertexId) * v_size);
+  }
   void allocate_co_from_dst() {
     assert(false);
     // v_size = destination.size();
@@ -572,6 +640,7 @@ class sampCSC {
   VertexId size_dev_co, size_dev_ri, size_dev_ewf;
   VertexId size_dev_ci, size_dev_ro, size_dev_ewb;
   VertexId size_dev_edge, size_dev_edge_max = 0;
+  double method1, method2, method3;
 };
 
 #endif

@@ -333,6 +333,7 @@ class Sampler {
         // LOG_DEBUG("dst size %d", csc_layer->v_size);
         // LOG_DEBUG("after init_dst csc v_size %d, pre src size %d", csc_layer->v_size, ssg->sampled_sgs[i -
         // 1]->src_size);
+#pragma omp parallel for
         for (int j = 0; j < csc_layer->v_size; ++j) {
           // std::cout << "dst size " << csc_layer->dst().size() << std::endl;
           // std::cout << "pre src size " << ssg->sampled_sgs[i - 1]->src().size() << std::endl;
@@ -460,6 +461,8 @@ class Sampler {
     auto whole_offset = whole_graph->column_offset;
     auto whole_indices = whole_graph->row_indices;
     VertexId edge_nums = whole_offset[dst + 1] - whole_offset[dst];
+    int actl_fanout = min(fanout_i, edge_nums);
+
     ////////////////////////////////////////////////
     // LOG_DEBUG("edge_nusm %d, fanout %d", edge_nums, fanout_i);
     if (edge_nums <= fanout_i) {
@@ -494,30 +497,33 @@ class Sampler {
     // assert(sorted_idxs.size() == fanout_i);
     // sorted_idxs.reserve(fanout_i);
     if (edge_nums > 2 * fanout_i) {
-      // sorted_idxs.reserve(fanout_i);
+      // if (edge_nums > 2 * fanout_i || true) {
+      sorted_idxs.reserve(actl_fanout);
       RandomSample(edge_nums, fanout_i, sorted_idxs);
+      ///////////////////////////
       std::sort(sorted_idxs.begin(), sorted_idxs.end());
+      ///////////////////////////
     } else {
       std::vector<size_t> negate;
-      // negate.reserve(edge_nums - fanout_i);
+      negate.reserve(edge_nums - fanout_i);
       RandomSample(edge_nums, edge_nums - fanout_i, negate);
       // LOG_DEBUG("after RandomSample");
+      ///////////////////////////
       std::sort(negate.begin(), negate.end());
       NegateArray(negate, edge_nums, sorted_idxs);
-      // LOG_DEBUG("after NegateArray");
+      ///////////////////////////
     }
     random_time = -get_time();
     // LOG_DEBUG("random time %.3f", random_time);
     // LOG_DEBUG("after random");
-#pragma omp parallel for
-    for (size_t i = 1; i < sorted_idxs.size(); ++i) {
-      assert(sorted_idxs[i] > sorted_idxs[i - 1]);
-    }
+    // #pragma omp parallel for
+    //     for (size_t i = 1; i < sorted_idxs.size(); ++i) {
+    //       assert(sorted_idxs[i] > sorted_idxs[i - 1]);
+    //     }
     assert(sorted_idxs.size() == fanout_i);
     ///////////////////////////////////////////////////
 
     // std::unordered_set<size_t> sorted_idxs;
-    // int actl_fanout = min(fanout_i, edge_nums);
     // while (sorted_idxs.size() < actl_fanout) {
     //   sorted_idxs.insert(rand_int(edge_nums));
     // }
