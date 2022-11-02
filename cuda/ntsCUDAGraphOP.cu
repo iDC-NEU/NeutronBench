@@ -63,9 +63,28 @@ Cuda_Stream::Cuda_Stream() {
 #endif
 }
 
+Cuda_Stream::~Cuda_Stream() {
+#if CUDA_ENABLE
+  printf("ntsCUDAGRAPHOp.cu line 68: call cuda_stream ~Destory_Stream()\n");
+  size_t gpu_total_size;
+  size_t gpu_free_size;
+  cudaError_t cuda_status = cudaMemGetInfo(&gpu_free_size, &gpu_total_size);
+  printf("before destroy stream GPU mem: %.3f-%.3f\n", gpu_total_size * 1.0 / 1024 / 1024, gpu_free_size * 1.0 / 1024 / 1024);
+  CHECK_CUDA_RESULT(cudaStreamDestroy(stream));
+  cuda_status = cudaMemGetInfo(&gpu_free_size, &gpu_total_size);
+  printf("after destroy stream GPU mem: %.3f-%.3f\n", gpu_total_size * 1.0 / 1024 / 1024, gpu_free_size * 1.0 / 1024 / 1024);
+  printf("ntsCUDAGRAPHOp.cu line 70: call cuda_stream is done\n");
+#else
+  printf("CUDA DISABLED Cuda_Stream::~Cuda_Stream\n");
+  exit(0);
+#endif
+}
+
+
 void Cuda_Stream::destory_Stream() {
 #if CUDA_ENABLE
   CHECK_CUDA_RESULT(cudaStreamDestroy(stream));
+  printf("destory_Stream is done\n");
 #else
   printf("CUDA DISABLED Cuda_Stream::Cuda_Stream\n");
   exit(0);

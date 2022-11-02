@@ -251,6 +251,7 @@ class NtsContext {
   }
   void pop_one_op() {
     if (ntsOp.top().op_t == GRAPHOP) {
+      // LOG_DEBUG("call pop_one_op!!!!");
       delete ntsOp.top().op;
     }
     op.pop();

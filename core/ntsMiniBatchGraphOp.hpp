@@ -240,20 +240,43 @@ class MiniBatchFuseOp : public ntsGraphOp {
 // #if CUDA_ENABLE
 class SingleGPUSampleGraphOp : public ntsGraphOp {
  public:
-  Cuda_Stream *cuda_stream;
+  // static Cuda_Stream *cuda_stream = nullptr;
+  static Cuda_Stream *cuda_stream;
   SampledSubgraph *subgraphs;
   int layer = 0;
+  std::vector<void *> tensor_address;
 
   SingleGPUSampleGraphOp(SampledSubgraph *subgraphs_, Graph<Empty> *graph_, int layer_) : ntsGraphOp(graph_) {
     subgraphs = subgraphs_;
     layer = layer_;
-    cuda_stream = new Cuda_Stream();
+    if (!cuda_stream) {
+      // LOG_DEBUG("create cuda_stream");
+      cuda_stream = new Cuda_Stream();
+    }
+  }
+
+  ~SingleGPUSampleGraphOp() {
+    // LOG_DEBUG("call cuda_stream Destory_Stream()");
+    // cuda_stream->destory_Stream();
+
+    // release_tensor_memory();
+    // delete cuda_stream;
+  }
+
+  void release_tensor_memory() {
+    // LOG_DEBUG("call release_tensor_memory address %d", tensor_address.size());
+    for (auto p : tensor_address) {
+      cudaFree(p);
+    }
+    tensor_address.clear();
   }
 
   NtsVar forward(NtsVar &f_input) {
     int feature_size = f_input.size(1);
     NtsVar f_output =
         graph_->Nts->NewKeyTensor({subgraphs->sampled_sgs[layer]->v_size, feature_size}, torch::DeviceType::CUDA);
+    // tensor_address.push_back(f_output.data_ptr());
+    // LOG_DEBUG("tensor_address push_back %p", tensor_address.back());
     ValueType *f_input_buffer = graph_->Nts->getWritableBuffer(f_input, torch::DeviceType::CUDA);
     ValueType *f_output_buffer = graph_->Nts->getWritableBuffer(f_output, torch::DeviceType::CUDA);
     // LOG_DEBUG("forward pull version");
@@ -276,13 +299,15 @@ class SingleGPUSampleGraphOp : public ntsGraphOp {
                                           true, false);
     }
     cuda_stream->CUDA_DEVICE_SYNCHRONIZE();
-
+    // LOG_DEBUG("graph op create output_tensor ptr %p", f_output.data_ptr());
     return f_output;
   }
   NtsVar backward(NtsVar &f_output_grad) {
     int feature_size = f_output_grad.size(1);
     NtsVar f_input_grad =
         graph_->Nts->NewLeafTensor({subgraphs->sampled_sgs[layer]->src_size, feature_size}, torch::DeviceType::CUDA);
+    // tensor_address.push_back(f_input_grad.data_ptr());
+    // LOG_DEBUG("tensor_address push_back %p", tensor_address.back());
     ValueType *f_input_grad_buffer = graph_->Nts->getWritableBuffer(f_input_grad, torch::DeviceType::CUDA);
     ValueType *f_output_grad_buffer = graph_->Nts->getWritableBuffer(f_output_grad, torch::DeviceType::CUDA);
     subgraphs->sampled_sgs[layer]->update_degree(graph_);
@@ -335,6 +360,7 @@ class SingleGPUSampleGraphOp : public ntsGraphOp {
   }
 };
 // #endif
+Cuda_Stream *SingleGPUSampleGraphOp::cuda_stream = new Cuda_Stream();
 
 // class SingleCPUSrcScatterOp : public ntsGraphOp{
 // public:

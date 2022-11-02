@@ -297,6 +297,27 @@ class sampCSC {
         node_idx[i] = src_size++;
       }
     }
+
+    // int length = WORD_OFFSET(all_node_num) + 1;
+    // for(VertexId i_src=0;i_src<all_node_num;i_src+=64){
+    //     unsigned long word= bits->data[WORD_OFFSET(i_src)];
+    //     VertexId vtx=i_src;
+    //     VertexId offset=0;
+    //     while(word != 0){
+    //         if(word & 1){
+    //             // printf("#dst %d %d\n",vtx+offset, src_size);
+    //             //ssg->sampled_sgs[i]->src_index.insert(std::make_pair(vtx+offset, src_size));
+    //             // src_index_array[vtx+offset]=ssg->sampled_sgs[i]->src_size;
+    //             // ssg->sampled_sgs[i]->source.push_back(vtx+offset);
+    //             // ssg->sampled_sgs[i]->src_size++;
+    //             source[src_size] = vtx + offset;
+    //             node_idx[vtx + offset] = src_size++;
+    //         }
+    //         offset++;
+    //         word = word >> 1;
+    //     }
+    // }
+
     assert(src_size == source.size());
     /////////// check
 #pragma omp parallel for
@@ -433,7 +454,7 @@ class sampCSC {
 
   void alloc_dev_array(bool pull = true) {
     //////// TODO(Sanzo): (realloc)
-    const int mem_factor = 2;
+    const float mem_factor = 1.2;
     if (v_size + 1 > size_dev_dst_max) {
       if (size_dev_dst_max > 0) {
         // free_gpu_data(dev_column_offset);
@@ -452,7 +473,7 @@ class sampCSC {
       size_dev_dst = v_size;
     }
 
-    if (src_size + 1 > size_dev_src_max) {
+    if ((src_size + 1) > size_dev_src_max) {
       if (size_dev_src_max > 0) {
         FreeEdge(dev_row_offset);
         FreeEdge(dev_source);

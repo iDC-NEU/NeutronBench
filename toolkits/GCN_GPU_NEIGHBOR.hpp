@@ -115,6 +115,10 @@ class GCN_GPU_NEIGHBOR_impl {
   }
 
   void init_nn() {
+    // const uint64_t seed = 2000;
+    // torch::manual_seed(seed);
+    // torch::cuda::manual_seed_all(seed);
+
     learn_rate = graph->config->learn_rate;
     weight_decay = graph->config->weight_decay;
     drop_rate = graph->config->drop_rate;
@@ -288,12 +292,21 @@ class GCN_GPU_NEIGHBOR_impl {
       target_lab = graph->Nts->NewLabelTensor({graph->config->batch_size}, torch::DeviceType::CUDA);
     }
 
+    // LOG_DEBUG("epoch %d start compute", graph->rtminfo->epoch);
+    double used_gpu_mem, total_gpu_mem;
     for (VertexId i = 0; i < sampler->batch_nums; ++i) {
+      // LOG_DEBUG("batch id %d", i);
+      double sample_one_cost = -get_time();
       sample_cost -= get_time();
       sampler->sample_one(graph->config->batch_type, ctx->is_train());
       sample_cost += get_time();
+      sample_one_cost += get_time();
+      // LOG_DEBUG("sample one cost %.3f", sample_one_cost);
+      // get_gpu_mem(used_gpu_mem, total_gpu_mem);
+      // LOG_DEBUG("epoch %d batch %d sample_one done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, used_gpu_mem,
+      // total_gpu_mem);
+
       auto ssg = sampler->subgraph;
-      // LOG_DEBUG("batch %d sample one done", i);
 
       if (graph->config->mini_pull > 0) {  // generate csr structure for backward of pull mode
         generate_csr_time -= get_time();
@@ -306,16 +319,21 @@ class GCN_GPU_NEIGHBOR_impl {
           debug_time += get_time();
         }
         generate_csr_time += get_time();
-        // LOG_DEBUG("batch %d generate csr done", i);
+        // get_gpu_mem(used_gpu_mem, total_gpu_mem);
+        // LOG_DEBUG("epoch %d batch %d pull gemnerate csr done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, used_gpu_mem,
+        // total_gpu_mem);
       }
 
       if (type == 0 && graph->rtminfo->epoch >= 3) train_sample_time += sample_cost;
 
       // std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
-      trans_to_gpu_cost -= -get_time();
+      trans_to_gpu_cost -= get_time();
       ssg->trans_to_gpu(graph->config->mini_pull > 0);  // wheather trans csr data to gpu
-      trans_to_gpu_cost += -get_time();
+      trans_to_gpu_cost += get_time();
       // LOG_DEBUG("batch %d tarns_to_gpu done", i);
+      // get_gpu_mem(used_gpu_mem, total_gpu_mem);
+      // LOG_DEBUG("epoch %d batch %d tarns_to_gpu done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, used_gpu_mem,
+      // total_gpu_mem);
 
       train_cost -= get_time();
       forward_other_cost -= get_time();
@@ -326,7 +344,9 @@ class GCN_GPU_NEIGHBOR_impl {
       get_feature_cost -= get_time();
       sampler->load_feature_gpu(X[0], gnndatum->dev_local_feature);
       get_feature_cost += get_time();
-      // LOG_DEBUG("load_feature done");
+      // get_gpu_mem(used_gpu_mem, total_gpu_mem);
+      // LOG_DEBUG("epoch %d batch %d get feature done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, used_gpu_mem,
+      // total_gpu_mem); LOG_DEBUG("load_feature done");
 
       // if (hosts > 1) {
       //   X[0] = nts::op::get_feature_from_global(*rpc, ssg->sampled_sgs[0]->src(), F, graph);
@@ -339,6 +359,9 @@ class GCN_GPU_NEIGHBOR_impl {
       sampler->load_label_gpu(target_lab, gnndatum->dev_local_label);
       get_label_cost += get_time();
       // LOG_DEBUG("load_label done");
+      // get_gpu_mem(used_gpu_mem, total_gpu_mem);
+      // LOG_DEBUG("epoch %d batch %d get label done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, used_gpu_mem,
+      // total_gpu_mem);
 
       // print label
       // long* local_label_buffer = nullptr;
@@ -358,13 +381,20 @@ class GCN_GPU_NEIGHBOR_impl {
         graph->rtminfo->curr_layer = l;
         forward_graph_cost -= get_time();
         NtsVar Y_i = ctx->runGraphOp<nts::op::SingleGPUSampleGraphOp>(ssg, graph, l, X[l]);
+        // LOG_DEBUG("after return output_tensor ptr %p", Y_i.data_ptr());
         forward_graph_cost += get_time();
         // LOG_DEBUG("  batch %d layer %d graph compute done", i, l);
+        // get_gpu_mem(used_gpu_mem, total_gpu_mem);
+        // LOG_DEBUG("epoch %d batch %d layer %d graph compute done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, l,
+        // used_gpu_mem, total_gpu_mem);
 
         forward_nn_cost -= get_time();
         X[l + 1] = ctx->runVertexForward([&](NtsVar n_i) { return vertexForward(n_i); }, Y_i);
         forward_nn_cost += get_time();
         // LOG_DEBUG("  batch %d layer %d nn compute done", i, l);
+        // get_gpu_mem(used_gpu_mem, total_gpu_mem);
+        // LOG_DEBUG("epoch %d batch %d layer %d nn compute done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, l,
+        // used_gpu_mem, total_gpu_mem);
       }
 
       forward_loss_cost -= get_time();
@@ -372,6 +402,9 @@ class GCN_GPU_NEIGHBOR_impl {
       auto loss_ = Loss(X[layers], target_lab, graph->config->classes == 1);
       loss_epoch += loss_.item<float>();
       forward_loss_cost += get_time();
+      // get_gpu_mem(used_gpu_mem, total_gpu_mem);
+      // LOG_DEBUG("epoch %d batch %d loss done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, used_gpu_mem, total_gpu_mem);
+
       // LOG_DEBUG("loss done %.3f", loss_epoch);
 
       if (ctx->training == true) {
@@ -383,9 +416,12 @@ class GCN_GPU_NEIGHBOR_impl {
         backward_cost -= get_time();
         ctx->b_nn_time = 0;
         ctx->self_backward(false);
+        // c10::cuda::CUDACachingAllocator::emptyCache();
         backward_nn_time += ctx->b_nn_time;
         backward_cost += get_time();
-        // LOG_DEBUG("batch %d backward done", i);
+        // get_gpu_mem(used_gpu_mem, total_gpu_mem);
+        // LOG_DEBUG("epoch %d batch %d backward done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, used_gpu_mem,
+        // total_gpu_mem);
 
         update_cost -= get_time();
         Update();
@@ -402,14 +438,15 @@ class GCN_GPU_NEIGHBOR_impl {
       }
       forward_acc_cost += get_time();
       // LOG_DEBUG("batch %d acc compute done", i);
+      // LOG_DEBUG("batch %d backward done", i);
+      // get_gpu_mem(used_gpu_mem, total_gpu_mem);
+      // LOG_DEBUG("epoch %d batch %d acc done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, used_gpu_mem, total_gpu_mem);
 
       train_cost += get_time();
       // std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
       sampler->reverse_sgs();
     }
     loss_epoch /= sampler->batch_nums;
-    LOG_INFO("sample_cost %.3f", sample_cost);
-    LOG_INFO("generate_csr %.3f, convert %.3f debug %.3f ", generate_csr_time, convert_time, debug_time);
 
     if (hosts > 1) {
       if (type == 0 && graph->rtminfo->epoch >= 3) rpc_wait_time -= get_time();
@@ -422,6 +459,9 @@ class GCN_GPU_NEIGHBOR_impl {
     }
 
     sampler->restart();
+    LOG_INFO("sample_cost %.3f", sample_cost);
+    LOG_INFO("generate_csr %.3f, convert %.3f debug %.3f", generate_csr_time, convert_time, debug_time);
+    LOG_INFO("trans_cost %.3f", trans_to_gpu_cost);
 
     if (type == 0) {
       LOG_INFO("trainning cost %.3f", train_cost);
@@ -432,6 +472,10 @@ class GCN_GPU_NEIGHBOR_impl {
     LOG_INFO("  forward: graph %.3f, nn %.3f, loss %.3f, acc %.3f, update %.3f", forward_graph_cost, forward_nn_cost,
              forward_loss_cost, forward_acc_cost, update_cost);
     LOG_INFO("  backward cost %.3f, b_nn_time %.3f", backward_cost, backward_nn_time);
+    get_gpu_mem(used_gpu_mem, total_gpu_mem);
+    LOG_INFO("epoch %d (%.0fM/%.0fM)", graph->rtminfo->epoch, used_gpu_mem, total_gpu_mem);
+
+    // assert(false);
     // LOG_DEBUG("forward other %.3f, append %.3f, backward cost %.3f train cost %.3f", forward_other_cost,
     // forward_append_cost, backward_cost, train_cost); LOG_DEBUG("forward other %.3f, backward cost %.3f train cost
     // %.3f", forward_other_cost, backward_cost, train_cost); LOG_DEBUG("forward all %.3f", forward_graph_cost +

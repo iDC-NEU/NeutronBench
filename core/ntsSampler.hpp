@@ -275,6 +275,8 @@ class Sampler {
 
   int random_uniform_int(const int min = 0, const int max = 1) {
     // thread_local std::default_random_engine generator;
+    // unsigned seed = 2000;
+    // static thread_local std::mt19937 generator(seed);
     static thread_local std::mt19937 generator;
     std::uniform_int_distribution<int> distribution(min, max);
     return distribution(generator);
@@ -289,12 +291,15 @@ class Sampler {
   template <typename T>
   T rand_int(T lower, T upper) {
     assert(lower < upper);
+    // unsigned seed = 2000;
+    // static thread_local std::mt19937 generator(seed);
     static thread_local std::mt19937 generator;
     std::uniform_int_distribution<T> distribution(lower, upper - 1);
     return distribution(generator);
   }
 
   void sample_one(int type = 0, bool phase = true) {
+    // zero_debug_time();
     // void reservoir_sample(int layers, int batch_size_, const
     // std::vector<int>& fanout_, int type = 0){ LOG_DEBUG("layers %d batch_size
     // %d fanout %d-%d", layers, batch_size_, fanout_[0], fanout_[1]);
@@ -308,6 +313,7 @@ class Sampler {
     // LOG_DEBUG("fuck batch_size %d", actl_batch_size);
     ssg->curr_dst_size = actl_batch_size;
     for (int i = 0; i < layers; i++) {
+      layer_time -= get_time();
       ssg->curr_layer = i;
       sample_load_dst -= get_time();
       auto csc_layer = ssg->sampled_sgs[i];
@@ -354,16 +360,15 @@ class Sampler {
       // LOG_DEBUG("sample_init_co cost %.3f", sample_init_co);
 
       sample_bits->clear();
-      sample_processing_time = -get_time();
+      sample_processing_time -= get_time();
       // LOG_DEBUG("fanout_i %d\n", fanout_i[i]);
       // ssg->sample_processing(std::bind(&Sampler::NeighborUniformSample, this, std::placeholders::_1,
       // std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5));
       ssg->sample_processing(
-          [=](VertexId fanout_i, VertexId dst, VertexId* column_offset, VertexId* row_indices, VertexId id) {
+          [&](VertexId fanout_i, VertexId dst, VertexId* column_offset, VertexId* row_indices, VertexId id) {
             this->NeighborUniformSample(fanout_i, dst, column_offset, row_indices, id);
             // this->NeighborUniformSample_reservoir(fanout_i, dst, column_offset, row_indices, id);
           });
-
       sample_processing_time += get_time();
       // LOG_DEBUG("sample_one layer %d processing done", i);
 
@@ -380,7 +385,6 @@ class Sampler {
     work_offset += actl_batch_size;
     // LOG_DEBUG("layer %.3f, pre_time %.3f, load_dst_time %.3f, init_co %.3f, processing %.3f, post_time %.3f,",
     // layer_time, sample_pre_time, sample_load_dst, sample_init_co, sample_processing_time, sample_post_time);
-    // std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
     // push_one(ssg);
     // printf("debug: sample one done!\n");
   }
@@ -455,7 +459,8 @@ class Sampler {
                              VertexId id) {
     auto whole_offset = whole_graph->column_offset;
     auto whole_indices = whole_graph->row_indices;
-    size_t edge_nums = whole_offset[dst + 1] - whole_offset[dst];
+    VertexId edge_nums = whole_offset[dst + 1] - whole_offset[dst];
+    ////////////////////////////////////////////////
     // LOG_DEBUG("edge_nusm %d, fanout %d", edge_nums, fanout_i);
     if (edge_nums <= fanout_i) {
       // LOG_DEBUG("  just return");
@@ -504,11 +509,18 @@ class Sampler {
     random_time = -get_time();
     // LOG_DEBUG("random time %.3f", random_time);
     // LOG_DEBUG("after random");
-
+#pragma omp parallel for
     for (size_t i = 1; i < sorted_idxs.size(); ++i) {
       assert(sorted_idxs[i] > sorted_idxs[i - 1]);
     }
     assert(sorted_idxs.size() == fanout_i);
+    ///////////////////////////////////////////////////
+
+    // std::unordered_set<size_t> sorted_idxs;
+    // int actl_fanout = min(fanout_i, edge_nums);
+    // while (sorted_idxs.size() < actl_fanout) {
+    //   sorted_idxs.insert(rand_int(edge_nums));
+    // }
 
     int pos = column_offset[id];
     for (auto& idx : sorted_idxs) {

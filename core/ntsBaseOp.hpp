@@ -28,6 +28,7 @@ class ntsGraphOp {
   VertexSubset *active_;
   PartitionedGraph *partitioned_graph_;
   ntsGraphOp() {}
+  virtual ~ntsGraphOp() {}
   ntsGraphOp(PartitionedGraph *partitioned_graph, VertexSubset *active) {
     graph_ = partitioned_graph->graph_;
     partitioned_graph_ = partitioned_graph;

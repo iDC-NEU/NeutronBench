@@ -94,6 +94,7 @@ class deviceCSC {
 class Cuda_Stream {
  public:
   Cuda_Stream();
+  ~Cuda_Stream();
   void destory_Stream();
   cudaStream_t getStream();
   void CUDA_DEVICE_SYNCHRONIZE();

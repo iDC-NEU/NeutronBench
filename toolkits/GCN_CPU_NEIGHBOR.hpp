@@ -1,5 +1,6 @@
 #include "core/neutronstar.hpp"
 #include "core/ntsPeerRPC.hpp"
+#include "utils/cuda_memory.hpp"
 #include "utils/torch_func.hpp"
 
 class GCN_CPU_NEIGHBOR_impl {
@@ -264,11 +265,13 @@ class GCN_CPU_NEIGHBOR_impl {
       max_batch_num = batch_num;
     }
 
+    // LOG_DEBUG("epoch %d start compute", graph->rtminfo->epoch);
+    double used_gpu_mem, total_gpu_mem;
     for (VertexId i = 0; i < sampler->batch_nums; ++i) {
       sample_cost -= get_time();
       sampler->sample_one(graph->config->batch_type, ctx->is_train());
       sample_cost += get_time();
-      // LOG_DEBUG("batch %d sample_one done", i);
+      // LOG_DEBUG("epoch %d batch %d sample_one done", graph->rtminfo->epoch, i);
 
       auto ssg = sampler->subgraph;
       if (graph->config->mini_pull > 0) {  // generate csr structure for backward of pull mode
@@ -286,7 +289,7 @@ class GCN_CPU_NEIGHBOR_impl {
         }
         // }
         generate_csr_time += get_time();
-        // LOG_DEBUG("batch %d pull gemnerate csr done", i);
+        LOG_DEBUG("epoch %d batch %d pull gemnerate csr done", graph->rtminfo->epoch, i);
       }
 
       if (type == 0 && graph->rtminfo->epoch >= 3) train_sample_time += sample_cost;
@@ -310,19 +313,15 @@ class GCN_CPU_NEIGHBOR_impl {
       } else {
         X[0] = nts::op::get_feature(ssg->sampled_sgs[0]->src().data(), ssg->sampled_sgs[0]->src_size, F, graph);
       }
-      // LOG_DEBUG("X.size() %d %d", X[0].size(0), X[0].size(1));
       get_feature_cost += get_time();
-      // std::cout << X[0][0] << std::endl;
-      // LOG_DEBUG("batch %d get feature done!", i);
+      // LOG_DEBUG("epoch %d batch %d get feature done", graph->rtminfo->epoch, i);
 
       get_label_cost -= get_time();
       NtsVar target_lab =
           nts::op::get_label(ssg->sampled_sgs.back()->dst().data(), ssg->sampled_sgs.back()->v_size, L_GT_C, graph);
       get_label_cost += get_time();
-      // LOG_DEBUG("batch %d get label done!", i);
       // LOG_DEBUG("label.size() %d", target_lab.size(0));
-      // std::cout << target_lab << std::endl;
-      // assert(false);
+      // LOG_DEBUG("epoch %d batch %d get label done", graph->rtminfo->epoch, i);
 
       for (int l = 0; l < layers; l++) {  // forward
         graph->rtminfo->curr_layer = l;
