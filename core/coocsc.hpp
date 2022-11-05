@@ -17,12 +17,13 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 #include "ntsCUDA.hpp"
 #endif
 
+#ifndef COOCSC_HPP
+#define COOCSC_HPP
 #include <algorithm>
 #include <map>
 #include <vector>
-#ifndef COOCSC_HPP
-#define COOCSC_HPP
 
+#include "utils/rand.hpp"
 class sampCSC {
  public:
   sampCSC() {
@@ -401,6 +402,7 @@ class sampCSC {
 
     // memcpy(destination.data(), dst, sizeof(VertexId) * v_size);
   }
+
   void init_dst(std::vector<VertexId>& dst) {
 #pragma omp parallel for
     for (int i = 0; i < v_size; ++i) {
@@ -408,6 +410,20 @@ class sampCSC {
     }
     // memcpy(destination.data(), dst.data(), sizeof(VertexId) * v_size);
   }
+
+  void random_batch(std::vector<VertexId>& sampled_nids) {
+    int all_node_length = sampled_nids.size();
+    std::unordered_set<int> st;
+    while (st.size() < v_size) {
+      st.insert(rand_int(all_node_length));
+    }
+    assert(v_size == st.size());
+    int idx = 0;
+    for (auto& id : st) {
+      destination[idx++] = sampled_nids[id];
+    }
+  }
+
   void allocate_co_from_dst() {
     assert(false);
     // v_size = destination.size();
@@ -445,6 +461,14 @@ class sampCSC {
   VertexId r_o(VertexId vid) { return row_offset[vid]; }
   std::vector<VertexId>& dst() { return destination; }
   std::vector<VertexId>& src() { return source; }
+  VertexId dst(VertexId idx) {
+    assert(idx < v_size);
+    return destination[idx];
+  }
+  VertexId src(VertexId idx) {
+    assert(idx < src_size);
+    return source[idx];
+  }
   std::vector<VertexId>& c_o() { return column_offset; }
   std::vector<VertexId>& r_i() { return row_indices; }
   std::vector<VertexId>& r_o() { return row_offset; }

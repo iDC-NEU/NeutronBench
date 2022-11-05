@@ -263,6 +263,8 @@ void InputInfo::readFromCfgFile(std::string config_file) {
         this->batch_type = DELLOW;
       } else if (0 == cfg_v.compare("delhigh")) {
         this->batch_type = DELHIGH;
+      } else if (0 == cfg_v.compare("metis")) {
+        this->batch_type = METIS;
       } else {
         this->batch_type = SHUFFLE;
       }
@@ -309,8 +311,10 @@ void InputInfo::print() {
     std::cout << "dellow" << std::endl;
   } else if (batch_type == DELHIGH) {
     std::cout << "delhigh" << std::endl;
+  } else if (batch_type == METIS) {
+    std::cout << "metis" << std::endl;
   } else {
-    std::cout << "ERROR" << std::endl;
+    std::cout << "Unknow" << std::endl;
   }
   std::cout << "del_frac\t:\t" << del_frac << std::endl;
   std::cout << "edge_file\t:\t" << edge_file << std::endl;
@@ -335,6 +339,52 @@ void InputInfo::print() {
   std::cout << "mini_pull\t:\t" << mini_pull << std::endl;
   std::cout << "------------------input info--------------" << std::endl;
 }
+
+// void InputInfo::print() {
+//   std::cout << "algorithm\t\t\t:\t" << algorithm << std::endl;
+//   std::cout << "vertices\t\t\t:\t" << vertices << std::endl;
+//   std::cout << "epochs\t\t\t\t:\t" << epochs << std::endl;
+//   std::cout << "layers\t\t\t\t:\t" << layer_string << std::endl;
+//   std::cout << "fanout\t\t\t\t:\t" << fanout_string << std::endl;
+//   std::cout << "batch_size\t\t:\t" << batch_size << std::endl;
+//   // std::cout << "batch_type\t\t\t\t:\t" << batch_type << std::endl;
+//   std::cout << "batch_type\t\t:\t";
+//   if (batch_type == SHUFFLE) {
+//     std::cout << "shuffle" << std::endl;
+//   } else if (batch_type == RANDOM) {
+//     std::cout << "random" << std::endl;
+//   } else if (batch_type == SEQUENCE) {
+//     std::cout << "sequence" << std::endl;
+//   } else if (batch_type == DELLOW) {
+//     std::cout << "dellow" << std::endl;
+//   } else if (batch_type == DELHIGH) {
+//     std::cout << "delhigh" << std::endl;
+//   } else {
+//     std::cout << "ERROR" << std::endl;
+//   }
+//   std::cout << "del_frac\t\t\t:\t" << del_frac << std::endl;
+//   std::cout << "edge_file\t\t\t:\t" << edge_file << std::endl;
+//   std::cout << "feature_file\t:\t" << feature_file << std::endl;
+//   std::cout << "label_file\t\t:\t" << label_file << std::endl;
+//   std::cout << "mask_file\t\t\t:\t" << mask_file << std::endl;
+//   std::cout << "proc_overlap\t:\t" << overlap << std::endl;
+//   std::cout << "proc_local\t\t:\t" << process_local << std::endl;
+//   std::cout << "proc_cuda\t\t\t:\t" << with_cuda << std::endl;
+//   std::cout << "proc_rep\t\t\t:\t" << repthreshold << std::endl;
+//   std::cout << "lock_free\t\t\t:\t" << lock_free << std::endl;
+//   std::cout << "optim_kernel\t:\t" << optim_kernel_enable << std::endl;
+//   std::cout << "learn_rate\t\t:\t" << learn_rate << std::endl;
+//   std::cout << "weight_decay\t:\t" << weight_decay << std::endl;
+//   std::cout << "decay_rate\t\t:\t" << decay_rate << std::endl;
+//   std::cout << "decay_epoch\t\t:\t" << decay_epoch << std::endl;
+//   std::cout << "drop_rate\t\t\t:\t" << drop_rate << std::endl;
+//   std::cout << "classes\t\t\t\t:\t" << classes << std::endl;
+//   std::cout << "batch_norm\t\t:\t" << batch_norm << std::endl;
+//   std::cout << "time_skip\t\t\t:\t" << time_skip << std::endl;
+//   std::cout << "runs\t\t\t\t\t:\t" << runs << std::endl;
+//   std::cout << "mini_pull\t\t\t:\t" << mini_pull << std::endl;
+//   std::cout << "------------------input info--------------" << std::endl;
+// }
 
 void RuntimeInfo::init_rtminfo() {
   process_local = false;

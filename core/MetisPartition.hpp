@@ -1,3 +1,5 @@
+#ifndef _METISPARTITION_HPP_
+#define _METISPARTITION_HPP_
 #include <metis.h>
 
 #include <cassert>
@@ -174,3 +176,5 @@ void MetisPartitionGraph(FullyRepGraph* whole_graph, int partition_num, std::str
   //     }
   // }
 }
+
+#endif

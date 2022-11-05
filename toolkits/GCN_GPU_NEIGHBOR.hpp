@@ -246,7 +246,9 @@ class GCN_GPU_NEIGHBOR_impl {
     double nn_cost = 0;
     double backward_cost = 0;
 
-    if (graph->config->batch_type != SEQUENCE) {  // shuffle
+    // enum BatchType { SHUFFLE, SEQUENCE, RANDOM, DELLOW, DELHIGH, METIS};
+    if (graph->config->batch_type == SHUFFLE || graph->config->batch_type == RANDOM ||
+        graph->config->batch_type == DELLOW || graph->config->batch_type == DELHIGH) {
       shuffle_vec(sampler->sample_nids);
     }
 
@@ -272,6 +274,8 @@ class GCN_GPU_NEIGHBOR_impl {
     double debug_time = 0;
     double epoch_time = -get_time();
     int batch_num = sampler->batch_nums;
+    int compute_cnt = 0;
+
     if (hosts > 1) {
       if (type == 0 && graph->rtminfo->epoch >= 3) mpi_comm_time -= get_time();
       MPI_Allreduce(&batch_num, &max_batch_num, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
@@ -298,7 +302,9 @@ class GCN_GPU_NEIGHBOR_impl {
     // for (int i = 0; i < layers; ++i) {
     //   sampler->subgraph->sampled_sgs[i]->zero_debug_time();
     // }
-
+    // std::unordered_set<VertexId> st;
+    sampler->metis_batch_id = 0;
+    LOG_DEBUG("sampler has %d batchs", sampler->batch_nums);
     for (VertexId i = 0; i < sampler->batch_nums; ++i) {
       // LOG_DEBUG("batch id %d", i);
       double sample_one_cost = -get_time();
@@ -306,6 +312,15 @@ class GCN_GPU_NEIGHBOR_impl {
       sampler->sample_one(graph->config->batch_type, ctx->is_train());
       sample_cost += get_time();
       sample_one_cost += get_time();
+
+      compute_cnt += sampler->get_compute_cnt();
+
+      // LOG_DEBUG("epoch %d batch %d, train_nodes %d", graph->rtminfo->epoch, i,
+      // sampler->subgraph->sampled_sgs.back()->v_size); sampler->print_batch_nodes();
+
+      ////////////////// check sampler
+      // sampler->insert_batch_nodes(st);
+
       // LOG_DEBUG("sample one cost %.3f", sample_one_cost);
       // get_gpu_mem(used_gpu_mem, total_gpu_mem);
       // LOG_DEBUG("epoch %d batch %d sample_one done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, used_gpu_mem,
@@ -451,11 +466,15 @@ class GCN_GPU_NEIGHBOR_impl {
       // std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
       sampler->reverse_sgs();
     }
+    LOG_DEBUG("sampler worker_offset %d range %d", sampler->work_offset, sampler->work_range[1]);
+    assert(sampler->work_offset == sampler->work_range[1]);
     loss_epoch /= sampler->batch_nums;
 
     // for (int i = 0; i < layers; ++i) {
     //   sampler->subgraph->sampled_sgs[i]->print_debug_time();
     // }
+
+    // LOG_DEBUG("all train nodes: %d, all sample nodes: %d", sampler->sample_nids.size(), st.size());
 
     if (hosts > 1) {
       if (type == 0 && graph->rtminfo->epoch >= 3) rpc_wait_time -= get_time();
@@ -485,12 +504,12 @@ class GCN_GPU_NEIGHBOR_impl {
     LOG_INFO("  backward cost %.3f, b_nn_time %.3f", backward_cost, backward_nn_time);
     if (type == 0) {
       get_gpu_mem(used_gpu_mem, total_gpu_mem);
-      LOG_INFO("train_epoch %d cost %.3f, gpu mem:  (%.0fM/%.0fM)", graph->rtminfo->epoch, epoch_time, used_gpu_mem,
-               total_gpu_mem);
+      LOG_INFO("train_epoch %d cost %.3f, compute_cnt %d, gpu mem:  (%.0fM/%.0fM)", graph->rtminfo->epoch, epoch_time,
+               compute_cnt, used_gpu_mem, total_gpu_mem);
     } else {
       get_gpu_mem(used_gpu_mem, total_gpu_mem);
-      LOG_INFO("eval_epoch %d cost %.3f, gpu mem: (%.0fM/%.0fM)", graph->rtminfo->epoch, epoch_time, used_gpu_mem,
-               total_gpu_mem);
+      LOG_INFO("eval_epoch %d cost %.3f, compute_cnt %d, gpu mem: (%.0fM/%.0fM)", graph->rtminfo->epoch, epoch_time,
+               compute_cnt, used_gpu_mem, total_gpu_mem);
     }
 
     // assert(false);
@@ -553,7 +572,7 @@ class GCN_GPU_NEIGHBOR_impl {
       }
     }
 
-    if (batch_type == RANDOM || batch_type == DELLOW || batch_type == DELHIGH) {  // random
+    if (batch_type == DELLOW || batch_type == DELHIGH) {
       if (batch_type == DELHIGH) {
         std::sort(train_nids.begin(), train_nids.end(), [&](const auto& x, const auto& y) {
           return graph->in_degree_for_backward[x] > graph->in_degree_for_backward[y];
@@ -562,25 +581,63 @@ class GCN_GPU_NEIGHBOR_impl {
         std::sort(train_nids.begin(), train_nids.end(), [&](const auto& x, const auto& y) {
           return graph->in_degree_for_backward[x] < graph->in_degree_for_backward[y];
         });
-      } else {  // random del nodes
-        shuffle_vec(train_nids);
       }
       int sz = train_nids.size();
       train_nids.erase(train_nids.begin() + static_cast<int>(sz * (1 - graph->config->del_frac)), train_nids.end());
+    }
+    Sampler* train_sampler = new Sampler(fully_rep_graph, train_nids);
+    Sampler* eval_sampler = new Sampler(fully_rep_graph, val_nids, true);   // true mean full batch
+    Sampler* test_sampler = new Sampler(fully_rep_graph, test_nids, true);  // true mean full batch
+    // LOG_DEBUG("samper done");
 
-      // shuffle_vec(train_nids);
+    if (batch_type == METIS) {
+      // void ClusterGCNSample(int layers, int batch_size, int partition_num, std::string objtype = "cut");
+      // void init_graph(std::vector<VertexId> &sample_nids);
+
+      // if (metis_partition_id.empty()) {
+      // LOG_DEBUG("start update_graph");
+      // fully_rep_graph->update_graph(train_nids);
+      // LOG_DEBUG("after update_graph");
+
+      int partition_num = (train_nids.size() + graph->config->batch_size - 1) / graph->config->batch_size;
+      std::vector<VertexId> metis_partition_id;
+      std::vector<VertexId> metis_partition_offset;
+
+      double metis_time = -get_time();
+      MetisPartitionGraph(fully_rep_graph, partition_num, "cut", metis_partition_id, metis_partition_offset);
+      metis_time += get_time();
+      LOG_DEBUG("metis partition cost %.3f", metis_time);
+
+      // fully_rep_graph->back_to_global();
+      LOG_DEBUG("metis_partition_id %d, train_nids %d", metis_partition_id.size(), train_nids.size());
+      // assert(metis_partition_id.size() == train_nids.size());
+      assert(partition_num + 1 == metis_partition_offset.size());
+
+      // LOG_DEBUG("metis partiton offset: ");
+      // for (int i = 0; i < partition_num; ++i) {
+      //   printf("part id: %d, %d\n", i, metis_partition_offset[i + 1] - metis_partition_offset[i]);
+      // }
+      // LOG_DEBUG("metis partiton id: ");
+      // for (auto id : metis_partition_id) {
+      //   printf("%d ", id);
+      // }printf("\n");
+
+      // std::sort(metis_partition_id.begin(), metis_partition_id.end());
+      // std::sort(train_nids.begin(), train_nids.end());
+      // for (int i = 0; i < train_nids.size(); ++i) {
+      //   assert(metis_partition_id[i] == train_nids[i]);
+      // }
+      // assert(false);
+      // }
+      train_sampler->update_metis_data(metis_partition_id, metis_partition_offset);
+      train_sampler->update_batch_nums();
     }
 
-    printf("label rate: %.3f, train/val/test: (%d/%d/%d) (%.3f/%.3f/%.3f)\n",
-           1.0 * (train_nids.size() + val_nids.size() + test_nids.size()) / graph->vertices, train_nids.size(),
-           val_nids.size(), test_nids.size(), train_nids.size() * 1.0 / graph->vertices,
-           val_nids.size() * 1.0 / graph->vertices, test_nids.size() * 1.0 / graph->vertices);
+    LOG_DEBUG("label rate: %.3f, train/val/test: (%d/%d/%d) (%.3f/%.3f/%.3f)",
+              1.0 * (train_nids.size() + val_nids.size() + test_nids.size()) / graph->vertices, train_nids.size(),
+              val_nids.size(), test_nids.size(), train_nids.size() * 1.0 / graph->vertices,
+              val_nids.size() * 1.0 / graph->vertices, test_nids.size() * 1.0 / graph->vertices);
 
-    Sampler* train_sampler = new Sampler(fully_rep_graph, train_nids);
-    Sampler* eval_sampler = new Sampler(fully_rep_graph, val_nids);
-    Sampler* test_sampler = new Sampler(fully_rep_graph, test_nids);
-    LOG_DEBUG("samper done");
-    // LOG_DEBUG("sampler contructor is done");
     pre_time += get_time();
 
     double train_time = 0;

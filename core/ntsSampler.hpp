@@ -23,6 +23,7 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 
 #include "FullyRepGraph.hpp"
 #include "core/MetisPartition.hpp"
+#include "utils/rand.hpp"
 
 enum Device { CPU, GPU };
 class Sampler {
@@ -41,9 +42,11 @@ class Sampler {
   std::vector<int> fanout;
   std::vector<VertexId> metis_partition_offset;
   std::vector<VertexId> metis_partition_id;
+  std::vector<std::vector<VertexId>> batch_nodes;
   VertexId batch_size;
   VertexId batch_nums;
   VertexId layers;
+  VertexId metis_batch_id;
   Cuda_Stream* cs;
 
   double sample_pre_time = 0;
@@ -87,7 +90,37 @@ class Sampler {
     work_queue.clear();
     sample_bits = new Bitmap(whole_graph->global_vertices);
   }
-  Sampler(FullyRepGraph* whole_graph_, std::vector<VertexId>& index) {
+
+  void update_metis_data(std::vector<VertexId>& part_ids, std::vector<VertexId>& offsets) {
+    metis_partition_id = std::move(part_ids);
+    metis_partition_offset = std::move(offsets);
+    std::unordered_set<VertexId> all_train_nodes;
+    all_train_nodes.insert(sample_nids.begin(), sample_nids.end());
+    assert(all_train_nodes.size() == sample_nids.size());
+    int partition_nums = metis_partition_offset.size() - 1;
+    assert(partition_nums > 0);
+
+    int debug_cnt = 0;
+    for (int i = 0; i < partition_nums; ++i) {
+      std::vector<VertexId> tmp;
+      for (int j = metis_partition_offset[i]; j < metis_partition_offset[i + 1]; ++j) {
+        if (all_train_nodes.find(metis_partition_id[j]) != all_train_nodes.end()) {
+          tmp.push_back(metis_partition_id[j]);
+          debug_cnt++;
+        }
+      }
+      if (!tmp.empty()) {
+        batch_nodes.push_back(std::move(tmp));
+      }
+    }
+    assert(debug_cnt == sample_nids.size());
+    LOG_DEBUG("metis batch num %d", batch_nodes.size());
+    for (int i = 0; i < partition_nums; ++i) {
+      printf("metis batch id %d has %d nodes\n", i, batch_nodes[i].size());
+    }
+  }
+
+  Sampler(FullyRepGraph* whole_graph_, std::vector<VertexId>& index, bool full_batch = false) {
     // Sampler(FullyRepGraph* whole_graph_, std::vector<VertexId>& index, Device dev = CPU, int gpu_id = 0) {
     // this->device = dev;
     // this->gpu_id = gpu_id;
@@ -106,8 +139,11 @@ class Sampler {
 
     fanout = whole_graph->graph_->gnnctx->fanout;
     batch_size = whole_graph->graph_->config->batch_size;
-    if (work_range[1] < batch_size) batch_size = work_range[1];
+    if (work_range[1] < batch_size || full_batch) batch_size = work_range[1];
     batch_nums = (work_range[1] + batch_size - 1) / batch_size;
+    // if (whole_graph->graph_->config->batch_type == METIS) {
+    //   batch_nums == batch_nodes.size();
+    // }
     layers = whole_graph->graph_->gnnctx->layer_size.size() - 1;
     // all_nodes = sample_nids.size();
     // assert(layers = 2);
@@ -121,6 +157,10 @@ class Sampler {
     // pre_alloc_one();
     // assert (false);
   }
+
+  void update_batch_nums(VertexId nums) { this->batch_nums = nums; }
+
+  void update_batch_nums() { this->batch_nums = batch_nodes.size(); }
 
   void trans_to_gpu() {
     auto sub_graph = subgraph;
@@ -273,29 +313,28 @@ class Sampler {
     queue_end = 0;
   }
 
-  int random_uniform_int(const int min = 0, const int max = 1) {
-    // thread_local std::default_random_engine generator;
-    // unsigned seed = 2000;
-    // static thread_local std::mt19937 generator(seed);
-    static thread_local std::mt19937 generator;
-    std::uniform_int_distribution<int> distribution(min, max);
-    return distribution(generator);
+  void print_batch_nodes() {
+    std::cout << "(v_size=" << subgraph->sampled_sgs.back()->v_size << ") ";
+    auto ssg = subgraph;
+    for (int i = 0; i < subgraph->sampled_sgs.back()->v_size; ++i) {
+      std::cout << subgraph->sampled_sgs.back()->dst(i) << " ";
+    }
+    std::cout << std::endl;
   }
 
-  template <typename T>
-  T rand_int(T upper) {
-    return rand_int<T>(0, upper);
+  void insert_batch_nodes(std::unordered_set<VertexId>& st) {
+    auto ssg = subgraph;
+    for (int i = 0; i < subgraph->sampled_sgs.back()->v_size; ++i) {
+      st.insert(subgraph->sampled_sgs.back()->dst(i));
+    }
   }
 
-  // random from [lower, upper)
-  template <typename T>
-  T rand_int(T lower, T upper) {
-    assert(lower < upper);
-    // unsigned seed = 2000;
-    // static thread_local std::mt19937 generator(seed);
-    static thread_local std::mt19937 generator;
-    std::uniform_int_distribution<T> distribution(lower, upper - 1);
-    return distribution(generator);
+  int get_compute_cnt() {
+    int ret = 0;
+    for (int i = 0; i < layers; ++i) {
+      ret += subgraph->sampled_sgs[i]->e_size;
+    }
+    return ret;
   }
 
   void sample_one(int type = 0, bool phase = true) {
@@ -306,6 +345,10 @@ class Sampler {
     assert(work_offset < work_range[1]);
     // assert(batch_size == batch_size_);
     VertexId actl_batch_size = std::min(batch_size, work_range[1] - work_offset);
+    if (phase && whole_graph->graph_->config->batch_type == METIS) {
+      actl_batch_size = batch_nodes[metis_batch_id].size();
+    }
+    assert(actl_batch_size > 0);
     // LOG_DEBUG("actl_batch %d", actl_batch_size);
     // SampledSubgraph* ssg=new SampledSubgraph(layers,fanout_);
     // auto ssg = work_queue[work_offset / batch_size_];
@@ -321,7 +364,17 @@ class Sampler {
       // csc_layer->update_vertices(ssg->curr_dst_size);
       csc_layer->alloc_vertices(ssg->curr_dst_size);
       if (i == 0) {
-        csc_layer->init_dst(sample_nids.data() + work_offset);
+        if (phase && whole_graph->graph_->config->batch_type == RANDOM) {
+          // LOG_DEBUG("batch: random_batch");
+          csc_layer->random_batch(sample_nids);
+        } else if (phase && whole_graph->graph_->config->batch_type == METIS) {
+          // LOG_DEBUG("init dst batch_nodes %d", metis_batch_id);
+          csc_layer->init_dst(batch_nodes[metis_batch_id++]);
+        } else {
+          // LOG_DEBUG("batch: work_offset");
+          csc_layer->init_dst(sample_nids.data() + work_offset);
+        }
+        work_offset += actl_batch_size;
         // LOG_DEBUG("dst size %d", csc_layer->v_size);
         /////////////// check
         // for (int j = 0; j < csc_layer->v_size; ++j) {
@@ -383,7 +436,6 @@ class Sampler {
       layer_time += get_time();
     }
     std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
-    work_offset += actl_batch_size;
     // LOG_DEBUG("layer %.3f, pre_time %.3f, load_dst_time %.3f, init_co %.3f, processing %.3f, post_time %.3f,",
     // layer_time, sample_pre_time, sample_load_dst, sample_init_co, sample_processing_time, sample_post_time);
     // push_one(ssg);

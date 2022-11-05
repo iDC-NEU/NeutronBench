@@ -262,6 +262,9 @@ class FullyRepGraph {
   VertexId *column_offset;
   VertexId *row_indices;
 
+  VertexId *column_offset_bak;
+  VertexId *row_indices_bak;
+
   FullyRepGraph() {}
   FullyRepGraph(Graph<Empty> *graph) {
     global_vertices = graph->vertices;
@@ -281,6 +284,36 @@ class FullyRepGraph {
     SyncAndLog("NeutronStar::Preprocessing[Generate Full Replicated Graph Topo]");
     SyncAndLog("------------------finish graph preprocessing--------------\n");
   }
+
+  void update_graph(std::vector<VertexId> &sample_nids) {
+    VertexId node_num = sample_nids.size();
+    VertexId edge_num = 0;
+    for (auto id : sample_nids) {
+      edge_num += column_offset_bak[id + 1] - column_offset_bak[id];
+    }
+    // VertexId *ri = new VertexId[edge_num];
+    // VertexId *co = new VertexId[node_num + 1];
+    // LOG_DEBUG("node %d edges %d", node_num, edge_num);
+    column_offset[0] = 0;
+    for (int i = 0; i < node_num; ++i) {
+      int dst = sample_nids[i];
+      int edges = column_offset_bak[dst + 1] - column_offset_bak[dst];
+      column_offset[i + 1] = column_offset[i] + edges;
+#pragma omp parallel for
+      for (int j = column_offset[i]; j < column_offset[i + 1]; ++j) {
+        row_indices[j] = row_indices_bak[column_offset_bak[dst] + j - column_offset[i]];
+      }
+    }
+    assert(column_offset[sample_nids.size()] == edge_num);
+    global_vertices = node_num;
+    global_edges = edge_num;
+  }
+
+  void back_to_global() {
+    memcpy(column_offset, column_offset_bak, sizeof(VertexId) * (global_vertices + 1));
+    memcpy(row_indices, row_indices_bak, sizeof(VertexId) * global_edges);
+  }
+
   void ReadRepGraphFromRawFile() {
     column_offset = new VertexId[global_vertices + 1];
     row_indices = new VertexId[global_edges];
@@ -348,6 +381,12 @@ class FullyRepGraph {
         row_indices[tmp_offset[dst]++] = src;
       }
     }
+
+    column_offset_bak = new VertexId[global_vertices + 1];
+    row_indices_bak = new VertexId[global_edges];
+    memcpy(column_offset_bak, column_offset, sizeof(VertexId) * (global_vertices + 1));
+    memcpy(row_indices_bak, row_indices, sizeof(VertexId) * global_edges);
+
     delete[] read_edge_buffer;
     delete[] tmp_offset;
   }

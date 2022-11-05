@@ -49,7 +49,7 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 
 const bool NOT_SUPPORT_DEVICE_TYPE = false;
 
-enum BatchType { SHUFFLE, SEQUENCE, RANDOM, DELLOW, DELHIGH };
+enum BatchType { SHUFFLE, SEQUENCE, RANDOM, DELLOW, DELHIGH, METIS };
 
 class CSC_segment_pinned {
  public:
