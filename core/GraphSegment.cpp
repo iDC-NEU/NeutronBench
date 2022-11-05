@@ -283,9 +283,10 @@ void InputInfo::readFromCfgFile(std::string config_file) {
       // assert(false);
     } else if (0 == cfg_k.compare("MINI_PULL")) {
       this->mini_pull = std::atoi(cfg_v.c_str());
-    }
-
-    else {
+    } else if (0 == cfg_k.compare("SAMPLE_RATE")) {
+      this->sample_rate = std::atof(cfg_v.c_str());
+      assert(sample_rate <= 1 && sample_rate > 0);
+    } else {
       printf("not supported configure\n");
     }
   }
@@ -337,6 +338,7 @@ void InputInfo::print() {
   std::cout << "time_skip\t:\t" << time_skip << std::endl;
   std::cout << "runs\t\t:\t" << runs << std::endl;
   std::cout << "mini_pull\t:\t" << mini_pull << std::endl;
+  std::cout << "sample_rate\t:\t" << sample_rate << std::endl;
   std::cout << "------------------input info--------------" << std::endl;
 }
 

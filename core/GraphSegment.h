@@ -164,6 +164,7 @@ class InputInfo {
   int time_skip = 3;
   int runs = 1;
   int mini_pull = 1;
+  float sample_rate = -1;
 
   // algorithm related:
   VertexId batch_size;

@@ -401,13 +401,26 @@ class Sampler {
       // LOG_DEBUG("sample_load_dst cost %.3f", sample_load_dst);
 
       sample_init_co -= get_time();
-      ssg->init_co(
-          [&](VertexId dst) {
-            int nbrs = whole_graph->column_offset[dst + 1] - whole_graph->column_offset[dst];
-            if (fanout[i] < 0) return nbrs;
-            return std::min(nbrs, fanout[i]);
-          },
-          i);
+      if (whole_graph->graph_->config->sample_rate > 0) {  // use sample rate
+        float sample_rate = whole_graph->graph_->config->sample_rate;
+        // LOG_DEBUG("sample_rate %.3f", sample_rate);
+        ssg->init_co(
+            [&](VertexId dst) {
+              int nbrs = whole_graph->column_offset[dst + 1] - whole_graph->column_offset[dst];
+              // if (fanout[i] < 0) return nbrs;
+              return std::max(int(nbrs * sample_rate), 1);
+            },
+            i);
+      } else {
+        ssg->init_co(
+            [&](VertexId dst) {
+              int nbrs = whole_graph->column_offset[dst + 1] - whole_graph->column_offset[dst];
+              if (fanout[i] < 0) return nbrs;
+              return std::min(nbrs, fanout[i]);
+            },
+            i);
+      }
+
       sample_init_co += get_time();
       // LOG_DEBUG("sample_one layer %d init_column_offset done", i);
 
@@ -513,6 +526,13 @@ class Sampler {
     auto whole_offset = whole_graph->column_offset;
     auto whole_indices = whole_graph->row_indices;
     VertexId edge_nums = whole_offset[dst + 1] - whole_offset[dst];
+
+    if (whole_graph->graph_->config->sample_rate > 0) {
+      VertexId tmp_fanout = std::max(1, int(edge_nums * whole_graph->graph_->config->sample_rate));
+      // LOG_DEBUG("neightbor sample fanout %d, edge %d sample rate %d", fanout_i, edge_nums, tmp_fanout);
+      fanout_i = tmp_fanout;
+    }
+
     int actl_fanout = min(fanout_i, edge_nums);
 
     ////////////////////////////////////////////////
