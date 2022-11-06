@@ -133,7 +133,7 @@ sample_rate 1024 7650 745-128-8 ../data/AmazonCoBuy_photo/AmazonCoBuy_photo GCNN
 # Reddit
 # 512, 1k, 2k, 4k, 8k, 16k, 32k, 64k, 128k, full
 array=('0.1' '0.2' '0.3' '0.4' '0.5' '0.6' '0.7' '0.8' '0.9', '1.0')
-sample_rate 1024 232965 602-128-41 ../data/reddit/reddit GCNNEIGHBORGPU 15,25 400 shuffle 0.01 0.0001 0.5 1 0 3 1  "${array[*]}"
+sample_rate 65536 232965 602-128-41 ../data/reddit/reddit GCNNEIGHBORGPU 15,25 400 shuffle 0.01 0.0001 0.5 1 0 3 1  "${array[*]}"
 
 # Yelp
 # array=('0.1' '0.2' '0.3' '0.4' '0.5' '0.6' '0.7' '0.8' '0.9', '1.0')

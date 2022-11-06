@@ -329,8 +329,8 @@ class Sampler {
     }
   }
 
-  int get_compute_cnt() {
-    int ret = 0;
+  uint64_t get_compute_cnt() {
+    uint64_t ret = 0;
     for (int i = 0; i < layers; ++i) {
       ret += subgraph->sampled_sgs[i]->e_size;
     }

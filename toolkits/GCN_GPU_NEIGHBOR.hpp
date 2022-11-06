@@ -274,7 +274,7 @@ class GCN_GPU_NEIGHBOR_impl {
     double debug_time = 0;
     double epoch_time = -get_time();
     int batch_num = sampler->batch_nums;
-    int compute_cnt = 0;
+    uint64_t compute_cnt = 0;
 
     if (hosts > 1) {
       if (type == 0 && graph->rtminfo->epoch >= 3) mpi_comm_time -= get_time();
@@ -314,6 +314,8 @@ class GCN_GPU_NEIGHBOR_impl {
       sample_one_cost += get_time();
 
       compute_cnt += sampler->get_compute_cnt();
+      // LOG_DEBUG("sample one done");
+      // continue;
 
       // LOG_DEBUG("epoch %d batch %d, train_nodes %d", graph->rtminfo->epoch, i,
       // sampler->subgraph->sampled_sgs.back()->v_size); sampler->print_batch_nodes();
@@ -504,11 +506,11 @@ class GCN_GPU_NEIGHBOR_impl {
     LOG_INFO("  backward cost %.3f, b_nn_time %.3f", backward_cost, backward_nn_time);
     if (type == 0) {
       get_gpu_mem(used_gpu_mem, total_gpu_mem);
-      LOG_INFO("train_epoch %d cost %.3f, compute_cnt %d, gpu mem:  (%.0fM/%.0fM)", graph->rtminfo->epoch, epoch_time,
+      LOG_INFO("train_epoch %d cost %.3f, compute_cnt %lld, gpu mem:  (%.0fM/%.0fM)", graph->rtminfo->epoch, epoch_time,
                compute_cnt, used_gpu_mem, total_gpu_mem);
     } else {
       get_gpu_mem(used_gpu_mem, total_gpu_mem);
-      LOG_INFO("eval_epoch %d cost %.3f, compute_cnt %d, gpu mem: (%.0fM/%.0fM)", graph->rtminfo->epoch, epoch_time,
+      LOG_INFO("eval_epoch %d cost %.3f, compute_cnt %lld, gpu mem: (%.0fM/%.0fM)", graph->rtminfo->epoch, epoch_time,
                compute_cnt, used_gpu_mem, total_gpu_mem);
     }
 
