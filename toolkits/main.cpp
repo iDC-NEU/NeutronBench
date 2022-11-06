@@ -119,7 +119,7 @@ int main(int argc, char **argv) {
       float acc = ntsGCN->run();
       best_val_accs.push_back(acc);
     }
-    std::cout << "Best-val-acc: ";
+    std::cout << "\nmain(): Best-val-acc: ";
     for (auto &it : best_val_accs) {
       std::cout << it << " ";
     }

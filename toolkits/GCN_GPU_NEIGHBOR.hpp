@@ -14,6 +14,7 @@ class GCN_GPU_NEIGHBOR_impl {
   ValueType epsilon;
   ValueType decay_rate;
   ValueType decay_epoch;
+  double start_time;
   int layers;
   // graph
   VertexSubset* active;
@@ -647,7 +648,18 @@ class GCN_GPU_NEIGHBOR_impl {
     double test_time = 0;
     float best_val_acc = 0;
     double run_time = -get_time();
+    float config_run_time = graph->config->run_time;
+    if (config_run_time > 0) {
+      start_time = get_time();
+      iterations = INT_MAX;
+      LOG_DEBUG("iterations %d config_run_time %d", iterations, config_run_time);
+    }
+
     for (int i_i = 0; i_i < iterations; i_i++) {
+      if (config_run_time > 0 && train_time >= config_run_time) {
+        iterations = i_i;
+        break;
+      }
       graph->rtminfo->epoch = i_i;
 
       ctx->train();
