@@ -327,6 +327,9 @@ void InputInfo::readFromCfgFile(std::string config_file) {
       //   std::cout << it << " ";
       // }
       // std::cout << std::endl;
+    } else if (0 == cfg_k.compare("LOWER_FANOUT")) {
+      this->lower_fanout = std::atoi(cfg_v.c_str());
+      assert(this->lower_fanout > 0);
     }
 
     else {
@@ -387,6 +390,7 @@ void InputInfo::print() {
   std::cout << "batch_size_vec_string: " << batch_size_vec_string << std::endl;
   std::cout << "sample_switch_time: " << sample_switch_time << std::endl;
   std::cout << "sample_rate_vec_string: " << sample_rate_vec_string << std::endl;
+  std::cout << "lower_fanout\t:\t" << lower_fanout << std::endl;
 
   std::cout << "------------------input info--------------" << std::endl;
 }
