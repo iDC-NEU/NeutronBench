@@ -408,7 +408,8 @@ class Sampler {
             [&](VertexId dst) {
               int nbrs = whole_graph->column_offset[dst + 1] - whole_graph->column_offset[dst];
               // if (fanout[i] < 0) return nbrs;
-              return std::max(int(nbrs * sample_rate), 1);
+              int lower_edge = std::min(whole_graph->graph_->config->lower_fanout, nbrs);
+              return std::max(int(nbrs * sample_rate), lower_edge);
             },
             i);
       } else {
@@ -528,12 +529,13 @@ class Sampler {
     VertexId edge_nums = whole_offset[dst + 1] - whole_offset[dst];
 
     if (whole_graph->graph_->config->sample_rate > 0) {
-      VertexId tmp_fanout = std::max(1, int(edge_nums * whole_graph->graph_->config->sample_rate));
+      VertexId tmp_fanout = std::max(whole_graph->graph_->config->lower_fanout, int(edge_nums * whole_graph->graph_->config->sample_rate));
       // LOG_DEBUG("neightbor sample fanout %d, edge %d sample rate %d", fanout_i, edge_nums, tmp_fanout);
       fanout_i = tmp_fanout;
     }
 
     int actl_fanout = min(fanout_i, edge_nums);
+    assert(column_offset[id + 1] - column_offset[id] == actl_fanout);
 
     ////////////////////////////////////////////////
     // LOG_DEBUG("edge_nusm %d, fanout %d", edge_nums, fanout_i);

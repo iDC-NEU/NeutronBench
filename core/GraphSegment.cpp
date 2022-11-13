@@ -289,6 +289,9 @@ void InputInfo::readFromCfgFile(std::string config_file) {
     } else if (0 == cfg_k.compare("RUN_TIME")) {
       this->run_time = std::atof(cfg_v.c_str());
       assert(this->run_time > 0);
+    } else if (0 == cfg_k.compare("LOWER_FANOUT")) {
+      this->lower_fanout = std::atoi(cfg_v.c_str());
+      assert(this->lower_fanout > 0);
     } 
     
     
@@ -346,6 +349,7 @@ void InputInfo::print() {
   std::cout << "mini_pull\t:\t" << mini_pull << std::endl;
   std::cout << "sample_rate\t:\t" << sample_rate << std::endl;
   std::cout << "run_time\t:\t" << run_time << std::endl;
+  std::cout << "lower_fanout\t:\t" << lower_fanout << std::endl;
   std::cout << "------------------input info--------------" << std::endl;
 }
 
