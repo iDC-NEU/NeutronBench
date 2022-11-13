@@ -166,6 +166,15 @@ class InputInfo {
   int mini_pull = 1;
   float sample_rate = -1;
   double run_time = -1;
+  // int dynamic_sample = -1;
+
+  float batch_switch_time = -1;
+  std::string batch_size_vec_string;
+  std::vector<int> batch_size_vec;
+
+  float sample_switch_time = -1;
+  std::string sample_rate_vec_string;
+  std::vector<float> sample_rate_vec;
 
   // algorithm related:
   VertexId batch_size;

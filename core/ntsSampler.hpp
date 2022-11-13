@@ -48,6 +48,12 @@ class Sampler {
   VertexId layers;
   VertexId metis_batch_id;
   Cuda_Stream* cs;
+  bool full_batch = false;
+  int batch_size_switch_idx = 0;
+  std::vector<int> batch_size_vec;
+
+  int sample_rate_switch_idx = 0;
+  std::vector<float> sample_rate_vec;
 
   double sample_pre_time = 0;
   double sample_load_dst = 0;
@@ -120,7 +126,37 @@ class Sampler {
     }
   }
 
+  void update_batch_size(VertexId batch_size_) {
+    // batch_size = whole_graph->graph_->config->batch_size;
+    LOG_DEBUG("batch_size switch to %d", batch_size_);
+    batch_size = batch_size_;
+    if (work_range[1] < batch_size || full_batch) batch_size = work_range[1];
+    batch_nums = (work_range[1] + batch_size - 1) / batch_size;
+  }
+
+  bool update_batch_size_from_time(float gcn_run_time) {
+    int idx = gcn_run_time / whole_graph->graph_->config->batch_switch_time;
+    if (idx != batch_size_switch_idx && idx < batch_size_vec.size()) {
+      batch_size_switch_idx = idx;
+      update_batch_size(batch_size_vec[batch_size_switch_idx]);
+      return true;
+    }
+    return false;
+  }
+
+  bool update_sample_rate_from_time(float gcn_run_time) {
+    int idx = gcn_run_time / whole_graph->graph_->config->sample_switch_time;
+    if (idx != sample_rate_switch_idx && idx < sample_rate_vec.size()) {
+      sample_rate_switch_idx = idx;
+      whole_graph->graph_->config->sample_rate = sample_rate_vec[sample_rate_switch_idx];
+      LOG_DEBUG("sample_rate switch to %.3f", whole_graph->graph_->config->sample_rate);
+      return true;
+    }
+    return false;
+  }
+
   Sampler(FullyRepGraph* whole_graph_, std::vector<VertexId>& index, bool full_batch = false) {
+    this->full_batch = full_batch;
     // Sampler(FullyRepGraph* whole_graph_, std::vector<VertexId>& index, Device dev = CPU, int gpu_id = 0) {
     // this->device = dev;
     // this->gpu_id = gpu_id;
@@ -138,9 +174,18 @@ class Sampler {
     sample_bits = new Bitmap(whole_graph->global_vertices);
 
     fanout = whole_graph->graph_->gnnctx->fanout;
-    batch_size = whole_graph->graph_->config->batch_size;
-    if (work_range[1] < batch_size || full_batch) batch_size = work_range[1];
-    batch_nums = (work_range[1] + batch_size - 1) / batch_size;
+
+    // if (whole_graph_->graph_->config->batch_switch_time <= 0) {
+
+    ////////////////////////////////////////////////////////
+    update_batch_size(whole_graph->graph_->config->batch_size);
+
+    ////////////////////////////////////////////////////////
+    // batch_size = whole_graph->graph_->config->batch_size;
+    // if (work_range[1] < batch_size || full_batch) batch_size = work_range[1];
+    // batch_nums = (work_range[1] + batch_size - 1) / batch_size;
+    ////////////////////////////////////////////////
+
     // if (whole_graph->graph_->config->batch_type == METIS) {
     //   batch_nums == batch_nodes.size();
     // }
@@ -156,6 +201,24 @@ class Sampler {
     subgraph = new SampledSubgraph(layers, fanout);
     // pre_alloc_one();
     // assert (false);
+
+    ////////////////////////////////////////////////
+    batch_size_vec = whole_graph_->graph_->config->batch_size_vec;
+    batch_size_switch_idx = -1;
+    LOG_DEBUG("show batch_size_vec in Samper constructor functioni:");
+    for (auto it : batch_size_vec) {
+      std::cout << it << " ";
+    }
+    std::cout << std::endl;
+
+    sample_rate_vec = whole_graph_->graph_->config->sample_rate_vec;
+    sample_rate_switch_idx = -1;
+    LOG_DEBUG("show sampel_rate_vec in Samper constructor functioni:");
+    for (auto it : sample_rate_vec) {
+      std::cout << it << " ";
+    }
+    std::cout << std::endl;
+    // assert(false);
   }
 
   void update_batch_nums(VertexId nums) { this->batch_nums = nums; }
@@ -342,6 +405,7 @@ class Sampler {
     // void reservoir_sample(int layers, int batch_size_, const
     // std::vector<int>& fanout_, int type = 0){ LOG_DEBUG("layers %d batch_size
     // %d fanout %d-%d", layers, batch_size_, fanout_[0], fanout_[1]);
+    // LOG_DEBUG("work_offset %d work_range[1] %d phase %d", work_offset, work_range[1], phase);
     assert(work_offset < work_range[1]);
     // assert(batch_size == batch_size_);
     VertexId actl_batch_size = std::min(batch_size, work_range[1] - work_offset);

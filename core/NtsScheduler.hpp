@@ -607,8 +607,20 @@ struct Parameter : torch::nn::Module {
   ValueType epsilon_t;
   ValueType l_r;
   ValueType weight_decay;
-  int curr_epoch;
 
+  void save_W(std::string save_dir, int layer) {
+    LOG_DEBUG("save to %s", (save_dir + "/W" + std::to_string(layer)).c_str());
+    torch::save(W, save_dir + "/W" + std::to_string(layer));
+  }
+
+  void load_W(std::string load_dir, int layer) {
+    LOG_DEBUG("load to %s", (load_dir + "/W" + std::to_string(layer)).c_str());
+    torch::Device GPU(torch::kCUDA, 0);
+    torch::load(W, load_dir + "/W" + std::to_string(layer));
+    // W.to(GPU);
+  }
+
+  int curr_epoch;
   int decay_rate;
   int decay_epoch;
   Parameter(size_t w, size_t h, ValueType alpha_, ValueType beta1_, ValueType beta2_, ValueType epsilon_,

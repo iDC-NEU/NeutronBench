@@ -14,6 +14,7 @@ class GCN_GPU_NEIGHBOR_impl {
   ValueType epsilon;
   ValueType decay_rate;
   ValueType decay_epoch;
+  ValueType best_val_acc;
   double start_time;
   int layers;
   // graph
@@ -45,6 +46,7 @@ class GCN_GPU_NEIGHBOR_impl {
   Sampler* test_sampler = nullptr;
   // double gcn_start_time = 0;
   double gcn_run_time = 0;
+  // int batch_size_switch_idx = 0;
 
   NtsVar F;
   NtsVar loss;
@@ -55,12 +57,15 @@ class GCN_GPU_NEIGHBOR_impl {
   long train_nodes;
   int max_batch_num;
   int min_batch_num;
+  std::string dataset_name;
   torch::nn::Dropout drpmodel;
   // double sample_cost = 0;
   std::vector<torch::nn::BatchNorm1d> bn1d;
 
   ntsPeerRPC<ValueType, VertexId>* rpc;
   int hosts;
+  // std::unordered_map<std::string, std::vector<int>> batch_size_mp;
+  // std::vector<int> batch_size_vec;
 
   GCN_GPU_NEIGHBOR_impl(Graph<Empty>* graph_, int iterations_, bool process_local = false,
                         bool process_overlap = false) {
@@ -87,6 +92,21 @@ class GCN_GPU_NEIGHBOR_impl {
     } else {
       rpc = nullptr;
     }
+    best_val_acc = 0;
+
+    // batch_size_mp["ppi"] = {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 2048, 4096, 9716};
+    // batch_size_mp["ppi-large"] = {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 44906};
+    // batch_size_mp["flickr"] = {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 44625};
+    // batch_size_mp["AmazonCoBuy_computers"] = {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8250};
+    // batch_size_mp["ogbn-arxiv"] = {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768,
+    // 65536, 90941}; batch_size_mp["AmazonCoBuy_photo"] = {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4590};
+
+    // batch_size_switch_idx = 0;
+
+    int pos_ = graph->config->edge_file.find('/', 7);
+    dataset_name = graph->config->edge_file.substr(7, pos_ - 7);
+    LOG_DEBUG("pos_ %d %c dataset_name: {%s}", pos_, graph->config->edge_file[pos_], dataset_name.c_str());
+    // batch_size_vec = graph->config->batch_size_vec;
   }
 
   void init_active() {
@@ -242,7 +262,8 @@ class GCN_GPU_NEIGHBOR_impl {
     }
   }
 
-  float Forward(Sampler* sampler, int type = 0) {
+  // float Forward(Sampler* sampler, int type = 0) {
+  std::pair<float, double> Forward(Sampler* sampler, int type = 0) {
     graph->rtminfo->forward = true;
     correct = 0;
     train_nodes = 0;
@@ -311,13 +332,38 @@ class GCN_GPU_NEIGHBOR_impl {
     // std::unordered_set<VertexId> st;
     sampler->metis_batch_id = 0;
     // LOG_DEBUG("sampler has %d batchs", sampler->batch_nums);
-    for (VertexId i = 0; i < sampler->batch_nums; ++i) {
+    // for (VertexId i = 0; i < sampler->batch_nums; ++i) {
+    int i = -1;
+    double forward_cost = 0;
+    while (sampler->work_offset < sampler->work_range[1]) {
+      ++i;
+      // for (VertexId i = 0; i < sampler->batch_nums; ++i) {
+      ctx->train();
       if (graph->config->run_time > 0 && gcn_run_time >= graph->config->run_time) {
         break;
       }
+      if (graph->config->batch_switch_time > 0) {
+        // LOG_DEBUG("update batch size before sample one, gcn_run_time%.3f", gcn_run_time);
+        bool ret = train_sampler->update_batch_size_from_time(gcn_run_time);
+        ////////////////////////////////////////////////////////
+        if (ret && train_sampler->batch_size_switch_idx > 0) {
+          LOG_DEBUG("load_W to /home/hdd/sanzo/neutron-sanzo/saved_modules");
+          for (int i = 0; i < layers; ++i) {
+            P[i]->load_W("/home/hdd/sanzo/neutron-sanzo/saved_modules", i);
+          }
+          // assert(false);
+        }
+        ///////////////////////////////////////////////////////////////
+      }
+
+      if (graph->config->sample_switch_time > 0) {
+        train_sampler->update_sample_rate_from_time(gcn_run_time);
+      }
+
       double one_batch_cost = -get_time();
       // LOG_DEBUG("batch id %d", i);
       double sample_one_cost = -get_time();
+
       sample_cost -= get_time();
       sampler->sample_one(graph->config->batch_type, ctx->is_train());
       sample_cost += get_time();
@@ -478,19 +524,32 @@ class GCN_GPU_NEIGHBOR_impl {
       // std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
       sampler->reverse_sgs();
       one_batch_cost += get_time();
+      // printf("gcn_run_time %.3f one_batfh_cost %.3f ", gcn_run_time, one_batch_cost);
       gcn_run_time += one_batch_cost;
+      // printf("gcn_run_time %.3f\n", gcn_run_time);
+
+      // LOG_DEBUG("start evalforward");
 
       // do evaluation after one batch
       ctx->eval();
-      double eval_start_time = -get_time();
+      double eval_cost = -get_time();
       float val_acc = EvalForward(eval_sampler, 1);
-      eval_start_time += get_time();
-      // LOG_INFO("Epoch %03d batch %03d eval_acc %.3f train_time %.3f", graph->rtminfo->epoch, i, val_acc,
-      // one_batch_cost);
-      LOG_INFO("Epoch %03d batch %03d eval_acc %.3f train_time %.3f run_time %.3f", graph->rtminfo->epoch, i, val_acc,
-               one_batch_cost, gcn_run_time);
+      eval_cost += get_time();
+      LOG_INFO("Epoch %03d batch %03d eval_acc %.3f train_time %.3lf eval_time %.3lf run_time %.3lf",
+               graph->rtminfo->epoch, i, val_acc, one_batch_cost, eval_cost, gcn_run_time);
+      ///////////////////////////////////////////////////
+      if (val_acc > best_val_acc) {
+        LOG_DEBUG("val_acc %.3f best_val_acc %.3f", val_acc, best_val_acc);
+        best_val_acc = val_acc;
+        LOG_DEBUG("save_W to /home/hdd/sanzo/neutron-sanzo/saved_modules");
+        for (int i = 0; i < layers; ++i) {
+          P[i]->save_W("/home/hdd/sanzo/neutron-sanzo/saved_modules", i);
+          // P[i]->load_W("/home/hdd/sanzo/neutron-sanzo/saved_modules", i);
+        }
+        // assert(false);
+      }
 
-      ctx->train();
+      forward_cost += one_batch_cost;
     }
     // LOG_DEBUG("sampler worker_offset %d range %d", sampler->work_offset, sampler->work_range[1]);
     assert(sampler->work_offset == sampler->work_range[1]);
@@ -553,7 +612,8 @@ class GCN_GPU_NEIGHBOR_impl {
       acc = 1.0 * correct / train_nodes;
     }
 
-    return acc;
+    // return acc;
+    return {acc, forward_cost};
   }
 
   float EvalForward(Sampler* sampler, int type = 0) {
@@ -625,7 +685,11 @@ class GCN_GPU_NEIGHBOR_impl {
     // std::unordered_set<VertexId> st;
     sampler->metis_batch_id = 0;
     // LOG_DEBUG("sampler has %d batchs", sampler->batch_nums);
-    for (VertexId i = 0; i < sampler->batch_nums; ++i) {
+    // for (VertexId i = 0; i < sampler->batch_nums; ++i) {
+    int i = -1;
+    // LOG_DEBUG("work_offset %d work_range %d", sampler->work_offset, sampler->work_range[1]);
+    while (sampler->work_offset < sampler->work_range[1]) {
+      ++i;
       // if (graph->config->run_time > 0 && get_time() - gcn_start_time >= graph->config->run_time) {
       //   break;
       // }
@@ -878,6 +942,7 @@ class GCN_GPU_NEIGHBOR_impl {
     // get train/val/test node index. (may be move this to GNNDatum)
     std::vector<VertexId> train_nids, val_nids, test_nids;
     BatchType batch_type = graph->config->batch_type;
+    assert(best_val_acc == 0);
     for (int i = 0; i < graph->gnnctx->l_v_num; ++i) {
       // for (int i = graph->partition_offset[graph->partition_id]; i < graph->partition_offset[graph->partition_id +
       // 1]; ++i) {
@@ -963,7 +1028,6 @@ class GCN_GPU_NEIGHBOR_impl {
     double train_time = 0;
     double val_time = 0;
     double test_time = 0;
-    float best_val_acc = 0;
     double run_time = -get_time();
     float config_run_time = graph->config->run_time;
     if (config_run_time > 0) {
@@ -982,8 +1046,12 @@ class GCN_GPU_NEIGHBOR_impl {
 
       ctx->train();
       // if (i_i >= graph->config->time_skip) train_time -= get_time();
-      float train_acc = Forward(train_sampler, 0);
+      // float train_acc = Forward(train_sampler, 0);
+      auto [train_acc, epoch_time] = Forward(train_sampler, 0);
       float train_loss = loss_epoch;
+
+      float val_acc = EvalForward(eval_sampler, 1);
+      LOG_DEBUG("epoch_train_acc %.3f epoch_eval_acc %.3f epoch_train_time %.3f", train_acc, val_acc, epoch_time);
       // if (i_i >= graph->config->time_skip) train_time += get_time();
       // LOG_DEBUG("epoch %d train Forward() done", i_i);
 
@@ -1011,21 +1079,22 @@ class GCN_GPU_NEIGHBOR_impl {
     }
     printf("best val acc: %.3f\n", best_val_acc);
 
-    double comm_time = mpi_comm_time + rpc_comm_time + rpc_wait_time;
-    double compute_time = train_time - comm_time;
-    printf(
-        "train TIME(%d) sample %.3f compute_time %.3f comm_time %.3f mpi_comm %.3f rpc_comm %.3f rpc_wait_time %.3f\n",
-        graph->partition_id, train_sample_time, compute_time, comm_time, mpi_comm_time, rpc_comm_time, rpc_wait_time);
-    printf("train/val/test time: %.3f, %.3f, %.3f\n", train_time, val_time, test_time);
+    // double comm_time = mpi_comm_time + rpc_comm_time + rpc_wait_time;
+    // double compute_time = train_time - comm_time;
+    // printf(
+    //     "train TIME(%d) sample %.3f compute_time %.3f comm_time %.3f mpi_comm %.3f rpc_comm %.3f rpc_wait_time
+    //     %.3f\n", graph->partition_id, train_sample_time, compute_time, comm_time, mpi_comm_time, rpc_comm_time,
+    //     rpc_wait_time);
+    // printf("train/val/test time: %.3f, %.3f, %.3f\n", train_time, val_time, test_time);
 
-    if (hosts > 1) rpc->exit();
-    run_time += get_time();
-    printf("run(): pre_time %.3fs runtime: %.3fs\n", pre_time, run_time);
+    // if (hosts > 1) rpc->exit();
+    // run_time += get_time();
+    // printf("run(): pre_time %.3fs runtime: %.3fs\n", pre_time, run_time);
 
-    if (graph->partition_id == 0)
-      printf("Avg epoch train_time %.3f val_time %.3f test_time %.3f\n",
-             train_time / (iterations - graph->config->time_skip), val_time / (iterations - graph->config->time_skip),
-             test_time / (iterations - graph->config->time_skip));
+    // if (graph->partition_id == 0)
+    //   printf("Avg epoch train_time %.3f val_time %.3f test_time %.3f\n",
+    //          train_time / (iterations - graph->config->time_skip), val_time / (iterations -
+    //          graph->config->time_skip), test_time / (iterations - graph->config->time_skip));
 
     delete active;
     return best_val_acc;

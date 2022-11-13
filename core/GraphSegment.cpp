@@ -289,9 +289,46 @@ void InputInfo::readFromCfgFile(std::string config_file) {
     } else if (0 == cfg_k.compare("RUN_TIME")) {
       this->run_time = std::atof(cfg_v.c_str());
       assert(this->run_time > 0);
-    } 
-    
-    
+    } else if (0 == cfg_k.compare("BATCH_SWITCH_TIME")) {
+      this->batch_switch_time = std::atof(cfg_v.c_str());
+      // printf("batch_switch_time %.3f\n", batch_switch_time);
+    }
+
+    // else if (0 == cfg_k.compare("DYNAMIC_SAMPLE")) {
+    //   this->dynamic_sample = std::atoi(cfg_v.c_str());
+    // }
+
+    else if (0 == cfg_k.compare("BATCH_SIZE_VEC")) {
+      this->batch_size_vec_string = cfg_v;
+      batch_size_vec.clear();
+      std::stringstream ss(cfg_v);
+      std::string number;
+      char c = fanout_string.find(',') != std::string::npos ? ',' : '-';
+      while (std::getline(ss, number, c)) {
+        batch_size_vec.push_back(std::stoi(number));
+      }
+      // for (auto it : batch_size_vec) {
+      //   std::cout << it << " ";
+      // }
+      // std::cout << std::endl;
+    } else if (0 == cfg_k.compare("SAMPLE_SWITCH_TIME")) {
+      this->sample_switch_time = std::atof(cfg_v.c_str());
+      // printf("sample_switch_time %.3f\n", sample_switch_time);
+    } else if (0 == cfg_k.compare("SAMPLE_RATE_VEC")) {
+      this->sample_rate_vec_string = cfg_v;
+      sample_rate_vec.clear();
+      std::stringstream ss(cfg_v);
+      std::string number;
+      char c = fanout_string.find(',') != std::string::npos ? ',' : '-';
+      while (std::getline(ss, number, c)) {
+        sample_rate_vec.push_back(std::stof(number));
+      }
+      // for (auto it : sample_rate_vec) {
+      //   std::cout << it << " ";
+      // }
+      // std::cout << std::endl;
+    }
+
     else {
       printf("not supported configure\n");
     }
@@ -346,6 +383,11 @@ void InputInfo::print() {
   std::cout << "mini_pull\t:\t" << mini_pull << std::endl;
   std::cout << "sample_rate\t:\t" << sample_rate << std::endl;
   std::cout << "run_time\t:\t" << run_time << std::endl;
+  std::cout << "batch_switch_time: " << batch_switch_time << std::endl;
+  std::cout << "batch_size_vec_string: " << batch_size_vec_string << std::endl;
+  std::cout << "sample_switch_time: " << sample_switch_time << std::endl;
+  std::cout << "sample_rate_vec_string: " << sample_rate_vec_string << std::endl;
+
   std::cout << "------------------input info--------------" << std::endl;
 }
 
