@@ -216,6 +216,8 @@ void InputInfo::readFromCfgFile(std::string config_file) {
       this->fanout_string = cfg_v;
     } else if (0 == cfg_k.compare("EDGE_FILE")) {
       this->edge_file = cfg_v.append("\0");
+      int pos_ = this->edge_file.find('/', 7);
+      dataset_name = edge_file.substr(7, pos_ - 7);
     } else if (0 == cfg_k.compare("FEATURE_FILE")) {
       this->feature_file = cfg_v;
     } else if (0 == cfg_k.compare("LABEL_FILE")) {
@@ -364,6 +366,7 @@ void InputInfo::print() {
     std::cout << "Unknow" << std::endl;
   }
   std::cout << "del_frac\t:\t" << del_frac << std::endl;
+  std::cout << "dataset:\t:\t" << dataset_name << std::endl;
   std::cout << "edge_file\t:\t" << edge_file << std::endl;
   std::cout << "feature_file\t:\t" << feature_file << std::endl;
   std::cout << "label_file\t:\t" << label_file << std::endl;
@@ -386,10 +389,10 @@ void InputInfo::print() {
   std::cout << "mini_pull\t:\t" << mini_pull << std::endl;
   std::cout << "sample_rate\t:\t" << sample_rate << std::endl;
   std::cout << "run_time\t:\t" << run_time << std::endl;
-  std::cout << "batch_switch_time: " << batch_switch_time << std::endl;
-  std::cout << "batch_size_vec_string: " << batch_size_vec_string << std::endl;
-  std::cout << "sample_switch_time: " << sample_switch_time << std::endl;
-  std::cout << "sample_rate_vec_string: " << sample_rate_vec_string << std::endl;
+  std::cout << "batch_switch_time:\t" << batch_switch_time << std::endl;
+  std::cout << "batch_size_vec_string:\t" << batch_size_vec_string << std::endl;
+  std::cout << "sample_switch_time:\t" << sample_switch_time << std::endl;
+  std::cout << "sample_rate_vec_string:\t" << sample_rate_vec_string << std::endl;
   std::cout << "lower_fanout\t:\t" << lower_fanout << std::endl;
 
   std::cout << "------------------input info--------------" << std::endl;

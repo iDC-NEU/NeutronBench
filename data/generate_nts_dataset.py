@@ -21,6 +21,7 @@ from dgl.data import CoraFullDataset, CoauthorCSDataset, CoauthorPhysicsDataset
 from dgl.data import AmazonCoBuyComputerDataset, AmazonCoBuyPhotoDataset
 from ogb.nodeproppred import DglNodePropPredDataset
 
+
 def extract_dataset(args):
     dataset = args.dataset
 
@@ -217,6 +218,7 @@ def extract_dataset(args):
     else:
         raise NotImplementedError
 
+
 def split_graph(graph, n_nodes, n_edges, features, labels, train_mask, val_mask, test_mask, fraction):
     new_n_nodes = int(n_nodes * fraction)
     #check_type(graph, n_nodes, n_edges, features, labels, train_mask, val_mask, test_mask, fraction)
@@ -237,11 +239,13 @@ def split_graph(graph, n_nodes, n_edges, features, labels, train_mask, val_mask,
 
     return graph, features, labels, train_mask, val_mask, test_mask
 
+
 def create_mask(idx, l):
     """Create mask."""
     mask = np.zeros(l, dtype=bool)
     mask[idx] = True
     return mask
+
 
 def split_dataset(num_nodes, x=8, y=1, z=1):
   '''
@@ -257,7 +261,23 @@ def split_dataset(num_nodes, x=8, y=1, z=1):
   assert(train_mask.sum() +  val_mask.sum() + test_mask.sum() == num_nodes)
   return train_mask, val_mask, test_mask
 
-  
+
+def remask(node_num, mask_rate=None):
+    train_num = int(mask_rate[0] * node_num)
+    val_num = int(mask_rate[1] * node_num)
+    test_num = node_num - train_num - val_num
+    print('remask to', train_num, val_num, test_num)
+    train_mask = np.zeros(node_num, dtype=bool)
+    val_mask = np.zeros(node_num, dtype=bool)
+    test_mask = np.zeros(node_num, dtype=bool)
+    node_ids = np.arange(node_num)
+    np.random.shuffle(node_ids)
+    train_mask[node_ids[ : train_num]] = True
+    val_mask[node_ids[train_num : train_num + val_num]] = True
+    test_mask[node_ids[train_num + val_num:]] = True
+    return train_mask, val_mask, test_mask
+
+
 def generate_nts_dataset(args, edge_list, features, labels, train_mask, val_mask, test_mask):
     dataset = args.dataset
     pre_path = os.getcwd() + '/' + dataset
@@ -290,6 +310,7 @@ def generate_nts_dataset(args, edge_list, features, labels, train_mask, val_mask
             mask_list.append('unknown')
     write_to_mask(pre_path + '.mask', mask_list)
 
+
 def show_time(func):
     def with_time(*args, **kwargs):
         time_cost = time.time()
@@ -298,6 +319,7 @@ def show_time(func):
         name = args[0]
         print("write to {} is done, cost: {:.2f}s Throughput:{:.2f}MB/s".format(name, time_cost, os.path.getsize(name)/1024/1024/time_cost))
     return with_time
+
 
 @show_time
 def edge2bin(name, edges):
@@ -341,7 +363,6 @@ def write_multi_class_to_file(name, data, format, index=False):
             f.write(' '.join(str(x) for x in line) + '\n')
 
 
-
 # def insert_self_loop(edge_list):
 #     time_stamp = time.time()
 #     graph = nx.from_edgelist(edge_list)
@@ -356,7 +377,7 @@ def write_multi_class_to_file(name, data, format, index=False):
 #         graph.add_edge(i, i)
 #     print('after insert self loop', graph)    
 #     return np.array(graph.edges)
-
+    
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Generate Dataset')
@@ -364,8 +385,14 @@ if __name__ == '__main__':
     parser.add_argument("--self-loop", type=bool, default=True, help="insert self-loop (default=True)")
     parser.add_argument("--split", type=bool, default=False, help="wheather or not split the graph")
     parser.add_argument("--frac", type=float, default=0.8, help="the fraction of split the graph")
-    
+    parser.add_argument("--remask", type=str, default=None, help="re-mark of the graph")
+
     args = parser.parse_args()
+    
+    
     print('args: ', args)
     edges_list, features, labels, train_mask, val_mask, test_mask = extract_dataset(args)
+    if args.remask is not None:
+        args.remask = list(map(float, args.remask.split(',')))
+        train_mask, val_mask, test_mask = remask(len(train_mask), args.remask)
     generate_nts_dataset(args, edges_list, features, labels, train_mask, val_mask, test_mask)

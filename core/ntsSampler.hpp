@@ -205,19 +205,19 @@ class Sampler {
     ////////////////////////////////////////////////
     batch_size_vec = whole_graph_->graph_->config->batch_size_vec;
     batch_size_switch_idx = -1;
-    LOG_DEBUG("show batch_size_vec in Samper constructor functioni:");
-    for (auto it : batch_size_vec) {
-      std::cout << it << " ";
-    }
-    std::cout << std::endl;
+    // LOG_DEBUG("show batch_size_vec in Samper constructor functioni:");
+    // for (auto it : batch_size_vec) {
+    //   std::cout << it << " ";
+    // }
+    // std::cout << std::endl;
 
     sample_rate_vec = whole_graph_->graph_->config->sample_rate_vec;
     sample_rate_switch_idx = -1;
-    LOG_DEBUG("show sampel_rate_vec in Samper constructor functioni:");
-    for (auto it : sample_rate_vec) {
-      std::cout << it << " ";
-    }
-    std::cout << std::endl;
+    // LOG_DEBUG("show sampel_rate_vec in Samper constructor functioni:");
+    // for (auto it : sample_rate_vec) {
+    //   std::cout << it << " ";
+    // }
+    // std::cout << std::endl;
     // assert(false);
   }
 
