@@ -354,7 +354,7 @@ class GCN_GPU_NEIGHBOR_impl {
       sample_cost += get_time();
       sample_one_cost += get_time();
 
-      compute_cnt += sampler->get_compute_cnt();
+      // compute_cnt += sampler->get_compute_cnt();
       // LOG_DEBUG("sample one done");
       // continue;
 
@@ -507,8 +507,8 @@ class GCN_GPU_NEIGHBOR_impl {
 
       train_cost += get_time();
       // std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
-      sampler->reverse_sgs();
       one_batch_cost += get_time();
+      sampler->reverse_sgs();
       // printf("gcn_run_time %.3f one_batfh_cost %.3f ", gcn_run_time, one_batch_cost);
       gcn_run_time += one_batch_cost;
       forward_cost += one_batch_cost;
@@ -601,6 +601,8 @@ class GCN_GPU_NEIGHBOR_impl {
     }
 
     // return acc;
+    // LOG_DEBUG("trans_cost %.3f\n", trans_feature_cost + trans_label_cost + trans_graph_cost);
+    forward_cost -= trans_feature_cost + trans_label_cost + trans_graph_cost;
     return {acc, forward_cost};
   }
 

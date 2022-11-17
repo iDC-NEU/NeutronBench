@@ -52,6 +52,7 @@ function new_cfg() {
   echo -e "TIME_SKIP:3" >> tmp.cfg
   echo -e "RUNS:${14}" >> tmp.cfg
   echo -e "CLASSES:${15}" >> tmp.cfg
+  echo -e "RUN_TIME:${16}" >> tmp.cfg
 
   other_paras="PROC_OVERLAP:0\nPROC_LOCAL:0\nPROC_CUDA:0\nPROC_REP:0\nLOCK_FREE:1\nDECAY_EPOCH:100\nDECAY_RATE:0.97"
   echo -e ${other_paras} >> tmp.cfg
@@ -71,7 +72,7 @@ function batch_size() {
 
   for bs in $1; do
     echo "run ${dataset} size $bs..."
-    new_cfg $2 $3 $4 $5 $6 $bs $7 $8 $9 ${10} ${11} ${12} ${13} ${14} ${15}
+    new_cfg $2 $3 $4 $5 $6 $bs $7 $8 $9 ${10} ${11} ${12} ${13} ${14} ${15} ${16}
     echo "mpiexec -hostfile hostfile -np 1 ./build/nts tmp.cfg > "${log_path}/${dataset}_${bs}.log""
     mpiexec -hostfile hostfile -np 1 ./build/nts tmp.cfg > "${log_path}/${dataset}_${bs}.log"
   done
@@ -88,39 +89,48 @@ function batch_size() {
 function run_batch_size() {
   # pubmed
   array=('128' '512' '1024' '2048' '4096' '8192' '11830')
-  batch_size "${array[*]}" 19717 500-128-3 ../data/pubmed/pubmed GCNNEIGHBORGPU $1 $2 shuffle 0.01 0.0001 0.5 1 0 1 1
+  batch_size "${array[*]}" 19717 500-128-3 ../data/pubmed/pubmed GCNNEIGHBORGPU $1 100 shuffle 0.01 0.0001 0.5 1 0 1 1 3
 
   # AmazonCoBuyComputer
   array=('128' '512' '1024' '2048' '4096' '8192' '8250')
-  batch_size "${array[*]}" 13752 767-128-10 ../data/AmazonCoBuy_computers/AmazonCoBuy_computers GCNNEIGHBORGPU $1 $2 shuffle 0.01 0.0001 0.5 1 0 1 1
+  batch_size "${array[*]}" 13752 767-128-10 ../data/AmazonCoBuy_computers/AmazonCoBuy_computers GCNNEIGHBORGPU $1 200 shuffle 0.01 0.0001 0.5 1 0 1 1 7
 
   # AmazonCoBuyPhoto
   # 4590
   array=('128' '512' '1024' '2048' '4590')
-  batch_size "${array[*]}" 7650 745-128-8 ../data/AmazonCoBuy_photo/AmazonCoBuy_photo GCNNEIGHBORGPU $1 $2 shuffle 0.01 0.0001 0.5 1 0 1 1
+  batch_size "${array[*]}" 7650 745-128-8 ../data/AmazonCoBuy_photo/AmazonCoBuy_photo GCNNEIGHBORGPU $1 200 shuffle 0.01 0.0001 0.5 1 0 1 1 7
 
   # Reddit
   # 512, 1k, 2k, 4k, 8k, 16k, 32k, 64k, 128k, full
   array=('128' '512' '1024' '2048' '4096' '8192' '16384' '32768' '65536' '131072' '153431')
-  batch_size "${array[*]}" 232965 602-128-41 ../data/reddit/reddit GCNNEIGHBORGPU $1 $2 shuffle 0.01 0.0001 0.5 1 0 1 1
+  batch_size "${array[*]}" 232965 602-128-41 ../data/reddit/reddit GCNNEIGHBORGPU $1 100 shuffle 0.01 0.0001 0.5 1 0 1 1 50
 
   # Arxiv
   # array=('128' '512' '1024' '2048' '4096' '8192' '16384' '32768' '65536' '90941')
   array=('128' '512' '3072' '6144' '12288' '24576' '49152' '90941')
-  batch_size "${array[*]}" 169343 128-128-40 ../data/ogbn-arxiv/ogbn-arxiv GCNNEIGHBORGPU $1 $2 shuffle 0.01 0.0001 0.5 1 0 1 1
+  batch_size "${array[*]}" 169343 128-128-40 ../data/ogbn-arxiv/ogbn-arxiv GCNNEIGHBORGPU $1 200 shuffle 0.01 0.0001 0.5 1 0 1 1 30
 
   # Ogbn-products
   array=('128' '512' '1024' '2048' '4096' '8192' '16384' '32768' '65536' '131072' '196615')
-  batch_size "${array[*]}" 2449029 100-16-47 ../data/ogbn-products/ogbn-products GCNNEIGHBORGPU $1 $2 shuffle 0.01 0.0001 0.5 1 0 1 1
+  batch_size "${array[*]}" 2449029 100-128-47 ../data/ogbn-products/ogbn-products GCNNEIGHBORGPU $1 200 shuffle 0.01 0.0001 0.5 1 0 1 1 150
 }
 
+log_path="./log/batch-size/epoch-2-2"
+run_batch_size 2,2
 
 log_path="./log/batch-size/epoch-4-4"
-run_batch_size 4,4 20
+run_batch_size 4,4
 
 log_path="./log/batch-size/epoch-10-25"
-run_batch_size 10,25 20
+run_batch_size 10,25
 
+#  pre_time = {
+#             # 'cora': 200, 'citeseer': 200, 'pubmed': 200, 
+#             'AmazonCoBuy_computers': 7, 'AmazonCoBuy_photo': 7,
+#             'ogbn-arxiv': 30, 'pubmed': 3, 'reddit': 50, 
+#             'ogbn-products': 200
+#             # 'reddit': 100, 'yelp': 100, 'ogbn-arxiv': 100,
+#            }   
 
 # # Yelp
 # array=('512' '1024' '2048' '4096' '8192' '16384' '32768' '65536' '131072' '262144' '537635')
