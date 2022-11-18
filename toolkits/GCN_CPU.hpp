@@ -130,7 +130,7 @@ class GCN_CPU_impl {
     X[0] = F.set_requires_grad(true);
   }
 
-  void Test(long s) {  // 0 train, //1 eval //2 test
+  float Test(long s) {  // 0 train, //1 eval //2 test
     NtsVar mask_train = MASK.eq(s);
     NtsVar all_train = X[graph->gnnctx->layer_size.size() - 1]
                            .argmax(1)
@@ -148,15 +148,16 @@ class GCN_CPU_impl {
     MPI_Allreduce(&p_train, &g_train, 1, dt, MPI_SUM, MPI_COMM_WORLD);
     float acc_train = 0.0;
     if (g_train > 0) acc_train = float(g_correct) / g_train;
-    if (graph->partition_id == 0) {
-      if (s == 0) {
-        LOG_INFO("Train Acc: %f %d %d", acc_train, g_train, g_correct);
-      } else if (s == 1) {
-        LOG_INFO("Eval Acc: %f %d %d", acc_train, g_train, g_correct);
-      } else if (s == 2) {
-        LOG_INFO("Test Acc: %f %d %d", acc_train, g_train, g_correct);
-      }
-    }
+    // if (graph->partition_id == 0) {
+    //   if (s == 0) {
+    //     LOG_INFO("Train Acc: %f %d %d", acc_train, g_train, g_correct);
+    //   } else if (s == 1) {
+    //     LOG_INFO("Eval Acc: %f %d %d", acc_train, g_train, g_correct);
+    //   } else if (s == 2) {
+    //     LOG_INFO("Test Acc: %f %d %d", acc_train, g_train, g_correct);
+    //   }
+    // }
+    return acc_train;
   }
   NtsVar vertexForward(NtsVar &a, NtsVar &x) {
     NtsVar y;
@@ -229,17 +230,21 @@ class GCN_CPU_impl {
           P[i]->zero_grad();
         }
       }
-
+      double epoch_train_time = -get_time();
       Forward();
-      Test(0);
-      Test(1);
-      Test(2);
       Loss();
-
       ctx->self_backward();
       Update();
+      epoch_train_time += get_time();
+
+      float train_acc = Test(0);
+      float val_acc = Test(1);
+      // float test_acc = Test(2);
+
       //       ctx->debug();
-      if (graph->partition_id == 0) std::cout << "Nts::Running.Epoch[" << i_i << "]:loss\t" << loss << std::endl;
+      if (graph->partition_id == 0)
+        LOG_INFO("Epoch %03d epoch_train_time %.3f train_loss %.3f train_acc %.3f val_acc %.3f", i_i, epoch_train_time,
+                 loss.item<float>(), train_acc, val_acc);
     }
     exec_time += get_time();
     //    std::string str="a10";

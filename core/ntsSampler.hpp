@@ -155,6 +155,15 @@ class Sampler {
     return false;
   }
 
+  void update_fanout(int nums) {
+    for (auto& it : fanout) {
+      it = nums;
+    }
+    for (auto it : fanout) {
+      assert(it == nums);
+    }
+  }
+
   Sampler(FullyRepGraph* whole_graph_, std::vector<VertexId>& index, bool full_batch = false) {
     this->full_batch = full_batch;
     // Sampler(FullyRepGraph* whole_graph_, std::vector<VertexId>& index, Device dev = CPU, int gpu_id = 0) {
@@ -480,6 +489,9 @@ class Sampler {
         ssg->init_co(
             [&](VertexId dst) {
               int nbrs = whole_graph->column_offset[dst + 1] - whole_graph->column_offset[dst];
+              // if (fanout[i] < 0 && full_batch) {
+              //   assert(false);
+              // }
               if (fanout[i] < 0) return nbrs;
               return std::min(nbrs, fanout[i]);
             },
@@ -591,6 +603,7 @@ class Sampler {
     auto whole_offset = whole_graph->column_offset;
     auto whole_indices = whole_graph->row_indices;
     VertexId edge_nums = whole_offset[dst + 1] - whole_offset[dst];
+    fanout_i = column_offset[id + 1] - column_offset[id];
 
     if (whole_graph->graph_->config->sample_rate > 0) {
       VertexId tmp_fanout = std::max(whole_graph->graph_->config->lower_fanout,
@@ -599,7 +612,7 @@ class Sampler {
       fanout_i = tmp_fanout;
     }
 
-    int actl_fanout = min(fanout_i, edge_nums);
+    VertexId actl_fanout = min(fanout_i, edge_nums);
     assert(column_offset[id + 1] - column_offset[id] == actl_fanout);
 
     ////////////////////////////////////////////////
@@ -637,7 +650,7 @@ class Sampler {
     // sorted_idxs.reserve(fanout_i);
     if (edge_nums > 2 * fanout_i) {
       // if (edge_nums > 2 * fanout_i || true) {
-      sorted_idxs.reserve(actl_fanout);
+      sorted_idxs.reserve(fanout_i);
       RandomSample(edge_nums, fanout_i, sorted_idxs);
       ///////////////////////////
       std::sort(sorted_idxs.begin(), sorted_idxs.end());

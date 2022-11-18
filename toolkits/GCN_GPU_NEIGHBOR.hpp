@@ -259,7 +259,7 @@ class GCN_GPU_NEIGHBOR_impl {
   }
 
   // float Forward(Sampler* sampler, int type = 0) {
-  std::pair<float, double> Forward(Sampler* sampler, int type = 0) {
+  std::tuple<float, double, double> Forward(Sampler* sampler, int type = 0) {
     graph->rtminfo->forward = true;
     correct = 0;
     train_nodes = 0;
@@ -345,6 +345,10 @@ class GCN_GPU_NEIGHBOR_impl {
       //   ///////////////////////////////////////////////////////////////
       // }
 
+      forward_other_cost -= get_time();
+      if (ctx->training == true) zero_grad();  // should zero grad after every mini batch compute
+      forward_other_cost += get_time();
+
       double one_batch_cost = -get_time();
       // LOG_DEBUG("batch id %d", i);
       double sample_one_cost = -get_time();
@@ -398,11 +402,6 @@ class GCN_GPU_NEIGHBOR_impl {
       // LOG_DEBUG("epoch %d batch %d tarns_to_gpu done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, used_gpu_mem,
       // total_gpu_mem);
 
-      train_cost -= get_time();
-      forward_other_cost -= get_time();
-      if (ctx->training == true) zero_grad();  // should zero grad after every mini batch compute
-
-      forward_other_cost += get_time();
       // rpc.keep_running();
       trans_feature_cost -= get_time();
       sampler->load_feature_gpu(X[0], gnndatum->dev_local_feature);
@@ -438,6 +437,7 @@ class GCN_GPU_NEIGHBOR_impl {
       //     printf("%d ", tmp[i * classes + j]);
       //   }printf("\n");
       // }
+      train_cost -= get_time();
 
       for (int l = 0; l < layers; l++) {  // forward
         // LOG_DEBUG("start compute layer %d", l);
@@ -492,6 +492,9 @@ class GCN_GPU_NEIGHBOR_impl {
         // LOG_DEBUG("batch %d update done", i);
       }
 
+      train_cost += get_time();
+      one_batch_cost += get_time();
+
       forward_acc_cost -= get_time();
       if (graph->config->classes == 1) {
         correct += get_correct(X[layers], target_lab, graph->config->classes == 1);
@@ -505,9 +508,6 @@ class GCN_GPU_NEIGHBOR_impl {
       // get_gpu_mem(used_gpu_mem, total_gpu_mem);
       // LOG_DEBUG("epoch %d batch %d acc done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, used_gpu_mem, total_gpu_mem);
 
-      train_cost += get_time();
-      // std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
-      one_batch_cost += get_time();
       sampler->reverse_sgs();
       // printf("gcn_run_time %.3f one_batfh_cost %.3f ", gcn_run_time, one_batch_cost);
       gcn_run_time += one_batch_cost;
@@ -602,8 +602,8 @@ class GCN_GPU_NEIGHBOR_impl {
 
     // return acc;
     // LOG_DEBUG("trans_cost %.3f\n", trans_feature_cost + trans_label_cost + trans_graph_cost);
-    forward_cost -= trans_feature_cost + trans_label_cost + trans_graph_cost;
-    return {acc, forward_cost};
+    double trans_cost = trans_feature_cost + trans_label_cost + trans_graph_cost;
+    return {acc, forward_cost, trans_cost};
   }
 
   float EvalForward(Sampler* sampler, int type = 0) {
@@ -962,6 +962,7 @@ class GCN_GPU_NEIGHBOR_impl {
     }
     train_sampler = new Sampler(fully_rep_graph, train_nids);
     eval_sampler = new Sampler(fully_rep_graph, val_nids, true);   // true mean full batch
+    eval_sampler->update_fanout(-1);                               // val not sample
     test_sampler = new Sampler(fully_rep_graph, test_nids, true);  // true mean full batch
     // LOG_DEBUG("samper done");
 
@@ -1037,7 +1038,7 @@ class GCN_GPU_NEIGHBOR_impl {
       ctx->train();
       // if (i_i >= graph->config->time_skip) train_time -= get_time();
       // float train_acc = Forward(train_sampler, 0);
-      auto [train_acc, epoch_time] = Forward(train_sampler, 0);
+      auto [train_acc, epoch_time, trans_cost] = Forward(train_sampler, 0);
       float train_loss = loss_epoch;
 
       // update batch size after the whole epoch training
@@ -1073,12 +1074,12 @@ class GCN_GPU_NEIGHBOR_impl {
       if (graph->partition_id == 0) {
         // printf("Epoch %03d loss %.3f train_acc %.3f val_acc %.3f test_acc %.3f\n\n", i_i, train_loss, train_acc,
         //        val_acc, test_acc);
-        LOG_INFO("Epoch %03d train_loss %.3f epoch_train_time %.3f train_acc %.3f val_acc %.3f", i_i, train_loss,
-                 epoch_time, train_acc, val_acc);
+        LOG_INFO("Epoch %03d train_loss %.3f epoch_train_time %.3f train_acc %.3f val_acc %.3f trans_cost %.3f", i_i,
+                 train_loss, epoch_time, train_acc, val_acc, trans_cost);
         // LOG_DEBUG("epoch_train_time %.3f epoch_train_acc %.3f epoch_eval_acc %.3f",epoch_time, train_acc, val_acc);
       }
     }
-    printf("best val acc: %.3f\n", best_val_acc);
+    // printf("best val acc: %.3f\n", best_val_acc);
 
     // double comm_time = mpi_comm_time + rpc_comm_time + rpc_wait_time;
     // double compute_time = train_time - comm_time;
