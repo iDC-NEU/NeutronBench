@@ -177,6 +177,7 @@ class InputInfo {
   std::string sample_rate_vec_string;
   std::vector<float> sample_rate_vec;
   int lower_fanout = 0;
+  int batch_switch_acc = -1;
 
   // algorithm related:
   VertexId batch_size;

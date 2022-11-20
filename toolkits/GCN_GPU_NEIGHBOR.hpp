@@ -1051,6 +1051,9 @@ class GCN_GPU_NEIGHBOR_impl {
       }
 
       float val_acc = EvalForward(eval_sampler, 1);
+      if (graph->config->batch_switch_acc > 0) {
+        train_sampler->update_batch_size_from_acc(i_i, val_acc, gcn_run_time);
+      }
       // LOG_DEBUG("epoch_train_time %.3f epoch_train_acc %.3f epoch_eval_acc %.3f",epoch_time, train_acc, val_acc);
       // if (i_i >= graph->config->time_skip) train_time += get_time();
       // LOG_DEBUG("epoch %d train Forward() done", i_i);

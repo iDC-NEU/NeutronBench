@@ -202,7 +202,8 @@ class GCN_impl {
     graph->rtminfo->forward = true;
     for (int i = 0; i < graph->gnnctx->layer_size.size() - 1; i++) {
       graph->rtminfo->curr_layer = i;
-      if (i != 0) {
+      // LOG_DEBUG("ctx_istrain %d", ctx->is_train());
+      if (i != 0 && ctx->is_train()) {
         X[i] = drpmodel(X[i]);
       }
       //      gt->GraphPropagateForward(X[i], Y[i], subgraphs);
@@ -228,6 +229,7 @@ class GCN_impl {
       }
 
       double epoch_train_time = -get_time();
+      ctx->train();
       Forward();
       Loss();
       // Backward();
@@ -236,6 +238,8 @@ class GCN_impl {
       epoch_train_time += get_time();
 
       float train_acc = Test(0);
+      ctx->eval();
+      Forward();
       float val_acc = Test(1);
       // float test_acc = Test(2);
 

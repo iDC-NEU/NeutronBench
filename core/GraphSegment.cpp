@@ -305,7 +305,7 @@ void InputInfo::readFromCfgFile(std::string config_file) {
       batch_size_vec.clear();
       std::stringstream ss(cfg_v);
       std::string number;
-      char c = fanout_string.find(',') != std::string::npos ? ',' : '-';
+      char c = cfg_v.find(',') != std::string::npos ? ',' : '-';
       while (std::getline(ss, number, c)) {
         batch_size_vec.push_back(std::stoi(number));
       }
@@ -321,7 +321,7 @@ void InputInfo::readFromCfgFile(std::string config_file) {
       sample_rate_vec.clear();
       std::stringstream ss(cfg_v);
       std::string number;
-      char c = fanout_string.find(',') != std::string::npos ? ',' : '-';
+      char c = cfg_v.find(',') != std::string::npos ? ',' : '-';
       while (std::getline(ss, number, c)) {
         sample_rate_vec.push_back(std::stof(number));
       }
@@ -332,6 +332,9 @@ void InputInfo::readFromCfgFile(std::string config_file) {
     } else if (0 == cfg_k.compare("LOWER_FANOUT")) {
       this->lower_fanout = std::atoi(cfg_v.c_str());
       assert(this->lower_fanout > 0);
+    } else if (0 == cfg_k.compare("BATCH_SWITCH_ACC")) {
+      this->batch_switch_acc = std::atoi(cfg_v.c_str());
+      // assert(this->batch_switch_acc > 0);
     }
 
     else {
@@ -394,6 +397,7 @@ void InputInfo::print() {
   std::cout << "sample_switch_time:\t" << sample_switch_time << std::endl;
   std::cout << "sample_rate_vec_string:\t" << sample_rate_vec_string << std::endl;
   std::cout << "lower_fanout\t:\t" << lower_fanout << std::endl;
+  std::cout << "batch_switch_acc:\t" << batch_switch_acc << std::endl;
 
   std::cout << "------------------input info--------------" << std::endl;
 }
