@@ -177,6 +177,8 @@ class InputInfo {
   std::string sample_rate_vec_string;
   std::vector<float> sample_rate_vec;
   int lower_fanout = 0;
+  float cache_rate = 0;
+  std::string cache_policy;
 
   // algorithm related:
   VertexId batch_size;

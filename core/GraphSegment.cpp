@@ -318,10 +318,12 @@ void InputInfo::readFromCfgFile(std::string config_file) {
       // printf("sample_switch_time %.3f\n", sample_switch_time);
     } else if (0 == cfg_k.compare("SAMPLE_RATE_VEC")) {
       this->sample_rate_vec_string = cfg_v;
+      std::cout << cfg_v << std::endl;
       sample_rate_vec.clear();
       std::stringstream ss(cfg_v);
       std::string number;
-      char c = fanout_string.find(',') != std::string::npos ? ',' : '-';
+      char c = cfg_v.find(',') != std::string::npos ? ',' : '-';
+      std::cout << c << std::endl;
       while (std::getline(ss, number, c)) {
         sample_rate_vec.push_back(std::stof(number));
       }
@@ -332,6 +334,12 @@ void InputInfo::readFromCfgFile(std::string config_file) {
     } else if (0 == cfg_k.compare("LOWER_FANOUT")) {
       this->lower_fanout = std::atoi(cfg_v.c_str());
       assert(this->lower_fanout > 0);
+    } else if (0 == cfg_k.compare("CACHE_RATE")) {
+      this->cache_rate = std::atof(cfg_v.c_str());
+      assert(this->cache_rate >= 0);
+      assert(this->cache_rate <= 1);
+    } else if (0 == cfg_k.compare("CACHE_POLICY")) {
+      this->cache_policy = cfg_v.c_str();
     }
 
     else {
@@ -394,6 +402,8 @@ void InputInfo::print() {
   std::cout << "sample_switch_time:\t" << sample_switch_time << std::endl;
   std::cout << "sample_rate_vec_string:\t" << sample_rate_vec_string << std::endl;
   std::cout << "lower_fanout\t:\t" << lower_fanout << std::endl;
+  std::cout << "cache_rate\t:\t" << cache_rate << std::endl;
+  std::cout << "cache_policy\t:\t" << cache_policy << std::endl;
 
   std::cout << "------------------input info--------------" << std::endl;
 }

@@ -107,6 +107,37 @@ __global__ void zero_copy_feature_move_gpu_kernel(float *dev_feature, float *pin
 	}
 }
 
+__global__ void zero_copy_feature_move_gpu_cache_kernel(float *dev_feature, float *pinned_host_feature, VertexId_CUDA *src_vertex, VertexId_CUDA feature_size, VertexId_CUDA vertex_size,
+																												VertexId_CUDA* local_idx) {
+	size_t threadId = blockIdx.x * blockDim.x + threadIdx.x;
+	const int WARPSIZE = 32;
+	size_t laneId = threadId % WARPSIZE;
+	size_t warpId = threadId / WARPSIZE;
+	for (long i = threadId; i < (long) vertex_size * WARPSIZE; i += blockDim.x * gridDim.x) {
+		VertexId_CUDA vtx_lid = local_idx[i / WARPSIZE];
+		VertexId_CUDA vtx_gid = src_vertex[vtx_lid];
+		for (int j = laneId; j < feature_size; j += 32) {
+			dev_feature[vtx_lid * feature_size + j] = pinned_host_feature[vtx_gid * feature_size + j];
+		}
+	}
+}
+
+__global__ void gather_feature_from_gpu_cache_kernel(float *dev_feature, float *dev_cache_feature, VertexId_CUDA *src_vertex, VertexId_CUDA feature_size, VertexId_CUDA vertex_size,
+																												VertexId_CUDA* local_idx_cache, VertexId_CUDA* cache_node_hashmap) {
+	size_t threadId = blockIdx.x * blockDim.x + threadIdx.x;
+	const int WARPSIZE = 32;
+	size_t laneId = threadId % WARPSIZE;
+	size_t warpId = threadId / WARPSIZE;
+	for (long i = threadId; i < (long) vertex_size * WARPSIZE; i += blockDim.x * gridDim.x) {
+		VertexId_CUDA vtx_lid = local_idx_cache[i / WARPSIZE];
+		VertexId_CUDA vtx_gid = cache_node_hashmap[src_vertex[vtx_lid]];
+		for (int j = laneId; j < feature_size; j += 32) {
+			// dev_feature[vtx_lid * feature_size + j] = dev_cache_feature[vtx_gid * feature_size + j];
+			dev_feature[vtx_lid * feature_size + j] = dev_cache_feature[vtx_gid * feature_size + j];
+		}
+	}
+}
+
 __global__ void global_copy_mulilabel_move_gpu_kernel(long * dev_label, long *global_dev_label, VertexId_CUDA *dst_vertex, VertexId_CUDA vertex_size, VertexId_CUDA label_size) {
 	size_t threadId = blockIdx.x * blockDim.x + threadIdx.x;
 	const int WARPSIZE = 32;

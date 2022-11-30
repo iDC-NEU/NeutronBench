@@ -21,6 +21,7 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 #include "GCN_CPU_EAGER.hpp"
 #include "GCN_CPU_LAYER.hpp"
 #include "GCN_CPU_NEIGHBOR.hpp"
+#include "GCN_GPU_NEIGHBOR-exp3.hpp"
 #include "GIN_CPU.hpp"
 #include "test_batch_distributed.hpp"
 #include "test_getdepneighbor_cpu.hpp"
@@ -128,6 +129,41 @@ int main(int argc, char **argv) {
     tie(mean, var) = get_mean_var(best_val_accs);
     printf("Val-mean-var %d runs: %.4f(%.4f)\n", graph->config->runs, mean, var);
     std::cout << "edge_file: " << graph->config->edge_file << std::endl;
+
+    // ntsGCN->run();
+  } else if (graph->config->algorithm == std::string("GCNNEIGHBORGPUEXP3")) {
+    graph->load_directed(graph->config->edge_file, graph->config->vertices);
+    graph->generate_backward_structure();
+    GCN_GPU_NEIGHBOR_EXP3_impl *ntsGCN = new GCN_GPU_NEIGHBOR_EXP3_impl(graph, iterations);
+    ntsGCN->init_graph();
+    ntsGCN->init_nn();
+      float acc = ntsGCN->run();
+
+    // std::vector<int> batch_size_list {512, 1024, 512, 1024};
+    // for (auto it : batch_size_list) {
+    //   graph->config->batch_size = it;
+    //   GCN_GPU_NEIGHBOR_EXP3_impl *ntsGCN = new GCN_GPU_NEIGHBOR_EXP3_impl(graph, iterations);
+    //   ntsGCN->init_graph();
+    //   ntsGCN->init_nn();
+    //   float acc = ntsGCN->run();
+    // }
+
+    // ntsGCN->batch_size_mem_run_time();
+    // vector<float> best_val_accs;
+    // for (int i = 0; i < graph->config->runs; ++i) {
+    //   if (i > 0) ntsGCN->init_active();
+    //   float acc = ntsGCN->run();
+    //   best_val_accs.push_back(acc);
+    // }
+    // std::cout << "\nmain(): Best-val-acc: ";
+    // for (auto &it : best_val_accs) {
+    //   std::cout << it << " ";
+    // }
+    // std::cout << std::endl;
+    // float mean, var;
+    // tie(mean, var) = get_mean_var(best_val_accs);
+    // printf("Val-mean-var %d runs: %.4f(%.4f)\n", graph->config->runs, mean, var);
+    // std::cout << "edge_file: " << graph->config->edge_file << std::endl;
 
     // ntsGCN->run();
   } else if (graph->config->algorithm == std::string("TEST_BATCH_DIST")) {
