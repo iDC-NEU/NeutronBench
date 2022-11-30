@@ -61,6 +61,8 @@ class Sampler {
   double sample_post_time = 0;
   double sample_processing_time = 0;
   double layer_time = 0;
+  int best_acc_epoch = -1;
+  float best_val_acc = 0.0;
   // int batch_size;
   // int layers;
 
@@ -151,6 +153,28 @@ class Sampler {
       whole_graph->graph_->config->sample_rate = sample_rate_vec[sample_rate_switch_idx];
       LOG_DEBUG("sample_rate switch to %.3f", whole_graph->graph_->config->sample_rate);
       return true;
+    }
+    return false;
+  }
+
+  bool update_batch_size_from_acc(int epoch, float val_acc, float gcn_run_time) {
+    // LOG_DEBUG("epoch %d val_acc %.3f best_val_acc %.3f best_epoch %d", epoch, val_acc, best_val_acc, best_acc_epoch);
+    if (best_acc_epoch == -1) {
+      best_acc_epoch = epoch;
+      best_val_acc = val_acc;
+    } else if (val_acc > best_val_acc) {
+      best_acc_epoch = epoch;
+      best_val_acc = val_acc;
+    } else if (epoch - best_acc_epoch >= whole_graph->graph_->config->batch_switch_acc) {
+      if (batch_size_switch_idx + 1 < batch_size_vec.size()) {
+        whole_graph->graph_->config->batch_size = batch_size_vec[++batch_size_switch_idx];
+        LOG_DEBUG("epoch %d best_acc_epoch %d gcn_run_time %.3f, batch_size switch to %d", epoch, best_acc_epoch,
+                  gcn_run_time, whole_graph->graph_->config->batch_size);
+        best_acc_epoch = epoch;
+        // LOG_DEBUG("epoch %d val_acc %.3f best_val_acc %.3f best_epoch %d", epoch, val_acc, best_val_acc,
+        // best_acc_epoch);
+        return true;
+      }
     }
     return false;
   }

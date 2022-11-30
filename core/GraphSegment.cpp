@@ -305,7 +305,7 @@ void InputInfo::readFromCfgFile(std::string config_file) {
       batch_size_vec.clear();
       std::stringstream ss(cfg_v);
       std::string number;
-      char c = fanout_string.find(',') != std::string::npos ? ',' : '-';
+      char c = cfg_v.find(',') != std::string::npos ? ',' : '-';
       while (std::getline(ss, number, c)) {
         batch_size_vec.push_back(std::stoi(number));
       }
@@ -323,7 +323,6 @@ void InputInfo::readFromCfgFile(std::string config_file) {
       std::stringstream ss(cfg_v);
       std::string number;
       char c = cfg_v.find(',') != std::string::npos ? ',' : '-';
-      std::cout << c << std::endl;
       while (std::getline(ss, number, c)) {
         sample_rate_vec.push_back(std::stof(number));
       }
@@ -340,6 +339,9 @@ void InputInfo::readFromCfgFile(std::string config_file) {
       assert(this->cache_rate <= 1);
     } else if (0 == cfg_k.compare("CACHE_POLICY")) {
       this->cache_policy = cfg_v.c_str();
+    } else if (0 == cfg_k.compare("BATCH_SWITCH_ACC")) {
+      this->batch_switch_acc = std::atoi(cfg_v.c_str());
+      // assert(this->batch_switch_acc > 0);
     }
 
     else {
@@ -404,6 +406,7 @@ void InputInfo::print() {
   std::cout << "lower_fanout\t:\t" << lower_fanout << std::endl;
   std::cout << "cache_rate\t:\t" << cache_rate << std::endl;
   std::cout << "cache_policy\t:\t" << cache_policy << std::endl;
+  std::cout << "batch_switch_acc:\t" << batch_switch_acc << std::endl;
 
   std::cout << "------------------input info--------------" << std::endl;
 }

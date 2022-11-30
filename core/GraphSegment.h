@@ -179,6 +179,7 @@ class InputInfo {
   int lower_fanout = 0;
   float cache_rate = 0;
   std::string cache_policy;
+  int batch_switch_acc = -1;
 
   // algorithm related:
   VertexId batch_size;
