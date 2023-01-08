@@ -1,5 +1,6 @@
 #ifndef _CUDA_MEMORY_HPP_
 #define _CUDA_MEMORY_HPP_
+#include "comm/logger.h"
 #include "ntsCUDA.hpp"
 
 void get_gpu_mem(double &used, double &total) {
@@ -59,6 +60,12 @@ pair<double, double> get_gpu_mem() {
   //     << "当前显卡总共有显存" << total_memory << "m \n"
   //     << "已使用显存" << used_memory << "m \n"
   //     << "剩余显存" << free_memory << "m \n" << std::endl;
+}
+
+void show_gpu_mem() {
+  double used, total;
+  get_gpu_mem(used, total);
+  printf("used gpu mem %.3fM\n", used);
 }
 
 #endif

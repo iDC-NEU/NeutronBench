@@ -216,8 +216,9 @@ void InputInfo::readFromCfgFile(std::string config_file) {
       this->fanout_string = cfg_v;
     } else if (0 == cfg_k.compare("EDGE_FILE")) {
       this->edge_file = cfg_v.append("\0");
-      int pos_ = this->edge_file.find('/', 7);
-      dataset_name = edge_file.substr(7, pos_ - 7);
+      int start = this->edge_file.find("data") + 5;  // 5 means "data/"
+      int pos_ = this->edge_file.find('/', start);
+      dataset_name = edge_file.substr(start, pos_ - start);
     } else if (0 == cfg_k.compare("FEATURE_FILE")) {
       this->feature_file = cfg_v;
     } else if (0 == cfg_k.compare("LABEL_FILE")) {
@@ -339,6 +340,8 @@ void InputInfo::readFromCfgFile(std::string config_file) {
       assert(this->cache_rate <= 1);
     } else if (0 == cfg_k.compare("CACHE_POLICY")) {
       this->cache_policy = cfg_v.c_str();
+    } else if (0 == cfg_k.compare("CACHE_TYPE")) {
+      this->cache_type = cfg_v.c_str();
     } else if (0 == cfg_k.compare("BATCH_SWITCH_ACC")) {
       this->batch_switch_acc = std::atoi(cfg_v.c_str());
       // assert(this->batch_switch_acc > 0);
@@ -406,6 +409,7 @@ void InputInfo::print() {
   std::cout << "lower_fanout\t:\t" << lower_fanout << std::endl;
   std::cout << "cache_rate\t:\t" << cache_rate << std::endl;
   std::cout << "cache_policy\t:\t" << cache_policy << std::endl;
+  std::cout << "cache_type\t:\t" << cache_type << std::endl;
   std::cout << "batch_switch_acc:\t" << batch_switch_acc << std::endl;
 
   std::cout << "------------------input info--------------" << std::endl;

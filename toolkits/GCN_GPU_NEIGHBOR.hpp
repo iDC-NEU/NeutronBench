@@ -963,6 +963,8 @@ class GCN_GPU_NEIGHBOR_impl {
     train_sampler = new Sampler(fully_rep_graph, train_nids);
     eval_sampler = new Sampler(fully_rep_graph, val_nids, true);   // true mean full batch
     eval_sampler->update_fanout(-1);                               // val not sample
+    // eval_sampler->update_fanout({16, 32});                               // val not sample
+    eval_sampler->show_fanout();
     test_sampler = new Sampler(fully_rep_graph, test_nids, true);  // true mean full batch
     // LOG_DEBUG("samper done");
 
@@ -1043,14 +1045,19 @@ class GCN_GPU_NEIGHBOR_impl {
 
       // update batch size after the whole epoch training
       if (graph->config->batch_switch_time > 0) {
-        train_sampler->update_batch_size_from_time(gcn_run_time);
+        bool ret = train_sampler->update_batch_size_from_time(gcn_run_time);
+        // if (ret == true && train_sampler->batch_size == 90941) {
+        // eval_sampler->update_fanout(-1);
+        // train_sampler->update_fanout(-1);
+        // }
       }
 
       if (graph->config->sample_switch_time > 0) {
         train_sampler->update_sample_rate_from_time(gcn_run_time);
       }
-
+      double val_train_cost = -get_time();
       float val_acc = EvalForward(eval_sampler, 1);
+      val_train_cost += get_time();
       if (graph->config->batch_switch_acc > 0) {
         train_sampler->update_batch_size_from_acc(i_i, val_acc, gcn_run_time);
       }
@@ -1077,8 +1084,10 @@ class GCN_GPU_NEIGHBOR_impl {
       if (graph->partition_id == 0) {
         // printf("Epoch %03d loss %.3f train_acc %.3f val_acc %.3f test_acc %.3f\n\n", i_i, train_loss, train_acc,
         //        val_acc, test_acc);
-        LOG_INFO("Epoch %03d train_loss %.3f epoch_train_time %.3f train_acc %.3f val_acc %.3f trans_cost %.3f", i_i,
-                 train_loss, epoch_time, train_acc, val_acc, trans_cost);
+        LOG_INFO(
+            "Epoch %03d train_loss %.3f epoch_train_time %.3f train_acc %.3f val_time %.3f val_acc %.3f trans_cost "
+            "%.3f",
+            i_i, train_loss, epoch_time, train_acc, val_train_cost, val_acc, trans_cost);
         // LOG_DEBUG("epoch_train_time %.3f epoch_train_acc %.3f epoch_eval_acc %.3f",epoch_time, train_acc, val_acc);
       }
     }

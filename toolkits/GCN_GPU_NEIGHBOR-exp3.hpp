@@ -1,6 +1,9 @@
+#include <c10/cuda/CUDACachingAllocator.h>
+
 #include "core/neutronstar.hpp"
 #include "core/ntsPeerRPC.hpp"
 #include "utils/torch_func.hpp"
+#include "utils/utils.hpp"
 
 class GCN_GPU_NEIGHBOR_EXP3_impl {
  public:
@@ -44,8 +47,13 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
   Sampler* train_sampler = nullptr;
   Sampler* eval_sampler = nullptr;
   Sampler* test_sampler = nullptr;
+  double all_trans_memory = 0;
+  double all_cache_hit_rate = 0;
+  std::vector<VertexId> train_nids, val_nids, test_nids;
+
   // double gcn_start_time = 0;
   double gcn_run_time = 0;
+  double gcn_sample_time = 0;
   double gcn_gather_cost = 0;
   double gcn_trans_cost = 0;
   double gcn_trans_cost_cache = 0;
@@ -119,140 +127,231 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
 
     // batch_size_switch_idx = 0;
     // batch_size_vec = graph->config->batch_size_vec;
-    
+  }
 
-    if (graph->config->cache_rate > 0) {
-      // determine the num of cache nodes
-      cache_node_num = graph->vertices * graph->config->cache_rate;
-      if (cache_node_num > graph->vertices) cache_node_num = graph->vertices;
-      LOG_DEBUG("cache_node_num %d (%.3f)", cache_node_num, 1.0 * cache_node_num / graph->vertices);
-
-      cache_node_idx_seq.resize(graph->vertices);
-      std::iota(cache_node_idx_seq.begin(), cache_node_idx_seq.end(), 0);
-      // cache_node_hashmap.resize(graph->vertices);
-      cache_node_hashmap = (VertexId *)cudaMallocPinned(graph->vertices * sizeof(VertexId));
-      dev_cache_node_hashmap = (VertexId *)getDevicePointer(cache_node_hashmap);
-
-      #pragma omp parallel for 
-      for (int i = 0; i < graph->vertices; ++i) {
-        cache_node_hashmap[i] = -1;
-        assert(cache_node_hashmap[i] == -1);
+  void init_nids() {
+    for (int i = 0; i < graph->gnnctx->l_v_num; ++i) {
+      // for (int i = graph->partition_offset[graph->partition_id]; i < graph->partition_offset[graph->partition_id +
+      // 1]; ++i) {
+      int type = gnndatum->local_mask[i];
+      // std::cout << i << " " << type << " " << i + graph->partition_offset[graph->partition_id] << std::endl;
+      if (type == 0) {
+        train_nids.push_back(i + graph->partition_offset[graph->partition_id]);
+      } else if (type == 1) {
+        val_nids.push_back(i + graph->partition_offset[graph->partition_id]);
+      } else if (type == 2) {
+        test_nids.push_back(i + graph->partition_offset[graph->partition_id]);
       }
-
-      if (graph->config->cache_policy == "sample") {
-        LOG_DEBUG("cache_sample");
-        cache_sample(cache_node_idx_seq);
-      } else { // default cache high degree
-        LOG_DEBUG("cache_high_degree");
-        cache_high_degree(cache_node_idx_seq);
-      }
-      
-      
-
-      // // gather_cache_feature, prepare trans to gpu
-      // LOG_DEBUG("start gather_cpu_cache_feature");
-      // float* local_cache_feature_gather = new float[cache_node_num * feat_dim];
-      // // #pragma omp parallel for
-      // for (int i = 0; i < cache_node_num; ++i) {
-      //   int node_id = cache_node_idx_seq[i];
-      //   LOG_DEBUG("copy node_id %d to", node_id);
-      //   LOG_DEBUG("local_id %d", cache_node_hashmap[node_id]);
-        
-      //   for (int j = 0; j < feat_dim; ++j) {
-      //     assert(cache_node_hashmap[node_id] < cache_node_num);
-      //     LOG_DEBUG("copy feat dim %d", j);
-      //     assert(cache_node_hashmap[node_id] * feat_dim + j < cache_node_num * feat_dim);
-      //     assert(node_id * feat_dim + j < graph->gnnctx->l_v_num * feat_dim);
-      //     local_cache_feature_gather[cache_node_hashmap[node_id] * feat_dim + j] = gnndatum->local_feature[node_id * feat_dim + j];
-      //     // local_cache_feature_gather[cache_node_hashmap[node_id] * feat_dim + j] = 0;
-      //   }
-      //   LOG_DEBUG("copy done");
-      // }
-      // LOG_DEBUG("start trans to gpu");
-      // move_data_in(dev_cache_feature, local_cache_feature_gather, 0, cache_node_num, feat_dim);
-      // local_idx = (VertexId *)cudaMallocPinned(graph->vertices * sizeof(VertexId));
-      // local_idx_cache = (VertexId *)cudaMallocPinned(graph->vertices * sizeof(VertexId));
-      // dev_local_idx = (VertexId *)getDevicePointer(local_idx);
-      // dev_local_idx_cache = (VertexId *)getDevicePointer(local_idx_cache);
     }
   }
 
+  void gater_cpu_cache_feature_and_trans_to_gpu() {
+    long feat_dim = graph->gnnctx->layer_size[0];
+    // LOG_DEBUG("feat_dim %d", feat_dim);
+    dev_cache_feature = (float*)cudaMallocGPU(cache_node_num * sizeof(float) * feat_dim);
+    // gather_cache_feature, prepare trans to gpu
+    // LOG_DEBUG("start gather_cpu_cache_feature");
+    float* local_cache_feature_gather = new float[cache_node_num * feat_dim];
+// std::cout << "###" << cache_node_num * sizeof(float) * feat_dim << " " << cache_node_num * feat_dim << std::endl;
+// std::cout << "###" << graph->vertices * feat_dim << "l_v_num " << graph->gnnctx->l_v_num << " " << graph->vertices <<
+// std::endl;
+#pragma omp parallel for
+    for (int i = 0; i < cache_node_num; ++i) {
+      int node_id = cache_node_idx_seq[i];
+      assert(node_id < graph->vertices);
+      assert(node_id < graph->gnnctx->l_v_num);
+      // LOG_DEBUG("copy node_id %d to", node_id);
+      // LOG_DEBUG("local_id %d", cache_node_hashmap[node_id]);
 
-void gater_cpu_cache_feature_and_trans_to_gpu() {
-  int feat_dim = graph->gnnctx->layer_size[0];
-  LOG_DEBUG("feat_dim %d", feat_dim);
-  dev_cache_feature = (float *)cudaMallocGPU(cache_node_num * sizeof(float) * feat_dim);
-  // gather_cache_feature, prepare trans to gpu
-  LOG_DEBUG("start gather_cpu_cache_feature");
-  float* local_cache_feature_gather = new float[cache_node_num * feat_dim];
-  #pragma omp parallel for
-  for (int i = 0; i < cache_node_num; ++i) {
-    int node_id = cache_node_idx_seq[i];
-    // LOG_DEBUG("copy node_id %d to", node_id);
-    // LOG_DEBUG("local_id %d", cache_node_hashmap[node_id]);
-    
-    for (int j = 0; j < feat_dim; ++j) {
-      assert(cache_node_hashmap[node_id] < cache_node_num);
-      // LOG_DEBUG("copy feat dim %d", j);
-      assert(cache_node_hashmap[node_id] * feat_dim + j < cache_node_num * feat_dim);
-      assert(node_id * feat_dim + j < graph->gnnctx->l_v_num * feat_dim);
-      local_cache_feature_gather[cache_node_hashmap[node_id] * feat_dim + j] = gnndatum->local_feature[node_id * feat_dim + j];
-      // local_cache_feature_gather[cache_node_hashmap[node_id] * feat_dim + j] = 0;
+      for (int j = 0; j < feat_dim; ++j) {
+        assert(cache_node_hashmap[node_id] < cache_node_num);
+        local_cache_feature_gather[cache_node_hashmap[node_id] * feat_dim + j] =
+            gnndatum->local_feature[node_id * feat_dim + j];
+      }
     }
-    // LOG_DEBUG("copy done");
+    LOG_DEBUG("start trans to gpu");
+    move_data_in(dev_cache_feature, local_cache_feature_gather, 0, cache_node_num, feat_dim);
+    local_idx = (VertexId*)cudaMallocPinned(1ll * graph->vertices * sizeof(VertexId));
+    local_idx_cache = (VertexId*)cudaMallocPinned(1ll * graph->vertices * sizeof(VertexId));
+    dev_local_idx = (VertexId*)getDevicePointer(local_idx);
+    dev_local_idx_cache = (VertexId*)getDevicePointer(local_idx_cache);
   }
-  LOG_DEBUG("start trans to gpu");
-  move_data_in(dev_cache_feature, local_cache_feature_gather, 0, cache_node_num, feat_dim);
-  local_idx = (VertexId *)cudaMallocPinned(graph->vertices * sizeof(VertexId));
-  local_idx_cache = (VertexId *)cudaMallocPinned(graph->vertices * sizeof(VertexId));
-  dev_local_idx = (VertexId *)getDevicePointer(local_idx);
-  dev_local_idx_cache = (VertexId *)getDevicePointer(local_idx_cache);
-}
 
-void mark_cache_node(std::vector<int> &cache_nodes) {
-  // init mask
-  #pragma omp parallel for 
-  for (int i = 0; i < graph->vertices; ++i) {
-    cache_node_hashmap[i] = -1;
-    assert(cache_node_hashmap[i] == -1);
-  }  
-  
-  // mark cache nodes
-  int tmp_idx = 0;
-  for (int i = 0; i < cache_node_num; ++i) {
-    // LOG_DEBUG("cache_nodes[%d] = %d", i, cache_nodes[i]);
-    cache_node_hashmap[cache_nodes[i]] = tmp_idx++;
+  void mark_cache_node(std::vector<int>& cache_nodes) {
+// init mask
+#pragma omp parallel for
+    for (int i = 0; i < graph->vertices; ++i) {
+      cache_node_hashmap[i] = -1;
+      assert(cache_node_hashmap[i] == -1);
+    }
+
+    // mark cache nodes
+    int tmp_idx = 0;
+    for (int i = 0; i < cache_node_num; ++i) {
+      // LOG_DEBUG("cache_nodes[%d] = %d", i, cache_nodes[i]);
+      cache_node_hashmap[cache_nodes[i]] = tmp_idx++;
+    }
+    LOG_DEBUG("cache_node_num %d tmp_idx %d", cache_node_num, tmp_idx);
+    assert(cache_node_num == tmp_idx);
+
+    // // debug
+    // int cache_node_hashmap_num = 0;
+    // for (int i = 0; i < graph->vertices; ++i) {
+    //   // LOG_DEBUG("cache_node_hashmap[%d] = %d", i, cache_node_hashmap[i]);
+    //   cache_node_hashmap_num += cache_node_hashmap[i] != -1; // unsigned
+    // }
+    // LOG_DEBUG("cache_node_hashmap_num %d", cache_node_hashmap_num);
+    // assert(cache_node_hashmap_num == cache_node_num);
   }
-  LOG_DEBUG("cache_node_num %d tmp_idx %d", cache_node_num, tmp_idx);
-  assert(cache_node_num == tmp_idx);
-  
-  // debug
-  int cache_node_hashmap_num = 0;
-  for (int i = 0; i < graph->vertices; ++i) {
-    // LOG_DEBUG("cache_node_hashmap[%d] = %d", i, cache_node_hashmap[i]);
-    cache_node_hashmap_num += cache_node_hashmap[i] != -1; // unsigned
+
+  void cache_high_degree(std::vector<int>& node_idx) {
+    std::sort(node_idx.begin(), node_idx.end(), [&](const int x, const int y) {
+      return graph->out_degree_for_backward[x] > graph->out_degree_for_backward[y];
+    });
+#pragma omp parallel for
+    for (int i = 1; i < graph->vertices; ++i) {
+      assert(graph->out_degree_for_backward[node_idx[i]] <= graph->out_degree_for_backward[node_idx[i - 1]]);
+    }
+    mark_cache_node(node_idx);
   }
-  LOG_DEBUG("cache_node_hashmap_num %d", cache_node_hashmap_num);
-  assert(cache_node_hashmap_num == cache_node_num);
-}
-  
-void cache_high_degree(std::vector<int> &node_idx) {
-  std::sort(node_idx.begin(), node_idx.end(), [&](const int x, const int y) {
-    return graph->out_degree_for_backward[x] > graph->out_degree_for_backward[y];
-  });
-  #pragma omp parallel for 
-  for (int i = 1; i < graph->vertices; ++i) {
-    assert(graph->out_degree_for_backward[node_idx[i]] <= graph->out_degree_for_backward[node_idx[i - 1]]);
+
+  void cache_sample(std::vector<int>& node_idx) {
+    std::vector<int> node_sample_cnt(node_idx.size(), 0);
+    int epochs = 3;
+    for (int i = 0; i < epochs; ++i) {
+      while (train_sampler->work_offset < train_sampler->work_range[1]) {
+        train_sampler->sample_one(graph->config->batch_type, ctx->is_train());
+        auto ssg = train_sampler->subgraph;
+        for (int i = 0; i < layers; ++i) {
+          auto p = ssg->sampled_sgs[i]->src();
+          for (const auto& v : p) {
+            node_sample_cnt[v]++;
+          }
+          // LOG_DEBUG("layer %d %d", i, p.size());
+        }
+        train_sampler->reverse_sgs();
+      }
+      train_sampler->restart();
+    }
+    sort(node_idx.begin(), node_idx.end(),
+         [&](const int x, const int y) { return node_sample_cnt[x] > node_sample_cnt[y]; });
+    for (int i = 1; i < node_idx.size(); ++i) {
+      // LOG_DEBUG("%d id (%d %d) cnt(%d %d)", i, node_idx[i - 1], node_idx[i], node_sample_cnt[node_idx[i - 1]],
+      // node_sample_cnt[node_idx[i]]);
+      assert(node_sample_cnt[node_idx[i - 1]] >= node_sample_cnt[node_idx[i]]);
+    }
+    mark_cache_node(node_idx);
   }
-  mark_cache_node(node_idx);
-}
 
-void cache_sample(std::vector<int>& node_idx) {
+  double get_gpu_idle_mem() {  // pre train some epochs to get idle memory of GPU when training
+    X[0] = graph->Nts->NewLeafTensor({1000, F.size(1)}, torch::DeviceType::CUDA);
+    NtsVar target_lab;
+    if (graph->config->classes > 1) {
+      target_lab =
+          graph->Nts->NewLabelTensor({graph->config->batch_size, graph->config->classes}, torch::DeviceType::CUDA);
+    } else {
+      target_lab = graph->Nts->NewLabelTensor({graph->config->batch_size}, torch::DeviceType::CUDA);
+    }
+    double max_gpu_used = 0;
+    double used_gpu_mem, total_gpu_mem;
 
-  mark_cache_node(node_idx);
-}
+    int epochs = 3;
+    for (int i = 0; i < epochs; ++i) {
+      while (train_sampler->work_offset < train_sampler->work_range[1]) {
+        ctx->train();
+        if (ctx->training == true) zero_grad();  // should zero grad after every mini batch compute
+        train_sampler->sample_one(graph->config->batch_type, ctx->is_train());
+        auto ssg = train_sampler->subgraph;
+        if (graph->config->mini_pull > 0) {  // generate csr structure for backward of pull mode
+          for (auto p : ssg->sampled_sgs) {
+            p->generate_csr_from_csc();
+          }
+        }
 
-  
+        ssg->trans_to_gpu(graph->config->mini_pull > 0);  // trans subgraph to gpu
+        //////////////////////////////////////////////start gather and trans feature (explicit
+        /// version)/////////////////////////////////////////////////////
+        if (hosts > 1) {
+          X[0] = nts::op::get_feature_from_global(*rpc, ssg->sampled_sgs[0]->src().data(),
+                                                  ssg->sampled_sgs[0]->src_size, F, graph);
+          // if (type == 0 && graph->rtminfo->epoch >= 3) rpc_comm_time += tmp_time;
+        } else {
+          X[0] = nts::op::get_feature(ssg->sampled_sgs[0]->src().data(), ssg->sampled_sgs[0]->src_size, F, graph);
+        }
+        X[0] = X[0].cuda().set_requires_grad(true);
+        //////////////////////////////////////////////end gather and trans feature (explicit
+        /// version)/////////////////////////////////////////////////////
+
+        /////////////////////////////////////////////////start trans target_lab
+        ///(explicit)//////////////////////////////////////////////////
+        if (hosts > 1) {
+          target_lab = nts::op::get_label_from_global(ssg->sampled_sgs.back()->dst().data(),
+                                                      ssg->sampled_sgs.back()->v_size, L_GT_C, graph);
+        } else {
+          target_lab =
+              nts::op::get_label(ssg->sampled_sgs.back()->dst().data(), ssg->sampled_sgs.back()->v_size, L_GT_C, graph);
+        }
+        target_lab = target_lab.cuda();
+        /////////////////////////////////////////////////end trans target_lab
+        ///(explicit)//////////////////////////////////////////////////
+
+        for (int l = 0; l < layers; l++) {  // forward
+          graph->rtminfo->curr_layer = l;
+          NtsVar Y_i = ctx->runGraphOp<nts::op::SingleGPUSampleGraphOp>(ssg, graph, l, X[l]);
+          X[l + 1] = ctx->runVertexForward([&](NtsVar n_i) { return vertexForward(n_i); }, Y_i);
+        }
+
+        auto loss_ = Loss(X[layers], target_lab, graph->config->classes == 1);
+        loss_epoch += loss_.item<float>();
+        if (ctx->training == true) {
+          ctx->appendNNOp(X[layers], loss_);
+          ctx->self_backward(false);
+          Update();
+        }
+        if (graph->config->classes == 1) {
+          get_correct(X[layers], target_lab, graph->config->classes == 1);
+          // target_lab.size(0);
+        } else {
+          f1_score(X[layers], target_lab, graph->config->classes == 1);
+        }
+        train_sampler->reverse_sgs();
+      }
+      train_sampler->restart();
+      get_gpu_mem(used_gpu_mem, total_gpu_mem);
+      max_gpu_used = std::max(used_gpu_mem, max_gpu_used);
+      LOG_DEBUG("epoch %d used %.3f total %.3f", i, max_gpu_used, total_gpu_mem);
+    }
+    LOG_DEBUG("max_gpu_used %.3f total %.3f", max_gpu_used, total_gpu_mem);
+    return max_gpu_used;
+  }
+
+  void determine_cache_node_idx(int node_nums) {
+    if (node_nums > graph->vertices) node_nums = graph->vertices;
+    cache_node_num = node_nums;
+    LOG_DEBUG("cache_node_num %d (%.3f)", cache_node_num, 1.0 * cache_node_num / graph->vertices);
+
+    cache_node_idx_seq.resize(graph->vertices);
+    std::iota(cache_node_idx_seq.begin(), cache_node_idx_seq.end(), 0);
+    // cache_node_hashmap.resize(graph->vertices);
+    cache_node_hashmap = (VertexId*)cudaMallocPinned(graph->vertices * sizeof(VertexId));
+    dev_cache_node_hashmap = (VertexId*)getDevicePointer(cache_node_hashmap);
+
+#pragma omp parallel for
+    for (int i = 0; i < graph->vertices; ++i) {
+      cache_node_hashmap[i] = -1;
+      assert(cache_node_hashmap[i] == -1);
+    }
+
+    if (graph->config->cache_policy == "sample") {
+      LOG_DEBUG("cache_sample");
+      cache_sample(cache_node_idx_seq);
+    } else {  // default cache high degree
+      LOG_DEBUG("cache_high_degree");
+      cache_high_degree(cache_node_idx_seq);
+    }
+    gater_cpu_cache_feature_and_trans_to_gpu();
+  }
+
   void init_active() {
     active = graph->alloc_vertex_subset();
     active->fill();
@@ -285,9 +384,9 @@ void cache_sample(std::vector<int>& node_idx) {
   }
 
   void init_nn() {
-    double used_gpu_mem, total_gpu_mem;
-    get_gpu_mem(used_gpu_mem, total_gpu_mem);
-    LOG_DEBUG("init_nn(): gcn_gpu_mem %.3fM", used_gpu_mem);
+    // double used_gpu_mem, total_gpu_mem;
+    // get_gpu_mem(used_gpu_mem, total_gpu_mem);
+    // LOG_DEBUG("init_nn(): gcn_gpu_mem %.3fM", used_gpu_mem);
 
     // const uint64_t seed = 2000;
     // torch::manual_seed(seed);
@@ -311,8 +410,10 @@ void cache_sample(std::vector<int>& node_idx) {
       gnndatum->readFeature_Label_Mask(graph->config->feature_file, graph->config->label_file,
                                        graph->config->mask_file);
     }
-    get_gpu_mem(used_gpu_mem, total_gpu_mem);
-    LOG_DEBUG("init_nn() after read_feature: gcn_gpu_mem %.3fM", used_gpu_mem);
+
+    // get_gpu_mem(used_gpu_mem, total_gpu_mem);
+    // LOG_DEBUG("init_nn() after read_feature: gcn_gpu_mem %.3fM", used_gpu_mem);
+
     // creating tensor to save Label and Mask
     if (graph->config->classes > 1) {
       gnndatum->registLabel(L_GT_C, gnndatum->local_label, gnndatum->gnnctx->l_v_num, graph->config->classes);
@@ -320,15 +421,15 @@ void cache_sample(std::vector<int>& node_idx) {
       gnndatum->registLabel(L_GT_C);
     }
     gnndatum->registMask(MASK);
-    get_gpu_mem(used_gpu_mem, total_gpu_mem);
-    LOG_DEBUG("init_nn() after registlabel: gcn_gpu_mem %.3fM", used_gpu_mem);
+    // get_gpu_mem(used_gpu_mem, total_gpu_mem);
+    // LOG_DEBUG("init_nn() after registlabel: gcn_gpu_mem %.3fM", used_gpu_mem);
 
     MASK_gpu = MASK.cuda();
-    get_gpu_mem(used_gpu_mem, total_gpu_mem);
-    LOG_DEBUG("init_nn() after maks.cuda(): gcn_gpu_mem %.3fM", used_gpu_mem);
+    // get_gpu_mem(used_gpu_mem, total_gpu_mem);
+    // LOG_DEBUG("init_nn() after maks.cuda(): gcn_gpu_mem %.3fM", used_gpu_mem);
     gnndatum->generate_gpu_data();
-    get_gpu_mem(used_gpu_mem, total_gpu_mem);
-    LOG_DEBUG("init_nn() after generate_gpu_data(): gcn_gpu_mem %.3fM", used_gpu_mem);
+    // get_gpu_mem(used_gpu_mem, total_gpu_mem);
+    // LOG_DEBUG("init_nn() after generate_gpu_data(): gcn_gpu_mem %.3fM", used_gpu_mem);
 
     torch::Device GPU(torch::kCUDA, 0);
 
@@ -348,8 +449,8 @@ void cache_sample(std::vector<int>& node_idx) {
       P[i]->to(GPU);
       P[i]->Adam_to_GPU();
     }
-    get_gpu_mem(used_gpu_mem, total_gpu_mem);
-    LOG_DEBUG("init_nn() after P->to(GPU): gcn_gpu_mem %.3fM", used_gpu_mem);
+    // get_gpu_mem(used_gpu_mem, total_gpu_mem);
+    // LOG_DEBUG("init_nn() after P->to(GPU): gcn_gpu_mem %.3fM", used_gpu_mem);
 
     // drpmodel = torch::nn::Dropout(torch::nn::DropoutOptions().p(drop_rate).inplace(true));
 
@@ -382,10 +483,8 @@ void cache_sample(std::vector<int>& node_idx) {
         return result_vector;
       });
     }
-    get_gpu_mem(used_gpu_mem, total_gpu_mem);
-    LOG_DEBUG("init_nn() done: gcn_gpu_mem %.3fM", used_gpu_mem);
-
-    gater_cpu_cache_feature_and_trans_to_gpu();
+    // get_gpu_mem(used_gpu_mem, total_gpu_mem);
+    // LOG_DEBUG("init_nn() done: gcn_gpu_mem %.3fM", used_gpu_mem);
   }
 
   void Update() {
@@ -443,6 +542,11 @@ void cache_sample(std::vector<int>& node_idx) {
       shuffle_vec(sampler->sample_nids);
     }
 
+    // std::cout << "sample_nids: ";
+    // for (int ti = 0; ti < 10; ++ti) {
+    //   std::cout << sampler->sample_nids[ti] << ' ';
+    // }std::cout << std::endl;
+
     // node sampling
     sampler->zero_debug_time();
     double sample_cost = 0;
@@ -474,14 +578,14 @@ void cache_sample(std::vector<int>& node_idx) {
     int batch_num = sampler->batch_nums;
     uint64_t compute_cnt = 0;
 
-    if (hosts > 1) {
-      if (type == 0 && graph->rtminfo->epoch >= 3) mpi_comm_time -= get_time();
-      MPI_Allreduce(&batch_num, &max_batch_num, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
-      MPI_Allreduce(&batch_num, &min_batch_num, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
-      if (type == 0 && graph->rtminfo->epoch >= 3) mpi_comm_time += get_time();
-    } else {
-      max_batch_num = batch_num;
-    }
+    // if (hosts > 1) {
+    //   if (type == 0 && graph->rtminfo->epoch >= 3) mpi_comm_time -= get_time();
+    //   MPI_Allreduce(&batch_num, &max_batch_num, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
+    //   MPI_Allreduce(&batch_num, &min_batch_num, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+    //   if (type == 0 && graph->rtminfo->epoch >= 3) mpi_comm_time += get_time();
+    // } else {
+    //   max_batch_num = batch_num;
+    // }
 
     X[0] = graph->Nts->NewLeafTensor({1000, F.size(1)}, torch::DeviceType::CUDA);
     NtsVar target_lab;
@@ -510,14 +614,26 @@ void cache_sample(std::vector<int>& node_idx) {
 
       double one_batch_cost = -get_time();
       // LOG_DEBUG("batch id %d", i);
-      double sample_one_cost = -get_time();
+      // double sample_one_cost = -get_time();
 
-      sample_cost -= get_time();
+      double sample_one_cost = -get_time();
       sampler->sample_one(graph->config->batch_type, ctx->is_train());
-      sample_cost += get_time();
       sample_one_cost += get_time();
+      sample_cost += sample_one_cost;
+      // sample_one_cost += get_time();
 
       auto ssg = sampler->subgraph;
+
+      // printf("layer0: ");
+      // for (auto tnode : ssg->sampled_sgs[1]->dst()) {
+      //   printf("%d ", tnode);
+      // } printf("\n");
+
+      // printf("layer2: ");
+      // for (auto tnode : ssg->sampled_sgs[0]->src()) {
+      //   printf("%d ", tnode);
+      // } printf("\n");
+      // assert(false);
 
       if (graph->config->mini_pull > 0) {  // generate csr structure for backward of pull mode
         generate_csr_time -= get_time();
@@ -537,9 +653,9 @@ void cache_sample(std::vector<int>& node_idx) {
 
       if (type == 0 && graph->rtminfo->epoch >= 3) train_sample_time += sample_cost;
 
-      double trans_graph_gpu_cost = -get_time();
-      ssg->trans_to_gpu(graph->config->mini_pull > 0);  // wheather trans csr data to gpu
-      trans_graph_gpu_cost += get_time();
+      trans_graph_cost -= get_time();
+      ssg->trans_to_gpu(graph->config->mini_pull > 0);  // trans subgraph to gpu
+      trans_graph_cost += get_time();
       // LOG_DEBUG("batch %d tarns_to_gpu done", i);
       // get_gpu_mem(used_gpu_mem, total_gpu_mem);
       // LOG_DEBUG("epoch %d batch %d tarns_to_gpu done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, used_gpu_mem,
@@ -551,13 +667,42 @@ void cache_sample(std::vector<int>& node_idx) {
       // LOG_DEBUG("epoch %d batch %d get feature done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, used_gpu_mem,
       // total_gpu_mem); LOG_DEBUG("load_feature done");
 
-      //////////////////////////////////////////////gathter feawture/////////////////////////////////////////////////////
-      
-      if (graph->config->cache_rate <= 0) {
+      //////////////////////////////////////////////start gather and trans feature (explicit
+      /// version)/////////////////////////////////////////////////////
+      // // double gather_feature_cost = -get_time();
+      // gather_feature_time -= get_time();
+      // if (hosts > 1) {
+      //   X[0] = nts::op::get_feature_from_global(*rpc, ssg->sampled_sgs[0]->src().data(),
+      //   ssg->sampled_sgs[0]->src_size, F, graph);
+      //   // if (type == 0 && graph->rtminfo->epoch >= 3) rpc_comm_time += tmp_time;
+      // } else {
+      //   X[0] = nts::op::get_feature(ssg->sampled_sgs[0]->src().data(), ssg->sampled_sgs[0]->src_size, F, graph);
+      // }
+      // gather_feature_time += get_time();
+      // // gather_feature_cost += get_time();
+      // // gather_feature_time += gather_feature_cost;
+
+      // // double trans_feature_gpu_cost = -get_time();
+      // trans_feature_cost -= get_time();
+      // X[0] = X[0].cuda().set_requires_grad(true);
+      // trans_feature_cost += get_time();
+      // // trans_feature_gpu_cost += get_time();
+      // // trans_feature_cost += trans_feature_gpu_cost;
+      //////////////////////////////////////////////end gather and trans feature (explicit
+      /// version)/////////////////////////////////////////////////////
+
+      ////////////////////////////////////////////// trans feature (zero copy or cache
+      /// version)/////////////////////////////////////////////////////
+      // if (graph->config->cache_rate <= 0) { // trans feature use zero
+      // graph->config->cache_type = "none";
+      if (graph->config->cache_type == "none") {  // trans feature use zero copy (omit gather feature)
         trans_feature_cost -= get_time();
         sampler->load_feature_gpu(X[0], gnndatum->dev_local_feature);
         trans_feature_cost += get_time();
-      } else {
+        // } else if (graph->config->cache_type == "gpu_memory" && graph->rtminfo->epoch >= 5){ // trans freature which
+        // is not cache in gpu
+      } else if (graph->config->cache_type == "gpu_memory" ||
+                 graph->config->cache_type == "rate") {  // trans freature which is not cache in gpu
         // LOG_DEBUG("start load_farture_gpu_cache");
         // trans_feature_cost -= get_time();
         auto [trans_feature_tmp, gather_gpu_cache_tmp] = sampler->load_feature_gpu_cache(X[0], gnndatum->dev_local_feature, dev_cache_feature, local_idx, local_idx_cache, cache_node_hashmap,
@@ -565,7 +710,7 @@ void cache_sample(std::vector<int>& node_idx) {
         // trans_feature_cost += get_time();
         trans_feature_cost += trans_feature_tmp;
         gather_gpu_cache_cost += gather_gpu_cache_tmp;
-        // LOG_DEBUG("start laod feature");
+        // gather_feature_time += gather_gpu_cache_tmp;
         one_batch_cost += get_time();
         epoch_cache_all += ssg->sampled_sgs[0]->src().size(); 
         for (auto &it : ssg->sampled_sgs[0]->src()) {
@@ -574,51 +719,45 @@ void cache_sample(std::vector<int>& node_idx) {
           }
         }
         one_batch_cost -= get_time();
+      } else {
+        std::cout << "cache_type: " << graph->config->cache_type << " is not support!" << std::endl;
+        assert(false);
       }
+      //////////////////////////////////////////////end trans feature (zero copy or cache
+      /// version)/////////////////////////////////////////////////////
 
-
-      // double gather_feature_cost = -get_time();
+      /////////////////////////////////////////////////start trans target_lab
+      ///(explicit)//////////////////////////////////////////////////
+      // double gather_label_cost = -get_time();
       // if (hosts > 1) {
-      //   X[0] = nts::op::get_feature_from_global(*rpc, ssg->sampled_sgs[0]->src().data(), ssg->sampled_sgs[0]->src_size, F, graph);
+      //   target_lab = nts::op::get_label_from_global(ssg->sampled_sgs.back()->dst().data(),
+      //   ssg->sampled_sgs.back()->v_size, L_GT_C, graph);
       //   // if (type == 0 && graph->rtminfo->epoch >= 3) rpc_comm_time += tmp_time;
       // } else {
-      //   X[0] = nts::op::get_feature(ssg->sampled_sgs[0]->src().data(), ssg->sampled_sgs[0]->src_size, F, graph);
+      //   target_lab = nts::op::get_label(ssg->sampled_sgs.back()->dst().data(), ssg->sampled_sgs.back()->v_size,
+      //   L_GT_C, graph);
       // }
-      // gather_feature_cost += get_time();
-      // double trans_feature_gpu_cost = -get_time();
-      // X[0] = X[0].cuda().set_requires_grad(true);
-      // trans_feature_gpu_cost += get_time();
-      // gather_feature_time += gather_feature_cost;
+      // gather_label_cost += get_time();
+      // gather_label_time += gather_label_cost;
 
-      // LOG_DEBUG("after laod feature");
-      ///////////////////////////////////////////////////////////////////////////////////////////////////
+      // // double trans_label_gpu_cost = -get_time();
+      // trans_label_cost -= get_time();
+      // target_lab = target_lab.cuda();
+      // trans_label_cost += get_time();
+      // // trans_label_gpu_cost += get_time();
+      // // trans_label_cost += trans_label_gpu_cost;
+      /////////////////////////////////////////////////end trans target_lab
+      ///(explicit)//////////////////////////////////////////////////
 
-      /////////////////////////////////////////////////target_lab//////////////////////////////////////////////////
+      /////////////////////////////////////////////////start trans target_lab (zero
+      /// copy)//////////////////////////////////////////////////
       trans_label_cost -= get_time();
       sampler->load_label_gpu(target_lab, gnndatum->dev_local_label);
       trans_label_cost += get_time();
-
-      // double gather_label_cost = -get_time();
-      // if (hosts > 1) {
-      //   target_lab = nts::op::get_label_from_global(ssg->sampled_sgs.back()->dst().data(), ssg->sampled_sgs.back()->v_size, L_GT_C, graph);
-      //   // if (type == 0 && graph->rtminfo->epoch >= 3) rpc_comm_time += tmp_time;
-      // } else {
-      //   target_lab = nts::op::get_label(ssg->sampled_sgs.back()->dst().data(), ssg->sampled_sgs.back()->v_size, L_GT_C, graph);
-      // }
-      // gather_label_cost += get_time();
-
-      // double trans_label_gpu_cost = -get_time();
-      // target_lab = target_lab.cuda();
-      // trans_label_gpu_cost += get_time();
-      // gather_label_time += gather_label_cost;
-
-      // LOG_DEBUG("after laod label");
-      ///////////////////////////////////////////////////////////////////////////////////////////////////
+      /////////////////////////////////////////////////end trans target_lab (zero
+      /// copy)//////////////////////////////////////////////////
 
       // epoch_trans_time += trans_feature_gpu_cost + trans_label_gpu_cost + trans_graph_gpu_cost;
-      trans_graph_cost += trans_graph_gpu_cost;
-      
-      
       // LOG_DEBUG("load_label done");
       // get_gpu_mem(used_gpu_mem, total_gpu_mem);
       // LOG_DEBUG("epoch %d batch %d get label done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, used_gpu_mem,
@@ -692,6 +831,7 @@ void cache_sample(std::vector<int>& node_idx) {
       }
 
       train_cost += get_time();
+
       one_batch_cost += get_time();
 
       forward_acc_cost -= get_time();
@@ -711,14 +851,12 @@ void cache_sample(std::vector<int>& node_idx) {
       // printf("gcn_run_time %.3f one_batfh_cost %.3f ", gcn_run_time, one_batch_cost);
       if (graph->rtminfo->epoch >= 3) {
         gcn_run_time += one_batch_cost;
+        gcn_sample_time += sample_one_cost;
       }
-      forward_cost += one_batch_cost;
+      // forward_cost += one_batch_cost;
+      forward_cost += one_batch_cost - sample_one_cost;  // omit sample cost
 
-      // printf("gcn_run_time %.3f\n", gcn_run_time);
-
-      // LOG_DEBUG("start evalforward");
-
-      /////////////////////////////////////////////////////////////////////
+      ///////////////////////////// Evalutation ////////////////////////////////////////
       // do evaluation after one batch
       // ctx->eval();
       // double eval_cost = -get_time();
@@ -759,38 +897,10 @@ void cache_sample(std::vector<int>& node_idx) {
       rpc->stop_running();
       if (type == 0 && graph->rtminfo->epoch >= 3) rpc_wait_time += get_time();
     }
-    
-
+    epoch_time += get_time();
     sampler->restart();
 
-    epoch_time += get_time();
-    // LOG_INFO("sample_cost %.3f", sample_cost);
-    // LOG_INFO("generate_csr %.3f, convert %.3f debug %.3f", generate_csr_time, convert_time, debug_time);
-    // LOG_INFO("trans_graph_cost %.3f", trans_graph_cost);
-    // if (type == 0) {
-    //   LOG_INFO("trainning cost %.3f", train_cost);
-    // } else {
-    //   LOG_INFO("evaluation cost %.3f", train_cost);
-    // }
-    // LOG_INFO("  trans_feature/lable (%.3f/%.3f)", trans_feature_cost, trans_label_cost);
-    // LOG_INFO("  forward: graph %.3f, nn %.3f, loss %.3f, acc %.3f, update %.3f", forward_graph_cost, forward_nn_cost,
-    //          forward_loss_cost, forward_acc_cost, update_cost);
-    // LOG_INFO("  backward cost %.3f, b_nn_time %.3f", backward_cost, backward_nn_time);
-    // if (type == 0) {
-    //   get_gpu_mem(used_gpu_mem, total_gpu_mem);
-    //   LOG_INFO("train_epoch %d cost %.3f, compute_cnt %lld, gpu mem:  (%.0fM/%.0fM)", graph->rtminfo->epoch,
-    //   epoch_time,
-    //            compute_cnt, used_gpu_mem, total_gpu_mem);
-    // } else {
-    //   get_gpu_mem(used_gpu_mem, total_gpu_mem);
-    //   LOG_INFO("eval_epoch %d cost %.3f, compute_cnt %lld, gpu mem: (%.0fM/%.0fM)", graph->rtminfo->epoch,
-    //   epoch_time,
-    //            compute_cnt, used_gpu_mem, total_gpu_mem);
-    // }
-    // printf("\n");
-
     if (graph->config->classes > 1) {
-      // LOG_DEBUG("use f1_score!");
       f1_epoch /= sampler->batch_nums;
       MPI_Allreduce(MPI_IN_PLACE, &f1_epoch, 1, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
       acc = f1_epoch / hosts;
@@ -806,30 +916,32 @@ void cache_sample(std::vector<int>& node_idx) {
     // LOG_DEBUG("trans_cost %.3f\n", trans_feature_cost + trans_label_cost + trans_graph_cost);
     // LOG_DEBUG("epoch_cache_hit %d", epoch_cache_hit);
     double epoch_trans_time = trans_feature_cost + trans_label_cost + trans_graph_cost;
-    double epoch_trans_time_cache = (trans_feature_cost / epoch_cache_all * (epoch_cache_all - epoch_cache_hit)) + trans_label_cost + trans_graph_cost;
+    // double epoch_trans_time_cache = (trans_feature_cost / epoch_cache_all * (epoch_cache_all - epoch_cache_hit)) +
+    // trans_label_cost + trans_graph_cost;
     double epoch_gather_time = gather_feature_time + gather_label_time;
-    double epoch_gather_time_cache = (gather_feature_time / epoch_cache_all * (epoch_cache_all - epoch_cache_hit)) + gather_label_time;
+
+    // double epoch_gather_time_cache = (gather_feature_time / epoch_cache_all * (epoch_cache_all - epoch_cache_hit)) +
+    // gather_label_time;
+    double epoch_cache_miss = (epoch_cache_all - epoch_cache_hit);
+    double epoch_trans_memory = epoch_cache_miss * graph->gnnctx->layer_size[0] * sizeof(ValueType) / 1024 / 1024;
     if (graph->rtminfo->epoch >= 3) {
         gcn_trans_cost += epoch_trans_time;
-        gcn_trans_cost_cache += epoch_trans_time_cache;
+        // gcn_trans_cost_cache += epoch_trans_time_cache;
         gcn_gather_cost += epoch_gather_time;
-        gcn_gather_cost_cache += epoch_gather_time_cache;
+        // gcn_gather_cost_cache += epoch_gather_time_cache;
+        all_cache_hit_rate += 1.0 * epoch_cache_hit / epoch_cache_all;
+        all_trans_memory += epoch_trans_memory;
     }
 
-    // double used_gpu_mem, total_gpu_mem;
     get_gpu_mem(used_gpu_mem, total_gpu_mem);
-    LOG_INFO("Epoch %03d epoch_train_time %.3f trans_cost %.3f(feat %.3f,label %.3f, graph %.3f) gather_gpu_cache_cost %.3f gather_cost %.3f gpu_mem %.3fM", 
-                 graph->rtminfo->epoch, forward_cost, epoch_trans_time, trans_feature_cost, trans_label_cost, trans_graph_cost, gather_gpu_cache_cost ,epoch_gather_time, used_gpu_mem);
-    // double used_gpu_mem, total_gpu_mem;
-    get_gpu_mem(used_gpu_mem, total_gpu_mem);
-    // LOG_INFO("Epoch %03d epoch_train_time_cache %.3f trans_cost_cache %.3f gather_cost_cache %.3f gpu_mem_cache %.3fM cache_mem %.3fM", 
-    //              graph->rtminfo->epoch, forward_cost - (epoch_trans_time - epoch_trans_time_cache) - (epoch_gather_time - epoch_gather_time_cache),
-    //               epoch_trans_time_cache, epoch_gather_time_cache, used_gpu_mem, 1.0 * cache_node_num * graph->gnnctx->layer_size[0]*4/1024/1024);
-
-      // epoch_trans_time += trans_feature_gpu_cost + trans_label_gpu_cost + trans_graph_gpu_cost;
-
-    // LOG_DEBUG("forward_cost %.3f gather_cost %.3f trans_cost %.3f", forward_cost, epoch_gather_time, epoch_trans_time);
-    // return {acc, forward_cost, trans_cost};
+    LOG_INFO(
+        "Epoch %03d epoch_time %.3f train_time %.3f sample_time %.3f trans_time %.3f(feat %.3f,label %.3f, graph %.3f) "
+        " gather_time %.3f(feat %.3f label %.3f) gpu_mem %.3fM cache_hit_rate %.3f trans_memory %.3fM",
+        graph->rtminfo->epoch, epoch_time, train_cost, sample_cost, epoch_trans_time, trans_feature_cost,
+        trans_label_cost, trans_graph_cost, epoch_gather_time, gather_feature_time, gather_label_time, used_gpu_mem,
+        epoch_cache_hit * 1.0 / epoch_cache_all, epoch_trans_memory);
+    // LOG_INFO("Epoch %03d epoch_trans_time_cache %.3f gather_gpu_cache_cost %.3f", epoch_trans_time_cache,
+    // gather_gpu_cache_cost);
     return {acc, forward_cost};
   }
 
@@ -1146,105 +1258,91 @@ void cache_sample(std::vector<int>& node_idx) {
     }
   }
 
-  void shuffle_vec(std::vector<VertexId>& vec) {
-    unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-    std::shuffle(vec.begin(), vec.end(), std::default_random_engine(seed));
-  }
-
   float run() {
-    double used_gpu_mem, total_gpu_mem;
-    get_gpu_mem(used_gpu_mem, total_gpu_mem);
-    LOG_DEBUG("run(): gcn_gpu_mem %.3fM", used_gpu_mem);
-
-
+    // double used_gpu_mem, total_gpu_mem;
+    // get_gpu_mem(used_gpu_mem, total_gpu_mem);
+    // LOG_DEBUG("run(): gcn_gpu_mem %.3fM", used_gpu_mem);
 
     gcn_run_time = gcn_gather_cost = gcn_trans_cost = 0;
+    gcn_sample_time = 0;
     // epoch_cache_hit = 0;
    
-
     double pre_time = -get_time();
     if (graph->partition_id == 0) {
       LOG_INFO("GNNmini::[Dist.GPU.GCNimpl] running [%d] Epoches\n", iterations);
     }
     // get train/val/test node index. (may be move this to GNNDatum)
-    std::vector<VertexId> train_nids, val_nids, test_nids;
     BatchType batch_type = graph->config->batch_type;
     assert(best_val_acc == 0);
-    for (int i = 0; i < graph->gnnctx->l_v_num; ++i) {
-      // for (int i = graph->partition_offset[graph->partition_id]; i < graph->partition_offset[graph->partition_id +
-      // 1]; ++i) {
-      int type = gnndatum->local_mask[i];
-      // std::cout << i << " " << type << " " << i + graph->partition_offset[graph->partition_id] << std::endl;
-      if (type == 0) {
-        train_nids.push_back(i + graph->partition_offset[graph->partition_id]);
-      } else if (type == 1) {
-        val_nids.push_back(i + graph->partition_offset[graph->partition_id]);
-      } else if (type == 2) {
-        test_nids.push_back(i + graph->partition_offset[graph->partition_id]);
-      }
-    }
 
-    if (batch_type == DELLOW || batch_type == DELHIGH) {
-      if (batch_type == DELHIGH) {
-        std::sort(train_nids.begin(), train_nids.end(), [&](const auto& x, const auto& y) {
-          return graph->in_degree_for_backward[x] > graph->in_degree_for_backward[y];
-        });
-      } else if (batch_type == DELLOW) {
-        std::sort(train_nids.begin(), train_nids.end(), [&](const auto& x, const auto& y) {
-          return graph->in_degree_for_backward[x] < graph->in_degree_for_backward[y];
-        });
-      }
-      int sz = train_nids.size();
-      train_nids.erase(train_nids.begin() + static_cast<int>(sz * (1 - graph->config->del_frac)), train_nids.end());
-    }
+    init_nids();
     train_sampler = new Sampler(fully_rep_graph, train_nids);
     eval_sampler = new Sampler(fully_rep_graph, val_nids, true);   // true mean full batch
-    // eval_sampler->update_fanout(-1);                               // val not sample
+    // eval_sampler->update_fanout(-1);                            // val not sample
     test_sampler = new Sampler(fully_rep_graph, test_nids, true);  // true mean full batch
+
+    // std::cout << "run: sample_nids: ";
+    // for (int ti = 0; ti < 10; ++ti) {
+    //   std::cout << train_sampler->sample_nids[ti] << ' ';
+    // }std::cout << std::endl;
+    // if (batch_type == DELLOW || batch_type == DELHIGH) {
+    //   if (batch_type == DELHIGH) {
+    //     std::sort(train_nids.begin(), train_nids.end(), [&](const auto& x, const auto& y) {
+    //       return graph->in_degree_for_backward[x] > graph->in_degree_for_backward[y];
+    //     });
+    //   } else if (batch_type == DELLOW) {
+    //     std::sort(train_nids.begin(), train_nids.end(), [&](const auto& x, const auto& y) {
+    //       return graph->in_degree_for_backward[x] < graph->in_degree_for_backward[y];
+    //     });
+    //   }
+    //   int sz = train_nids.size();
+    //   train_nids.erase(train_nids.begin() + static_cast<int>(sz * (1 - graph->config->del_frac)), train_nids.end());
+    // }
+
     // LOG_DEBUG("samper done");
 
-    if (batch_type == METIS) {
-      // void ClusterGCNSample(int layers, int batch_size, int partition_num, std::string objtype = "cut");
-      // void init_graph(std::vector<VertexId> &sample_nids);
+    // if (batch_type == METIS) {
+    //   // void ClusterGCNSample(int layers, int batch_size, int partition_num, std::string objtype = "cut");
+    //   // void init_graph(std::vector<VertexId> &sample_nids);
 
-      // if (metis_partition_id.empty()) {
-      // LOG_DEBUG("start update_graph");
-      // fully_rep_graph->update_graph(train_nids);
-      // LOG_DEBUG("after update_graph");
+    //   // if (metis_partition_id.empty()) {
+    //   // LOG_DEBUG("start update_graph");
+    //   // fully_rep_graph->update_graph(train_nids);
+    //   // LOG_DEBUG("after update_graph");
 
-      int partition_num = (train_nids.size() + graph->config->batch_size - 1) / graph->config->batch_size;
-      std::vector<VertexId> metis_partition_id;
-      std::vector<VertexId> metis_partition_offset;
+    //   int partition_num = (train_nids.size() + graph->config->batch_size - 1) / graph->config->batch_size;
+    //   std::vector<VertexId> metis_partition_id;
+    //   std::vector<VertexId> metis_partition_offset;
 
-      double metis_time = -get_time();
-      MetisPartitionGraph(fully_rep_graph, partition_num, "cut", metis_partition_id, metis_partition_offset);
-      metis_time += get_time();
-      LOG_DEBUG("metis partition cost %.3f", metis_time);
+    //   double metis_time = -get_time();
+    //   MetisPartitionGraph(fully_rep_graph, partition_num, "cut", metis_partition_id, metis_partition_offset);
+    //   metis_time += get_time();
+    //   LOG_DEBUG("metis partition cost %.3f", metis_time);
 
-      // fully_rep_graph->back_to_global();
-      LOG_DEBUG("metis_partition_id %d, train_nids %d", metis_partition_id.size(), train_nids.size());
-      // assert(metis_partition_id.size() == train_nids.size());
-      assert(partition_num + 1 == metis_partition_offset.size());
+    //   // fully_rep_graph->back_to_global();
+    //   LOG_DEBUG("metis_partition_id %d, train_nids %d", metis_partition_id.size(), train_nids.size());
+    //   // assert(metis_partition_id.size() == train_nids.size());
+    //   assert(partition_num + 1 == metis_partition_offset.size());
 
-      // LOG_DEBUG("metis partiton offset: ");
-      // for (int i = 0; i < partition_num; ++i) {
-      //   printf("part id: %d, %d\n", i, metis_partition_offset[i + 1] - metis_partition_offset[i]);
-      // }
-      // LOG_DEBUG("metis partiton id: ");
-      // for (auto id : metis_partition_id) {
-      //   printf("%d ", id);
-      // }printf("\n");
+    //   // LOG_DEBUG("metis partiton offset: ");
+    //   // for (int i = 0; i < partition_num; ++i) {
+    //   //   printf("part id: %d, %d\n", i, metis_partition_offset[i + 1] - metis_partition_offset[i]);
+    //   // }
+    //   // LOG_DEBUG("metis partiton id: ");
+    //   // for (auto id : metis_partition_id) {
+    //   //   printf("%d ", id);
+    //   // }printf("\n");
 
-      // std::sort(metis_partition_id.begin(), metis_partition_id.end());
-      // std::sort(train_nids.begin(), train_nids.end());
-      // for (int i = 0; i < train_nids.size(); ++i) {
-      //   assert(metis_partition_id[i] == train_nids[i]);
-      // }
-      // assert(false);
-      // }
-      train_sampler->update_metis_data(metis_partition_id, metis_partition_offset);
-      train_sampler->update_batch_nums();
-    }
+    //   // std::sort(metis_partition_id.begin(), metis_partition_id.end());
+    //   // std::sort(train_nids.begin(), train_nids.end());
+    //   // for (int i = 0; i < train_nids.size(); ++i) {
+    //   //   assert(metis_partition_id[i] == train_nids[i]);
+    //   // }
+    //   // assert(false);
+    //   // }
+    //   train_sampler->update_metis_data(metis_partition_id, metis_partition_offset);
+    //   train_sampler->update_batch_nums();
+    // }
 
     LOG_INFO("label rate: %.3f, train/val/test: (%d/%d/%d) (%.3f/%.3f/%.3f)",
              1.0 * (train_nids.size() + val_nids.size() + test_nids.size()) / graph->vertices, train_nids.size(),
@@ -1265,6 +1363,35 @@ void cache_sample(std::vector<int>& node_idx) {
     }
     gcn_run_time = 0;
 
+    if (graph->config->cache_type == "gpu_memory") {
+      // determine_cache_node_idx(graph->vertices * graph->config->cache_rate);
+      double max_gpu_mem = get_gpu_idle_mem();
+
+      for (int ti = 0; ti < 3; ++ti) {  // clear gpu cache memory
+        c10::cuda::CUDACachingAllocator::emptyCache();
+      }
+
+      double used_gpu_mem, total_gpu_mem;
+      get_gpu_mem(used_gpu_mem, total_gpu_mem);
+      LOG_DEBUG("used %.3f total %.3f (after emptyCache)", used_gpu_mem, total_gpu_mem);
+
+      // printf("feat dim: %d\n", graph->gnnctx->layer_size[0]);
+      double free_memory = total_gpu_mem - used_gpu_mem - 200;
+      int memory_nodes = free_memory * 1024 * 1024 / sizeof(ValueType) / graph->gnnctx->layer_size[0];
+      determine_cache_node_idx(memory_nodes);
+
+      get_gpu_mem(used_gpu_mem, total_gpu_mem);
+      LOG_DEBUG("used %.3f total %.3f (after cache feature)", used_gpu_mem, total_gpu_mem);
+    } else if (graph->config->cache_type == "rate") {
+      assert(graph->config->cache_rate >= 0 && graph->config->cache_rate <= 1);
+      determine_cache_node_idx(graph->vertices * graph->config->cache_rate);
+    } else if (graph->config->cache_type == "none") {
+      LOG_DEBUG("There is no cache_type!");
+    } else {
+      std::cout << "cache_type: " << graph->config->cache_type << " is not support!" << std::endl;
+      assert(false);
+    }
+
     for (int i_i = 0; i_i < iterations; i_i++) {
       if (config_run_time > 0 && gcn_run_time >= config_run_time) {
         iterations = i_i;
@@ -1280,61 +1407,51 @@ void cache_sample(std::vector<int>& node_idx) {
       float train_loss = loss_epoch;
 
       // update batch size after the whole epoch training
-      if (graph->config->batch_switch_time > 0) {
-        train_sampler->update_batch_size_from_time(gcn_run_time);
-      }
+      // if (graph->config->batch_switch_time > 0) {
+      //   train_sampler->update_batch_size_from_time(gcn_run_time);
+      // }
 
-      if (graph->config->sample_switch_time > 0) {
-        train_sampler->update_sample_rate_from_time(gcn_run_time);
-      }
+      // if (graph->config->sample_switch_time > 0) {
+      //   train_sampler->update_sample_rate_from_time(gcn_run_time);
+      // }
 
-      float val_acc = EvalForward(eval_sampler, 1);
-      LOG_DEBUG("Epoch %03d val_acc %.3f", i_i, val_acc);
-      float test_acc = 0;
-      if (graph->partition_id == 0) {
-        // double used_gpu_mem, total_gpu_mem;
-        // get_gpu_mem(used_gpu_mem, total_gpu_mem);
-        // LOG_INFO("Epoch %03d epoch_train_time %.3f trans_cost %.3f gpu_mem %.3fM", 
-        //          i_i, epoch_time, trans_cost, used_gpu_mem);
-      }
+      // float val_acc = EvalForward(eval_sampler, 1);
+      // LOG_DEBUG("Epoch %03d val_acc %.3f", i_i, val_acc);
+
+      // float test_acc = 0;
+      // if (graph->partition_id == 0) {
+      //   double used_gpu_mem, total_gpu_mem;
+      //   get_gpu_mem(used_gpu_mem, total_gpu_mem);
+      //   LOG_INFO("Epoch %03d epoch_train_time %.3f trans_cost %.3f gpu_mem %.3fM",
+      //            i_i, epoch_time, trans_cost, used_gpu_mem);
+      // }
+      double used_gpu_mem, total_gpu_mem;
+      get_gpu_mem(used_gpu_mem, total_gpu_mem);
+      printf("epoch %d used %.3f total %.3f\n", i_i, used_gpu_mem, total_gpu_mem);
     }
-    // double used_gpu_mem, total_gpu_mem;
+    double used_gpu_mem, total_gpu_mem;
     get_gpu_mem(used_gpu_mem, total_gpu_mem);
     LOG_DEBUG("div %d epoch", graph->config->epochs - 3);
     gcn_trans_cost /= (graph->config->epochs - 3);
     gcn_run_time /= (graph->config->epochs - 3);
     gcn_gather_cost /= (graph->config->epochs - 3);
-
-    LOG_DEBUG("dataset %s gcn_cache_rate %.3f gcn_batch_size %d gcn_run_time %.3f gcn_gpu_run_mem %.3fM gcn_gather_cost %.3f (%.3f) gcn_trans_cost %.3f (%.3f), all_cost %.3f", 
-              graph->config->dataset_name.c_str(), graph->config->cache_rate, graph->config->batch_size, gcn_run_time, used_gpu_mem, 
-              gcn_gather_cost, gcn_gather_cost / gcn_run_time, 
-              gcn_trans_cost, gcn_trans_cost / gcn_run_time,
-              (gcn_gather_cost + gcn_trans_cost) / gcn_run_time);
-    get_gpu_mem(used_gpu_mem, total_gpu_mem);
-    gcn_run_time -= gcn_gather_cost - gcn_gather_cost_cache + gcn_trans_cost - gcn_trans_cost_cache;
-    // LOG_DEBUG("dataset %s gcn_batch_size_cache %d gcn_run_time_cache %.3f gcn_gpu_mem_cache %.3fM gcn_cache_mem %.3fM gcn_gather_cost_cache %.3f (%.3f) gcn_trans_cost_cache %.3f (%.3f), all_cost %.3f", 
-    //         graph->config->dataset_name.c_str(), graph->config->batch_size, gcn_run_time, used_gpu_mem, 1.0 * cache_node_num * graph->gnnctx->layer_size[0]*4/1024/1024, 
-    //         gcn_gather_cost_cache, gcn_gather_cost_cache / gcn_run_time, 
-    //         gcn_trans_cost_cache, gcn_trans_cost_cache / gcn_run_time,
-    //         (gcn_gather_cost_cache + gcn_trans_cost_cache) / gcn_run_time);       
-
-    // double comm_time = mpi_comm_time + rpc_comm_time + rpc_wait_time;
-    // double compute_time = train_time - comm_time;
-    // printf(
-    //     "train TIME(%d) sample %.3f compute_time %.3f comm_time %.3f mpi_comm %.3f rpc_comm %.3f rpc_wait_time
-    //     %.3f\n", graph->partition_id, train_sample_time, compute_time, comm_time, mpi_comm_time, rpc_comm_time,
-    //     rpc_wait_time);
-    // printf("train/val/test time: %.3f, %.3f, %.3f\n", train_time, val_time, test_time);
+    gcn_sample_time /= (graph->config->epochs - 3);
+    all_cache_hit_rate /= (graph->config->epochs - 3);
+    all_trans_memory /= (graph->config->epochs - 3);
+    // all_cache_hit / all
+    double gcn_train_time = gcn_run_time - gcn_trans_cost - gcn_gather_cost - gcn_sample_time;
+    LOG_DEBUG(
+        "dataset %s gcn_cache_rate %.3f gcn_batch_size %d gcn_gpu_run_mem %.3fM gcn_run_time %.3f gcn_gather_time %.3f "
+        "(%.3f) gcn_trans_time %.3f (%.3f), prepare_time %.3f (%.3f) gcn_sample_time %.3f (%.3f) train_time %.3f "
+        "(%.3f) compute_time %.3f (%.3f) cache_hit_rate %.3f trans_memory %.3fM",
+        graph->config->dataset_name.c_str(), graph->config->cache_rate, graph->config->batch_size, used_gpu_mem,
+        gcn_run_time, gcn_gather_cost, gcn_gather_cost / gcn_run_time, gcn_trans_cost, gcn_trans_cost / gcn_run_time,
+        (gcn_gather_cost + gcn_trans_cost), (gcn_gather_cost + gcn_trans_cost) / gcn_run_time, gcn_sample_time,
+        gcn_sample_time / gcn_run_time, gcn_train_time, gcn_train_time / gcn_run_time,
+        (gcn_train_time + gcn_sample_time), (gcn_train_time + gcn_sample_time) / gcn_run_time, all_cache_hit_rate,
+        all_trans_memory);
 
     // if (hosts > 1) rpc->exit();
-    // run_time += get_time();
-    // printf("run(): pre_time %.3fs runtime: %.3fs\n", pre_time, run_time);
-
-    // if (graph->partition_id == 0)
-    //   printf("Avg epoch train_time %.3f val_time %.3f test_time %.3f\n",
-    //          train_time / (iterations - graph->config->time_skip), val_time / (iterations -
-    //          graph->config->time_skip), test_time / (iterations - graph->config->time_skip));
-    // delete active;
     return best_val_acc;
   }
 

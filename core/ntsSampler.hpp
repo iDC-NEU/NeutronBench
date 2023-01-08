@@ -188,6 +188,21 @@ class Sampler {
     }
   }
 
+  void update_fanout(std::vector<int> nums) {
+    assert(fanout.size() == nums.size());
+    for (int i = 0; i < nums.size(); ++i) {
+      fanout[i] = nums[i];
+    }
+  }
+
+  void show_fanout() {
+    printf("eval fanout: ");
+    for (auto& it : fanout) {
+      printf("%d, ", it);
+    }
+    printf("\n");
+  }
+
   Sampler(FullyRepGraph* whole_graph_, std::vector<VertexId>& index, bool full_batch = false) {
     this->full_batch = full_batch;
     // Sampler(FullyRepGraph* whole_graph_, std::vector<VertexId>& index, Device dev = CPU, int gpu_id = 0) {

@@ -27,6 +27,7 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 #include <vector>
 
 #include "core/graph.hpp"
+#include "utils/utils.hpp"
 
 class GNNDatum {
  public:
@@ -71,7 +72,8 @@ class GNNDatum {
     global_mask = new int[graph_->partition_offset[graph_->partitions]];
     // std::cout << "fuck " << graph->partitions << std::endl;
     // std::cout << "parts " << graph_->partitions<< " " << graph_->partition_offset[graph_->partitions] << std::endl;
-    memset(local_mask, 1, sizeof(int) * gnnctx->l_v_num);
+    memset(local_mask, 0, sizeof(int) * gnnctx->l_v_num);
+    memset(global_mask, 0, sizeof(int) * graph_->partition_offset[graph_->partitions]);
     graph = graph_;
   }
 
@@ -87,15 +89,51 @@ class GNNDatum {
    * generate random data for feature, label and mask
    */
   void random_generate() {
-    for (int i = 0; i < gnnctx->l_v_num; i++) {
-      for (int j = 0; j < gnnctx->layer_size[0]; j++) {
+    // LOG_DEBUG("start random generate l_v_num %d layer %d lable_num %d", gnnctx->l_v_num, gnnctx->layer_size[0],
+    // gnnctx->label_num); LOG_DEBUG("sizeof local_feature %d", sizeof(local_feature)); local_feature = new
+    // float[gnnctx->l_v_num * gnnctx->layer_size[0]]; local_feature = (float*)malloc(gnnctx->l_v_num *
+    // gnnctx->layer_size[0] * sizeof(float)); LOG_DEBUG("sizeof local_feature %d", sizeof(local_feature));
+
+    for (long i = 0; i < gnnctx->l_v_num; i++) {
+      // if (i % 500000 == 0 && i) printf("node id %d\n", i);
+      for (long j = 0; j < gnnctx->layer_size[0]; j++) {
         local_feature[i * gnnctx->layer_size[0] + j] = 1.0;
       }
       local_label[i] = rand() % gnnctx->label_num;
-      local_mask[i] = i % 3;
+      // local_mask[i] = i % 3;
     }
-  }
 
+    // LOG_DEBUG("start random generate local_mask");
+    std::vector<int> shuffle_nodes(gnnctx->l_v_num);
+    std::iota(shuffle_nodes.begin(), shuffle_nodes.end(), 0);
+    assert(shuffle_nodes.back() == gnnctx->l_v_num - 1);
+    shuffle_vec(shuffle_nodes);
+    // std::cout << "after shuffle ";
+    // for (int i = 0; i < 10; ++i) {
+    //   std::cout << shuffle_nodes[i] << " ";
+    // } std::cout << std::endl;
+    int tmpN = gnnctx->l_v_num;
+    for (int i = 0; i < tmpN / 10 * 6; ++i) {
+      local_mask[shuffle_nodes[i]] = 0;
+    }
+    for (int i = tmpN / 10 * 6; i < tmpN / 10 * 8; ++i) {
+      local_mask[shuffle_nodes[i]] = 1;
+    }
+    for (int i = tmpN / 10 * 8; i < shuffle_nodes.size(); ++i) {
+      local_mask[shuffle_nodes[i]] = 2;
+    }
+
+    // debug
+    int cnt0 = 0, cnt1 = 0, cnt2 = 0;
+    assert(tmpN == gnnctx->l_v_num);
+    for (int i = 0; i < gnnctx->l_v_num; ++i) {
+      if (local_mask[i] == 0) cnt0++;
+      if (local_mask[i] == 1) cnt1++;
+      if (local_mask[i] == 2) cnt2++;
+    }
+    assert(cnt0 + cnt1 + cnt2 == tmpN);
+    LOG_DEBUG("local_mask: (%d %d %d) (%.1f %.1f %.1f)", cnt0, cnt1, cnt2, cnt0 * 1.0 / cnt2, cnt1 * 1.0 / cnt2, 1.0);
+  }
   /**
    * @brief
    * Create tensor corresponding to local label

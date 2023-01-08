@@ -5,9 +5,9 @@
 
 int random_uniform_int(const int min = 0, const int max = 1) {
   // thread_local std::default_random_engine generator;
-  // unsigned seed = 2000;
-  // static thread_local std::mt19937 generator(seed);
-  static thread_local std::mt19937 generator;
+  unsigned seed = 2000;
+  static thread_local std::mt19937 generator(seed);
+  // static thread_local std::mt19937 generator;
   std::uniform_int_distribution<int> distribution(min, max);
   return distribution(generator);
 }
@@ -16,9 +16,9 @@ int random_uniform_int(const int min = 0, const int max = 1) {
 template <typename T>
 T rand_int(T lower, T upper) {
   assert(lower < upper);
-  // unsigned seed = 2000;
-  // static thread_local std::mt19937 generator(seed);
-  static thread_local std::mt19937 generator;
+  unsigned seed = 2000;
+  static thread_local std::mt19937 generator(seed);
+  // static thread_local std::mt19937 generator;
   std::uniform_int_distribution<T> distribution(lower, upper - 1);
   return distribution(generator);
 }

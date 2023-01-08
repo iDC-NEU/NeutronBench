@@ -178,6 +178,7 @@ class InputInfo {
   std::vector<float> sample_rate_vec;
   int lower_fanout = 0;
   float cache_rate = 0;
+  std::string cache_type = "none";
   std::string cache_policy;
   int batch_switch_acc = -1;
 
