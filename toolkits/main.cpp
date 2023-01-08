@@ -137,7 +137,7 @@ int main(int argc, char **argv) {
     GCN_GPU_NEIGHBOR_EXP3_impl *ntsGCN = new GCN_GPU_NEIGHBOR_EXP3_impl(graph, iterations);
     ntsGCN->init_graph();
     ntsGCN->init_nn();
-      float acc = ntsGCN->run();
+    float acc = ntsGCN->run();
 
     // std::vector<int> batch_size_list {512, 1024, 512, 1024};
     // for (auto it : batch_size_list) {

@@ -161,10 +161,12 @@ class Cuda_Stream {
                                    VertexId_CUDA batch_size, VertexId_CUDA feature_size);
   void zero_copy_feature_move_gpu(float *dev_feature, float *pinned_host_feature, VertexId_CUDA *src_vertex,
                                   VertexId_CUDA feature_size, VertexId_CUDA vertex_size);
-  void zero_copy_feature_move_gpu_cache(float *dev_feature, float *host_pinned_feature, VertexId_CUDA* src_vertex, VertexId_CUDA feature_size, VertexId_CUDA vertex_size,
-                                             VertexId_CUDA* local_idx);
-  void gather_feature_from_gpu_cache(float *dev_feature, float *dev_cache_feature, VertexId_CUDA* src_vertex, VertexId_CUDA feature_size, VertexId_CUDA vertex_size,
-                                             VertexId_CUDA* local_idx, VertexId_CUDA* cache_node_hashmap);      
+  void zero_copy_feature_move_gpu_cache(float *dev_feature, float *host_pinned_feature, VertexId_CUDA *src_vertex,
+                                        VertexId_CUDA feature_size, VertexId_CUDA vertex_size,
+                                        VertexId_CUDA *local_idx);
+  void gather_feature_from_gpu_cache(float *dev_feature, float *dev_cache_feature, VertexId_CUDA *src_vertex,
+                                     VertexId_CUDA feature_size, VertexId_CUDA vertex_size, VertexId_CUDA *local_idx,
+                                     VertexId_CUDA *cache_node_hashmap);
   void global_copy_mulilabel_move_gpu(long *dev_label, long *global_dev_label, VertexId_CUDA *dst_vertex,
                                       VertexId_CUDA vertex_size, VertexId_CUDA label_size);
   void global_copy_label_move_gpu(long *dev_label, long *global_dev_label, VertexId_CUDA *dst_vertex,

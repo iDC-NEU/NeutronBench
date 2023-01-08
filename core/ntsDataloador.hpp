@@ -39,11 +39,11 @@ class GNNDatum {
   // ValueType *dev_local_embedding;
   long *dev_local_label;
 
-  long *local_label;         // labels of local partition
-  long *global_label;        // labels of global partition
-  int *local_mask;           // mask(indicate whether data is for train, eval or test) of
-  int *global_mask;          // mask(indicate whether data is for train, eval or test) of
-                             // local partition
+  long *local_label;   // labels of local partition
+  long *global_label;  // labels of global partition
+  int *local_mask;     // mask(indicate whether data is for train, eval or test) of
+  int *global_mask;    // mask(indicate whether data is for train, eval or test) of
+                       // local partition
 
   // GNN datum world
 

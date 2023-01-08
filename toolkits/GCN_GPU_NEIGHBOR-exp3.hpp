@@ -87,12 +87,10 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
   int cache_node_num = 0;
   // std::unordered_map<std::string, std::vector<int>> batch_size_mp;
   // std::vector<int> batch_size_vec;
-  ~GCN_GPU_NEIGHBOR_EXP3_impl() {
-    delete active;
-  }
+  ~GCN_GPU_NEIGHBOR_EXP3_impl() { delete active; }
 
   GCN_GPU_NEIGHBOR_EXP3_impl(Graph<Empty>* graph_, int iterations_, bool process_local = false,
-                        bool process_overlap = false) {
+                             bool process_overlap = false) {
     graph = graph_;
     iterations = iterations_;
 
@@ -600,7 +598,7 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     sampler->metis_batch_id = 0;
     int batch_id = 0;
     double forward_cost = 0;
-    
+
     while (sampler->work_offset < sampler->work_range[1]) {
       // for (VertexId i = 0; i < sampler->batch_nums; ++i) {
       ctx->train();
@@ -705,15 +703,16 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
                  graph->config->cache_type == "rate") {  // trans freature which is not cache in gpu
         // LOG_DEBUG("start load_farture_gpu_cache");
         // trans_feature_cost -= get_time();
-        auto [trans_feature_tmp, gather_gpu_cache_tmp] = sampler->load_feature_gpu_cache(X[0], gnndatum->dev_local_feature, dev_cache_feature, local_idx, local_idx_cache, cache_node_hashmap,
-                                        dev_local_idx, dev_local_idx_cache, dev_cache_node_hashmap);
+        auto [trans_feature_tmp, gather_gpu_cache_tmp] = sampler->load_feature_gpu_cache(
+            X[0], gnndatum->dev_local_feature, dev_cache_feature, local_idx, local_idx_cache, cache_node_hashmap,
+            dev_local_idx, dev_local_idx_cache, dev_cache_node_hashmap);
         // trans_feature_cost += get_time();
         trans_feature_cost += trans_feature_tmp;
         gather_gpu_cache_cost += gather_gpu_cache_tmp;
         // gather_feature_time += gather_gpu_cache_tmp;
         one_batch_cost += get_time();
-        epoch_cache_all += ssg->sampled_sgs[0]->src().size(); 
-        for (auto &it : ssg->sampled_sgs[0]->src()) {
+        epoch_cache_all += ssg->sampled_sgs[0]->src().size();
+        for (auto& it : ssg->sampled_sgs[0]->src()) {
           if (cache_node_hashmap[it] != -1) {
             epoch_cache_hit++;
           }
@@ -925,12 +924,12 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     double epoch_cache_miss = (epoch_cache_all - epoch_cache_hit);
     double epoch_trans_memory = epoch_cache_miss * graph->gnnctx->layer_size[0] * sizeof(ValueType) / 1024 / 1024;
     if (graph->rtminfo->epoch >= 3) {
-        gcn_trans_cost += epoch_trans_time;
-        // gcn_trans_cost_cache += epoch_trans_time_cache;
-        gcn_gather_cost += epoch_gather_time;
-        // gcn_gather_cost_cache += epoch_gather_time_cache;
-        all_cache_hit_rate += 1.0 * epoch_cache_hit / epoch_cache_all;
-        all_trans_memory += epoch_trans_memory;
+      gcn_trans_cost += epoch_trans_time;
+      // gcn_trans_cost_cache += epoch_trans_time_cache;
+      gcn_gather_cost += epoch_gather_time;
+      // gcn_gather_cost_cache += epoch_gather_time_cache;
+      all_cache_hit_rate += 1.0 * epoch_cache_hit / epoch_cache_all;
+      all_trans_memory += epoch_trans_memory;
     }
 
     get_gpu_mem(used_gpu_mem, total_gpu_mem);
@@ -1266,7 +1265,7 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     gcn_run_time = gcn_gather_cost = gcn_trans_cost = 0;
     gcn_sample_time = 0;
     // epoch_cache_hit = 0;
-   
+
     double pre_time = -get_time();
     if (graph->partition_id == 0) {
       LOG_INFO("GNNmini::[Dist.GPU.GCNimpl] running [%d] Epoches\n", iterations);
@@ -1277,7 +1276,7 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
 
     init_nids();
     train_sampler = new Sampler(fully_rep_graph, train_nids);
-    eval_sampler = new Sampler(fully_rep_graph, val_nids, true);   // true mean full batch
+    eval_sampler = new Sampler(fully_rep_graph, val_nids, true);  // true mean full batch
     // eval_sampler->update_fanout(-1);                            // val not sample
     test_sampler = new Sampler(fully_rep_graph, test_nids, true);  // true mean full batch
 
@@ -1463,4 +1462,3 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
   //   }
   // }
 };
-

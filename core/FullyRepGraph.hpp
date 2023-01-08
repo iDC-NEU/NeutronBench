@@ -178,12 +178,12 @@ class SampledSubgraph {
     // LOG_DEBUG("thrads %d", threads);
     // LOG_DEBUG("processing %d %d layer %d, fanout %d", 0, curr_dst_size, curr_layer, fanout[curr_layer]);
 #pragma omp parallel for num_threads(threads)
-      for (VertexId begin_v_i = 0; begin_v_i < curr_dst_size; begin_v_i += 1) {
-        // for every vertex, apply the sparse_slot at the partition
-        // corresponding to the step
-        vertex_sample(fanout[curr_layer], sampled_sgs[curr_layer]->dst()[begin_v_i],
-                      sampled_sgs[curr_layer]->c_o().data(), sampled_sgs[curr_layer]->r_i().data(), begin_v_i);
-      }
+    for (VertexId begin_v_i = 0; begin_v_i < curr_dst_size; begin_v_i += 1) {
+      // for every vertex, apply the sparse_slot at the partition
+      // corresponding to the step
+      vertex_sample(fanout[curr_layer], sampled_sgs[curr_layer]->dst()[begin_v_i],
+                    sampled_sgs[curr_layer]->c_o().data(), sampled_sgs[curr_layer]->r_i().data(), begin_v_i);
+    }
   }
 
   // void sample_postprocessing(){

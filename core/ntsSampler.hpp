@@ -297,9 +297,11 @@ class Sampler {
                                    local_feature.size(1), csc_layer->src_size);
   }
 
-  std::pair<double, double> load_feature_gpu_cache(NtsVar& local_feature, ValueType* global_feature_buffer,  ValueType* dev_cache_feature, 
-                              VertexId* local_idx, VertexId* local_idx_cache, VertexId* cache_node_hashmap,
-                              VertexId* dev_local_idx, VertexId* dev_local_idx_cache, VertexId* dev_cache_node_hashmap) {
+  std::pair<double, double> load_feature_gpu_cache(NtsVar& local_feature, ValueType* global_feature_buffer,
+                                                   ValueType* dev_cache_feature, VertexId* local_idx,
+                                                   VertexId* local_idx_cache, VertexId* cache_node_hashmap,
+                                                   VertexId* dev_local_idx, VertexId* dev_local_idx_cache,
+                                                   VertexId* dev_cache_node_hashmap) {
     // std::vector<int> &cache_node_hashmap) {
 
     auto csc_layer = subgraph->sampled_sgs[0];
@@ -330,15 +332,16 @@ class Sampler {
     // LOG_DEBUG("start zero_copy_feature_move_gpU_cache");
     double trans_feature_cost = -get_time();
     cs->zero_copy_feature_move_gpu_cache(local_feature_buffer, global_feature_buffer, csc_layer->dev_source,
-                                   local_feature.size(1), local_idx_cnt, dev_local_idx);
-    trans_feature_cost += get_time();                              
+                                         local_feature.size(1), local_idx_cnt, dev_local_idx);
+    trans_feature_cost += get_time();
     // LOG_DEBUG("gather_fature_from_gpu_cache");
-    double gather_gpu_cache_cost = -get_time(); 
+    double gather_gpu_cache_cost = -get_time();
     cs->gather_feature_from_gpu_cache(local_feature_buffer, dev_cache_feature, csc_layer->dev_source,
-                                   local_feature.size(1), local_idx_cache_cnt, dev_local_idx_cache, dev_cache_node_hashmap);                                
+                                      local_feature.size(1), local_idx_cache_cnt, dev_local_idx_cache,
+                                      dev_cache_node_hashmap);
     gather_gpu_cache_cost += get_time();
     return {trans_feature_cost, gather_gpu_cache_cost};
-  }  
+  }
 
   void load_label_gpu(NtsVar& local_label, long* global_label_buffer) {
     auto csc_layer = subgraph->sampled_sgs[layers - 1];

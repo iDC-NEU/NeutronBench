@@ -961,8 +961,8 @@ class GCN_GPU_NEIGHBOR_impl {
       train_nids.erase(train_nids.begin() + static_cast<int>(sz * (1 - graph->config->del_frac)), train_nids.end());
     }
     train_sampler = new Sampler(fully_rep_graph, train_nids);
-    eval_sampler = new Sampler(fully_rep_graph, val_nids, true);   // true mean full batch
-    eval_sampler->update_fanout(-1);                               // val not sample
+    eval_sampler = new Sampler(fully_rep_graph, val_nids, true);  // true mean full batch
+    eval_sampler->update_fanout(-1);                              // val not sample
     // eval_sampler->update_fanout({16, 32});                               // val not sample
     eval_sampler->show_fanout();
     test_sampler = new Sampler(fully_rep_graph, test_nids, true);  // true mean full batch
