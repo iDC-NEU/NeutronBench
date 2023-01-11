@@ -45,6 +45,11 @@ template <typename T>
 void free_gpu_data(T *data);
 template <typename T>
 void alloc_gpu_data(T **input, int size);
+void FreeBufferAsync(float *buffer, cudaStream_t cs);
+void FreeEdgeAsync(VertexId_CUDA *buffer, cudaStream_t cs);
+void allocate_gpu_buffer_async(float **input, int size, cudaStream_t cs);
+void allocate_gpu_edge_async(VertexId_CUDA **input, int size, cudaStream_t cs);
+void move_bytes_in_async(void *d_pointer, void *h_pointer, long bytes, cudaStream_t cs);
 
 class deviceCSC {
  public:
@@ -99,6 +104,7 @@ class Cuda_Stream {
   cudaStream_t getStream();
   void CUDA_DEVICE_SYNCHRONIZE();
   cudaStream_t stream;
+  void Cuda_Stream::setNewStream(cudaStream_t cudaStream);
   void move_result_out(float *output, float *input, VertexId_CUDA src, VertexId_CUDA dst, int feature_size,
                        bool sync = true);
   void move_data_in(float *d_pointer, float *h_pointer, VertexId_CUDA start, VertexId_CUDA end, int feature_size,

@@ -596,6 +596,58 @@ class sampCSC {
     }
   }
 
+  void alloc_dev_array_async(cudaStream_t stream, bool pull = true) {
+    //////// TODO(Sanzo): (realloc)
+    const float mem_factor = 1.2;
+    if (v_size + 1 > size_dev_dst_max) {
+      if (size_dev_dst_max > 0) {
+        // free_gpu_data(dev_column_offset);
+        // free_gpu_data(dev_destination);
+        FreeEdgeAsync(dev_destination, stream);
+        FreeEdgeAsync(dev_column_offset, stream);
+      }
+      size_dev_dst_max = (v_size + 1) * mem_factor;
+      // alloc_gpu_data(&dev_destination, size_dev_dst_max);
+      // alloc_gpu_data(&dev_column_offset, size_dev_dst_max);
+      allocate_gpu_edge_async(&dev_destination, size_dev_dst_max, stream);
+      allocate_gpu_edge_async(&dev_column_offset, size_dev_dst_max, stream);
+
+      size_dev_dst = v_size;
+    } else {
+      size_dev_dst = v_size;
+    }
+
+    if ((src_size + 1) > size_dev_src_max) {
+      if (size_dev_src_max > 0) {
+        FreeEdgeAsync(dev_row_offset, stream);
+        FreeEdgeAsync(dev_source, stream);
+      }
+      size_dev_src_max = (src_size + 1) * mem_factor;
+      allocate_gpu_edge_async(&dev_source, size_dev_src_max, stream);
+      allocate_gpu_edge_async(&dev_row_offset, size_dev_src_max, stream);
+      size_dev_src = src_size;
+    } else {
+      size_dev_src = src_size;
+    }
+
+    if (e_size > size_dev_edge_max) {
+      if (size_dev_edge_max > 0) {
+        FreeEdgeAsync(dev_row_indices, stream);
+        FreeEdgeAsync(dev_column_indices, stream);
+        FreeBufferAsync(dev_edge_weight_backward, stream);
+        FreeBufferAsync(dev_edge_weight_forward, stream);
+      }
+      size_dev_edge_max = e_size * mem_factor;
+      allocate_gpu_edge_async(&dev_row_indices, size_dev_edge_max, stream);
+      allocate_gpu_edge_async(&dev_column_indices, size_dev_edge_max, stream);
+      allocate_gpu_buffer_async(&dev_edge_weight_forward, size_dev_edge_max, stream);
+      allocate_gpu_buffer_async(&dev_edge_weight_backward, size_dev_edge_max, stream);
+      size_dev_edge = e_size;
+    } else {
+      size_dev_edge = e_size;
+    }
+  }
+
   void copy_data_to_device(bool pull = true) {
     move_bytes_in(dev_column_offset, column_offset.data(), (v_size + 1) * sizeof(VertexId));
     move_bytes_in(dev_row_indices, row_indices.data(), e_size * sizeof(VertexId));
@@ -605,6 +657,18 @@ class sampCSC {
 
     if (pull) {
       copy_csr_to_device();
+    }
+  }
+
+  void copy_data_to_device_async(cudaStream_t cs, bool pull = true) {
+    move_bytes_in_async(dev_column_offset, column_offset.data(), (v_size + 1) * sizeof(VertexId), cs);
+    move_bytes_in_async(dev_row_indices, row_indices.data(), e_size * sizeof(VertexId), cs);
+
+    move_bytes_in_async(dev_source, source.data(), src_size * sizeof(VertexId), cs);
+    move_bytes_in_async(dev_destination, destination.data(), v_size * sizeof(VertexId), cs);
+
+    if (pull) {
+      copy_csr_to_device_async(cs);
     }
   }
 
@@ -619,6 +683,19 @@ class sampCSC {
   void copy_csr_to_device() {
     move_bytes_in(dev_row_offset, row_offset.data(), (src_size + 1) * sizeof(VertexId));
     move_bytes_in(dev_column_indices, column_indices.data(), e_size * sizeof(VertexId));
+  }
+
+  void copy_ewf_to_device_async(cudaStream_t cs) {
+    move_bytes_in_async(dev_edge_weight_forward, edge_weight_forward.data(), e_size * sizeof(ValueType), cs);
+  }
+
+  void copy_ewb_to_device_async(cudaStream_t cs) {
+    move_bytes_in_async(dev_edge_weight_backward, edge_weight_backward.data(), e_size * sizeof(ValueType), cs);
+  }
+
+  void copy_csr_to_device_async(cudaStream_t cs) {
+    move_bytes_in_async(dev_row_offset, row_offset.data(), (src_size + 1) * sizeof(VertexId), cs);
+    move_bytes_in_async(dev_column_indices, column_indices.data(), e_size * sizeof(VertexId), cs);
   }
 
   // private:

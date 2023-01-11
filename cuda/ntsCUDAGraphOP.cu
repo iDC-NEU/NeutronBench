@@ -350,6 +350,16 @@ void Cuda_Stream::Scatter_Dst_to_Msg(float* message, float* dst_feature,  // dat
 #endif
 }
 
+void Cuda_Stream::setNewStream(cudaStream_t cudaStream) {
+#if CUDA_ENABLE
+    destory_Stream();
+    this->stream = cudaStream;
+#else
+    printf("CUDA DISABLED Cuda_Stream::getStream\n");
+    exit(0);
+#endif
+}
+
 void Cuda_Stream::Gather_Msg_to_Dst(float* dst_feature, float* message,  // data
                                     VertexId_CUDA* row_indices, VertexId_CUDA* column_offset, VertexId_CUDA batch_size,
                                     VertexId_CUDA feature_size) {
@@ -496,6 +506,15 @@ void move_bytes_in(void* d_pointer, void* h_pointer, long bytes, bool sync) {
 #endif
 }
 
+void move_bytes_in_async(void* d_pointer, void* h_pointer, long bytes, cudaStream_t cs) {
+#if CUDA_ENABLE
+  CHECK_CUDA_RESULT(cudaMemcpyAsync(d_pointer, h_pointer, bytes, cudaMemcpyHostToDevice, cs));
+#else
+  printf("CUDA DISABLED move_bytes_in\n");
+  exit(0);
+#endif
+}
+
 // void aggregate_comm_result(float* aggregate_buffer,float *input_buffer,int data_size,int feature_size,int
 // partition_offset,bool sync){ #if CUDA_ENABLE
 //    const int THREAD_SIZE=512;//getThreadNum(_meta->get_feature_size());
@@ -528,6 +547,15 @@ void FreeBuffer(float* buffer) {
 #endif
 }
 
+void FreeBufferAsync(float* buffer, cudaStream_t cs) {
+#if CUDA_ENABLE
+  cudaFreeAsync(buffer, cs);
+#else
+  printf("CUDA DISABLED FreeBuffer\n");
+  exit(0);
+#endif
+}
+
 void FreeEdge(VertexId_CUDA* buffer) {
 #if CUDA_ENABLE
   cudaFree(buffer);
@@ -536,6 +564,16 @@ void FreeEdge(VertexId_CUDA* buffer) {
   exit(0);
 #endif
 }
+
+void FreeEdgeAsync(VertexId_CUDA* buffer, cudaStream_t cs) {
+#if CUDA_ENABLE
+  cudaFreeAsync(buffer, cs);
+#else
+  printf("CUDA DISABLED FreeEdge\n");
+  exit(0);
+#endif
+}
+
 void zero_buffer(float* buffer, int size) {
 #if CUDA_ENABLE
   CHECK_CUDA_RESULT(cudaMemset(buffer, 0, sizeof(float) * size));
@@ -575,9 +613,28 @@ void allocate_gpu_buffer(float** input, int size) {
 #endif
 }
 
+void allocate_gpu_buffer_async(float** input, int size, cudaStream_t cs) {
+#if CUDA_ENABLE
+  CHECK_CUDA_RESULT(cudaMallocAsync(input,sizeof(float)*(size), cs));
+#else
+  printf("CUDA DISABLED Cuda_Stream::Gather_By_Dst_From_Message\n");
+  exit(0);
+#endif
+}
+
 void allocate_gpu_edge(VertexId_CUDA** input, int size) {
 #if CUDA_ENABLE
   CHECK_CUDA_RESULT(cudaMalloc(input, sizeof(VertexId_CUDA) * (size)));
+#else
+  printf("CUDA DISABLED Cuda_Stream::Gather_By_Dst_From_Message\n");
+  exit(0);
+
+#endif
+}
+
+void allocate_gpu_edge_async(VertexId_CUDA** input, int size, cudaStream_t cs) {
+#if CUDA_ENABLE
+  CHECK_CUDA_RESULT(cudaMallocAsync(input,sizeof(VertexId_CUDA)*(size), cs));
 #else
   printf("CUDA DISABLED Cuda_Stream::Gather_By_Dst_From_Message\n");
   exit(0);
