@@ -115,6 +115,18 @@ class SampledSubgraph {
     }
   }
 
+  void trans_graph_to_gpu_async(cudaStream_t cs, bool pull = true) {
+    for (int i = 0; i < layers; ++i) {
+      // TODO(sanzo): not alloc memory fo csr in push version
+      // sampled_sgs[i]->alloc_dev_array(pull);
+      // LOG_DEBUG("alloc dev arry done");
+      sampled_sgs[i]->copy_data_to_device_async(cs, pull);
+      sampled_sgs[i]->copy_ewb_to_device_async(cs);
+      sampled_sgs[i]->copy_ewf_to_device_async(cs);
+      // LOG_DEBUG("copy_data_to device done");
+    }
+  }
+
   void sample_preprocessing(VertexId layer) {
     curr_layer = layer;
     if (0 == layer) {

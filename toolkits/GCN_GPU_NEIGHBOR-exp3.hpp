@@ -629,7 +629,8 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
       if (type == 0 && graph->rtminfo->epoch >= 3) train_sample_time += sample_cost;
 
       trans_graph_cost -= get_time();
-      ssg->trans_graph_to_gpu(graph->config->mini_pull > 0);  // trans subgraph to gpu
+      // ssg->trans_graph_to_gpu(graph->config->mini_pull > 0);  // trans subgraph to gpu
+      ssg->trans_graph_to_gpu_async(cuda_stream->stream, graph->config->mini_pull > 0);  // trans subgraph to gpu
       trans_graph_cost += get_time();
 
       //////////////////////////////////////////////start gather and trans feature (explicit
@@ -662,7 +663,8 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
       // graph->config->cache_type = "none";
       if (graph->config->cache_type == "none") {  // trans feature use zero copy (omit gather feature)
         trans_feature_cost -= get_time();
-        sampler->load_feature_gpu(X[0], gnndatum->dev_local_feature);
+        // sampler->load_feature_gpu(X[0], gnndatum->dev_local_feature);
+        sampler->load_feature_gpu(cuda_stream, X[0], gnndatum->dev_local_feature);
         trans_feature_cost += get_time();
         // } else if (graph->config->cache_type == "gpu_memory" && graph->rtminfo->epoch >= 5){ // trans freature which
         // is not cache in gpu
@@ -670,9 +672,13 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
                  graph->config->cache_type == "rate") {  // trans freature which is not cache in gpu
         // LOG_DEBUG("start load_farture_gpu_cache");
         // trans_feature_cost -= get_time();
+        // auto [trans_feature_tmp, gather_gpu_cache_tmp] = sampler->load_feature_gpu_cache(
+        //     X[0], gnndatum->dev_local_feature, dev_cache_feature, local_idx, local_idx_cache, cache_node_hashmap,
+        //     dev_local_idx, dev_local_idx_cache, dev_cache_node_hashmap);
+
         auto [trans_feature_tmp, gather_gpu_cache_tmp] = sampler->load_feature_gpu_cache(
-            X[0], gnndatum->dev_local_feature, dev_cache_feature, local_idx, local_idx_cache, cache_node_hashmap,
-            dev_local_idx, dev_local_idx_cache, dev_cache_node_hashmap);
+            cuda_stream, X[0], gnndatum->dev_local_feature, dev_cache_feature, local_idx, local_idx_cache,
+            cache_node_hashmap, dev_local_idx, dev_local_idx_cache, dev_cache_node_hashmap);
         // trans_feature_cost += get_time();
         trans_feature_cost += trans_feature_tmp;
         gather_gpu_cache_cost += gather_gpu_cache_tmp;
@@ -718,7 +724,8 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
       /////////////////////////////////////////////////start trans target_lab (zero
       /// copy)//////////////////////////////////////////////////
       trans_label_cost -= get_time();
-      sampler->load_label_gpu(target_lab, gnndatum->dev_local_label);
+      // sampler->load_label_gpu(target_lab, gnndatum->dev_local_label);
+      sampler->load_label_gpu(cuda_stream, target_lab, gnndatum->dev_local_label);
       trans_label_cost += get_time();
       /////////////////////////////////////////////////end trans target_lab (zero
       /// copy)//////////////////////////////////////////////////
