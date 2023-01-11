@@ -64,6 +64,7 @@ class GCN_GPU_NEIGHBOR_impl {
 
   ntsPeerRPC<ValueType, VertexId>* rpc;
   int hosts;
+  Cuda_Stream* cuda_stream;
   // std::unordered_map<std::string, std::vector<int>> batch_size_mp;
   // std::vector<int> batch_size_vec;
 
@@ -93,6 +94,7 @@ class GCN_GPU_NEIGHBOR_impl {
       rpc = nullptr;
     }
     best_val_acc = 0;
+    cuda_stream = new Cuda_Stream();
 
     // batch_size_mp["ppi"] = {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 2048, 4096, 9716};
     // batch_size_mp["ppi-large"] = {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 44906};
@@ -444,7 +446,7 @@ class GCN_GPU_NEIGHBOR_impl {
         // LOG_DEBUG("start compute layer %d", l);
         graph->rtminfo->curr_layer = l;
         forward_graph_cost -= get_time();
-        NtsVar Y_i = ctx->runGraphOp<nts::op::SingleGPUSampleGraphOp>(ssg, graph, l, X[l]);
+        NtsVar Y_i = ctx->runGraphOp<nts::op::SingleGPUSampleGraphOp>(ssg, graph, l, X[l], cuda_stream);
         // LOG_DEBUG("after return output_tensor ptr %p", Y_i.data_ptr());
         forward_graph_cost += get_time();
         // LOG_DEBUG("  batch %d layer %d graph compute done", i, l);
@@ -781,7 +783,7 @@ class GCN_GPU_NEIGHBOR_impl {
         // LOG_DEBUG("start compute layer %d", l);
         graph->rtminfo->curr_layer = l;
         forward_graph_cost -= get_time();
-        NtsVar Y_i = ctx->runGraphOp<nts::op::SingleGPUSampleGraphOp>(ssg, graph, l, X[l]);
+        NtsVar Y_i = ctx->runGraphOp<nts::op::SingleGPUSampleGraphOp>(ssg, graph, l, X[l], cuda_stream);
         // LOG_DEBUG("after return output_tensor ptr %p", Y_i.data_ptr());
         forward_graph_cost += get_time();
         // LOG_DEBUG("  batch %d layer %d graph compute done", i, l);

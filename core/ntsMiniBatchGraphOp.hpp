@@ -240,12 +240,12 @@ class MiniBatchFuseOp : public ntsGraphOp {
 // #if CUDA_ENABLE
 class SingleGPUSampleGraphOp : public ntsGraphOp {
  public:
-  // static Cuda_Stream *cuda_stream = nullptr;
-  static Cuda_Stream *cuda_stream;
+  Cuda_Stream *cuda_stream;
   SampledSubgraph *subgraphs;
   int layer = 0;
   std::vector<void *> tensor_address;
 
+  // static Cuda_Stream *cuda_stream;
   SingleGPUSampleGraphOp(SampledSubgraph *subgraphs_, Graph<Empty> *graph_, int layer_) : ntsGraphOp(graph_) {
     subgraphs = subgraphs_;
     layer = layer_;
@@ -253,6 +253,13 @@ class SingleGPUSampleGraphOp : public ntsGraphOp {
       // LOG_DEBUG("create cuda_stream");
       cuda_stream = new Cuda_Stream();
     }
+  }
+
+  SingleGPUSampleGraphOp(SampledSubgraph *subgraphs_, Graph<Empty> *graph_, int layer_, Cuda_Stream *cs)
+      : ntsGraphOp(graph_) {
+    subgraphs = subgraphs_;
+    layer = layer_;
+    cuda_stream = cs;
   }
 
   ~SingleGPUSampleGraphOp() {
@@ -360,7 +367,7 @@ class SingleGPUSampleGraphOp : public ntsGraphOp {
   }
 };
 // #endif
-Cuda_Stream *SingleGPUSampleGraphOp::cuda_stream = new Cuda_Stream();
+// Cuda_Stream *SingleGPUSampleGraphOp::cuda_stream = new Cuda_Stream();
 
 // class SingleCPUSrcScatterOp : public ntsGraphOp{
 // public:

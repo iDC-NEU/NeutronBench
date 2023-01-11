@@ -60,6 +60,7 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
   double gcn_gather_cost_cache = 0;
   float* dev_cache_feature;
   VertexId *local_idx, *local_idx_cache, *dev_local_idx, *dev_local_idx_cache;
+  Cuda_Stream* cuda_stream;
 
   // int batch_size_switch_idx = 0;
 
@@ -115,6 +116,7 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
       rpc = nullptr;
     }
     best_val_acc = 0;
+    cuda_stream = new Cuda_Stream();
 
     // batch_size_mp["ppi"] = {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 2048, 4096, 9716};
     // batch_size_mp["ppi-large"] = {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 44906};
@@ -654,16 +656,6 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
       trans_graph_cost -= get_time();
       ssg->trans_graph_to_gpu(graph->config->mini_pull > 0);  // trans subgraph to gpu
       trans_graph_cost += get_time();
-      // LOG_DEBUG("batch %d tarns_to_gpu done", i);
-      // get_gpu_mem(used_gpu_mem, total_gpu_mem);
-      // LOG_DEBUG("epoch %d batch %d tarns_to_gpu done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, used_gpu_mem,
-      // total_gpu_mem);
-
-      // rpc.keep_running();
-
-      // get_gpu_mem(used_gpu_mem, total_gpu_mem);
-      // LOG_DEBUG("epoch %d batch %d get feature done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, used_gpu_mem,
-      // total_gpu_mem); LOG_DEBUG("load_feature done");
 
       //////////////////////////////////////////////start gather and trans feature (explicit
       /// version)/////////////////////////////////////////////////////
@@ -756,45 +748,20 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
       /////////////////////////////////////////////////end trans target_lab (zero
       /// copy)//////////////////////////////////////////////////
 
-      // epoch_trans_time += trans_feature_gpu_cost + trans_label_gpu_cost + trans_graph_gpu_cost;
-      // LOG_DEBUG("load_label done");
-      // get_gpu_mem(used_gpu_mem, total_gpu_mem);
-      // LOG_DEBUG("epoch %d batch %d get label done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, used_gpu_mem,
-      // total_gpu_mem);
-
-      // print label
-      // long* local_label_buffer = nullptr;
-      // auto classes = graph->config->classes;
-      // if (classes > 1) {local_label_buffer = graph->Nts->getWritableBuffer2d<long>(target_lab,
-      // torch::DeviceType::CUDA);} else {local_label_buffer = graph->Nts->getWritableBuffer1d<long>(target_lab,
-      // torch::DeviceType::CUDA);} long* tmp = new long[classes * graph->config->batch_size]; cudaMemcpy ( tmp,
-      // local_label_buffer, classes * graph->config->batch_size * sizeof(long), cudaMemcpyDeviceToHost); for (int i =
-      // 0; i < 4; ++i) {
-      //   for (int j = 0; j < classes; ++j) {
-      //     printf("%d ", tmp[i * classes + j]);
-      //   }printf("\n");
-      // }
       train_cost -= get_time();
 
       for (int l = 0; l < layers; l++) {  // forward
         // LOG_DEBUG("start compute layer %d", l);
         graph->rtminfo->curr_layer = l;
         forward_graph_cost -= get_time();
-        NtsVar Y_i = ctx->runGraphOp<nts::op::SingleGPUSampleGraphOp>(ssg, graph, l, X[l]);
+        // NtsVar Y_i = ctx->runGraphOp<nts::op::SingleGPUSampleGraphOp>(ssg, graph, l, X[l]);
+        NtsVar Y_i = ctx->runGraphOp<nts::op::SingleGPUSampleGraphOp>(ssg, graph, l, X[l], cuda_stream);
         // LOG_DEBUG("after return output_tensor ptr %p", Y_i.data_ptr());
         forward_graph_cost += get_time();
-        // LOG_DEBUG("  batch %d layer %d graph compute done", i, l);
-        // get_gpu_mem(used_gpu_mem, total_gpu_mem);
-        // LOG_DEBUG("epoch %d batch %d layer %d graph compute done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, l,
-        // used_gpu_mem, total_gpu_mem);
 
         forward_nn_cost -= get_time();
         X[l + 1] = ctx->runVertexForward([&](NtsVar n_i) { return vertexForward(n_i); }, Y_i);
         forward_nn_cost += get_time();
-        // LOG_DEBUG("  batch %d layer %d nn compute done", i, l);
-        // get_gpu_mem(used_gpu_mem, total_gpu_mem);
-        // LOG_DEBUG("epoch %d batch %d layer %d nn compute done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, l,
-        // used_gpu_mem, total_gpu_mem);
       }
 
       forward_loss_cost -= get_time();
@@ -1071,13 +1038,6 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
       // LOG_DEBUG("epoch %d batch %d get feature done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, used_gpu_mem,
       // total_gpu_mem); LOG_DEBUG("load_feature done");
 
-      // if (hosts > 1) {
-      //   X[0] = nts::op::get_feature_from_global(*rpc, ssg->sampled_sgs[0]->src(), F, graph);
-      //   // if (type == 0 && graph->rtminfo->epoch >= 3) rpc_comm_time += tmp_time;
-      // } else {
-      //   X[0] = nts::op::get_feature(ssg->sampled_sgs[0]->src(), ssg->sampled_sgs[0]->src_size, F, graph);
-      // }
-
       trans_label_cost -= get_time();
       sampler->load_label_gpu(target_lab, gnndatum->dev_local_label);
       trans_label_cost += get_time();
@@ -1085,19 +1045,6 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
       // get_gpu_mem(used_gpu_mem, total_gpu_mem);
       // LOG_DEBUG("epoch %d batch %d get label done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, used_gpu_mem,
       // total_gpu_mem);
-
-      // print label
-      // long* local_label_buffer = nullptr;
-      // auto classes = graph->config->classes;
-      // if (classes > 1) {local_label_buffer = graph->Nts->getWritableBuffer2d<long>(target_lab,
-      // torch::DeviceType::CUDA);} else {local_label_buffer = graph->Nts->getWritableBuffer1d<long>(target_lab,
-      // torch::DeviceType::CUDA);} long* tmp = new long[classes * graph->config->batch_size]; cudaMemcpy ( tmp,
-      // local_label_buffer, classes * graph->config->batch_size * sizeof(long), cudaMemcpyDeviceToHost); for (int i =
-      // 0; i < 4; ++i) {
-      //   for (int j = 0; j < classes; ++j) {
-      //     printf("%d ", tmp[i * classes + j]);
-      //   }printf("\n");
-      // }
 
       for (int l = 0; l < layers; l++) {  // forward
         // LOG_DEBUG("start compute layer %d", l);
@@ -1196,28 +1143,6 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     // LOG_INFO("generate_csr %.3f, convert %.3f debug %.3f", generate_csr_time, convert_time, debug_time);
     // LOG_INFO("trans_graph_cost %.3f", trans_graph_cost);
 
-    // if (type == 0) {
-    //   LOG_INFO("trainning cost %.3f", train_cost);
-    // } else {
-    //   LOG_INFO("evaluation cost %.3f", train_cost);
-    // }
-    // LOG_INFO("  trans_feature/lable (%.3f/%.3f)", trans_feature_cost, trans_label_cost);
-    // LOG_INFO("  forward: graph %.3f, nn %.3f, loss %.3f, acc %.3f, update %.3f", forward_graph_cost, forward_nn_cost,
-    //          forward_loss_cost, forward_acc_cost, update_cost);
-    // LOG_INFO("  backward cost %.3f, b_nn_time %.3f", backward_cost, backward_nn_time);
-
-    // if (type == 0) {
-    //   get_gpu_mem(used_gpu_mem, total_gpu_mem);
-    //   LOG_INFO("train_epoch %d cost %.3f, compute_cnt %lld, gpu mem:  (%.0fM/%.0fM)", graph->rtminfo->epoch,
-    //   epoch_time,
-    //            compute_cnt, used_gpu_mem, total_gpu_mem);
-    // } else {
-    //   get_gpu_mem(used_gpu_mem, total_gpu_mem);
-    //   LOG_INFO("eval_epoch %d cost %.3f, compute_cnt %lld, gpu mem: (%.0fM/%.0fM)\n", graph->rtminfo->epoch,
-    //   epoch_time,
-    //            compute_cnt, used_gpu_mem, total_gpu_mem);
-    // }
-
     if (graph->config->classes > 1) {
       // LOG_DEBUG("use f1_score!");
       f1_epoch /= sampler->batch_nums;
@@ -1246,11 +1171,9 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     // double used_gpu_mem, total_gpu_mem;
     // get_gpu_mem(used_gpu_mem, total_gpu_mem);
     // LOG_DEBUG("run(): gcn_gpu_mem %.3fM", used_gpu_mem);
-
     gcn_run_time = gcn_gather_cost = gcn_trans_cost = 0;
     gcn_sample_time = 0;
     // epoch_cache_hit = 0;
-
     double pre_time = -get_time();
     if (graph->partition_id == 0) {
       LOG_INFO("GNNmini::[Dist.GPU.GCNimpl] running [%d] Epoches\n", iterations);
@@ -1264,69 +1187,6 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     eval_sampler = new Sampler(fully_rep_graph, val_nids, true);  // true mean full batch
     // eval_sampler->update_fanout(-1);                            // val not sample
     test_sampler = new Sampler(fully_rep_graph, test_nids, true);  // true mean full batch
-
-    // std::cout << "run: sample_nids: ";
-    // for (int ti = 0; ti < 10; ++ti) {
-    //   std::cout << train_sampler->sample_nids[ti] << ' ';
-    // }std::cout << std::endl;
-    // if (batch_type == DELLOW || batch_type == DELHIGH) {
-    //   if (batch_type == DELHIGH) {
-    //     std::sort(train_nids.begin(), train_nids.end(), [&](const auto& x, const auto& y) {
-    //       return graph->in_degree_for_backward[x] > graph->in_degree_for_backward[y];
-    //     });
-    //   } else if (batch_type == DELLOW) {
-    //     std::sort(train_nids.begin(), train_nids.end(), [&](const auto& x, const auto& y) {
-    //       return graph->in_degree_for_backward[x] < graph->in_degree_for_backward[y];
-    //     });
-    //   }
-    //   int sz = train_nids.size();
-    //   train_nids.erase(train_nids.begin() + static_cast<int>(sz * (1 - graph->config->del_frac)), train_nids.end());
-    // }
-
-    // LOG_DEBUG("samper done");
-
-    // if (batch_type == METIS) {
-    //   // void ClusterGCNSample(int layers, int batch_size, int partition_num, std::string objtype = "cut");
-    //   // void init_graph(std::vector<VertexId> &sample_nids);
-
-    //   // if (metis_partition_id.empty()) {
-    //   // LOG_DEBUG("start update_graph");
-    //   // fully_rep_graph->update_graph(train_nids);
-    //   // LOG_DEBUG("after update_graph");
-
-    //   int partition_num = (train_nids.size() + graph->config->batch_size - 1) / graph->config->batch_size;
-    //   std::vector<VertexId> metis_partition_id;
-    //   std::vector<VertexId> metis_partition_offset;
-
-    //   double metis_time = -get_time();
-    //   MetisPartitionGraph(fully_rep_graph, partition_num, "cut", metis_partition_id, metis_partition_offset);
-    //   metis_time += get_time();
-    //   LOG_DEBUG("metis partition cost %.3f", metis_time);
-
-    //   // fully_rep_graph->back_to_global();
-    //   LOG_DEBUG("metis_partition_id %d, train_nids %d", metis_partition_id.size(), train_nids.size());
-    //   // assert(metis_partition_id.size() == train_nids.size());
-    //   assert(partition_num + 1 == metis_partition_offset.size());
-
-    //   // LOG_DEBUG("metis partiton offset: ");
-    //   // for (int i = 0; i < partition_num; ++i) {
-    //   //   printf("part id: %d, %d\n", i, metis_partition_offset[i + 1] - metis_partition_offset[i]);
-    //   // }
-    //   // LOG_DEBUG("metis partiton id: ");
-    //   // for (auto id : metis_partition_id) {
-    //   //   printf("%d ", id);
-    //   // }printf("\n");
-
-    //   // std::sort(metis_partition_id.begin(), metis_partition_id.end());
-    //   // std::sort(train_nids.begin(), train_nids.end());
-    //   // for (int i = 0; i < train_nids.size(); ++i) {
-    //   //   assert(metis_partition_id[i] == train_nids[i]);
-    //   // }
-    //   // assert(false);
-    //   // }
-    //   train_sampler->update_metis_data(metis_partition_id, metis_partition_offset);
-    //   train_sampler->update_batch_nums();
-    // }
 
     LOG_INFO("label rate: %.3f, train/val/test: (%d/%d/%d) (%.3f/%.3f/%.3f)",
              1.0 * (train_nids.size() + val_nids.size() + test_nids.size()) / graph->vertices, train_nids.size(),
