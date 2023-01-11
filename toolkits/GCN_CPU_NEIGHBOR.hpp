@@ -267,13 +267,13 @@ class GCN_CPU_NEIGHBOR_impl {
 
     // LOG_DEBUG("epoch %d start compute", graph->rtminfo->epoch);
     double used_gpu_mem, total_gpu_mem;
+    auto ssg = sampler->subgraph;
     for (VertexId i = 0; i < sampler->batch_nums; ++i) {
       sample_cost -= get_time();
-      sampler->sample_one(graph->config->batch_type, ctx->is_train());
+      sampler->sample_one(ssg, graph->config->batch_type, ctx->is_train());
       sample_cost += get_time();
       // LOG_DEBUG("epoch %d batch %d sample_one done", graph->rtminfo->epoch, i);
 
-      auto ssg = sampler->subgraph;
       if (graph->config->mini_pull > 0) {  // generate csr structure for backward of pull mode
         generate_csr_time -= get_time();
         for (auto p : ssg->sampled_sgs) {

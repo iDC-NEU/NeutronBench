@@ -494,7 +494,9 @@ class Sampler {
     return ret;
   }
 
-  void sample_one(int type = 0, bool phase = true) {
+  void sample_one(int type = 0, bool phase = true) { sample_one(subgraph, type, phase); }
+
+  void sample_one(SampledSubgraph* ssg, int type = 0, bool phase = true) {
     // zero_debug_time();
     // void reservoir_sample(int layers, int batch_size_, const
     // std::vector<int>& fanout_, int type = 0){ LOG_DEBUG("layers %d batch_size
@@ -510,7 +512,7 @@ class Sampler {
     // LOG_DEBUG("actl_batch %d", actl_batch_size);
     // SampledSubgraph* ssg=new SampledSubgraph(layers,fanout_);
     // auto ssg = work_queue[work_offset / batch_size_];
-    auto ssg = subgraph;
+    // auto ssg = subgraph;
     // LOG_DEBUG("fuck batch_size %d", actl_batch_size);
     ssg->curr_dst_size = actl_batch_size;
     for (int i = 0; i < layers; i++) {

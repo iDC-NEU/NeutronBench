@@ -355,27 +355,13 @@ class GCN_GPU_NEIGHBOR_impl {
       // LOG_DEBUG("batch id %d", i);
       double sample_one_cost = -get_time();
 
+      auto ssg = sampler->subgraph;
+
       sample_cost -= get_time();
-      sampler->sample_one(graph->config->batch_type, ctx->is_train());
+      sampler->sample_one(ssg, graph->config->batch_type, ctx->is_train());
       sample_cost += get_time();
       sample_one_cost += get_time();
 
-      // compute_cnt += sampler->get_compute_cnt();
-      // LOG_DEBUG("sample one done");
-      // continue;
-
-      // LOG_DEBUG("epoch %d batch %d, train_nodes %d", graph->rtminfo->epoch, i,
-      // sampler->subgraph->sampled_sgs.back()->v_size); sampler->print_batch_nodes();
-
-      ////////////////// check sampler
-      // sampler->insert_batch_nodes(st);
-
-      // LOG_DEBUG("sample one cost %.3f", sample_one_cost);
-      // get_gpu_mem(used_gpu_mem, total_gpu_mem);
-      // LOG_DEBUG("epoch %d batch %d sample_one done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, used_gpu_mem,
-      // total_gpu_mem);
-
-      auto ssg = sampler->subgraph;
 
       // if (graph->config->mini_pull > 0) {  // generate csr structure for backward of pull mode
       //   generate_csr_time -= get_time();
@@ -687,29 +673,14 @@ class GCN_GPU_NEIGHBOR_impl {
       //   break;
       // }
 
-      // LOG_DEBUG("batch id %d", i);
+      auto ssg = sampler->subgraph;
       double sample_one_cost = -get_time();
       sample_cost -= get_time();
-      sampler->sample_one(graph->config->batch_type, ctx->is_train());
+      sampler->sample_one(ssg, graph->config->batch_type, ctx->is_train());
       sample_cost += get_time();
       sample_one_cost += get_time();
 
       compute_cnt += sampler->get_compute_cnt();
-      // LOG_DEBUG("sample one done");
-      // continue;
-
-      // LOG_DEBUG("epoch %d batch %d, train_nodes %d", graph->rtminfo->epoch, i,
-      // sampler->subgraph->sampled_sgs.back()->v_size); sampler->print_batch_nodes();
-
-      ////////////////// check sampler
-      // sampler->insert_batch_nodes(st);
-
-      // LOG_DEBUG("sample one cost %.3f", sample_one_cost);
-      // get_gpu_mem(used_gpu_mem, total_gpu_mem);
-      // LOG_DEBUG("epoch %d batch %d sample_one done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, used_gpu_mem,
-      // total_gpu_mem);
-
-      auto ssg = sampler->subgraph;
 
       if (graph->config->mini_pull > 0) {  // generate csr structure for backward of pull mode
         generate_csr_time -= get_time();

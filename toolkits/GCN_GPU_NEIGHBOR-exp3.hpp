@@ -218,10 +218,10 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
   void cache_sample(std::vector<int>& node_idx) {
     std::vector<int> node_sample_cnt(node_idx.size(), 0);
     int epochs = 3;
+    auto ssg = train_sampler->subgraph;
     for (int i = 0; i < epochs; ++i) {
       while (train_sampler->work_offset < train_sampler->work_range[1]) {
-        train_sampler->sample_one(graph->config->batch_type, ctx->is_train());
-        auto ssg = train_sampler->subgraph;
+        train_sampler->sample_one(ssg, graph->config->batch_type, ctx->is_train());
         for (int i = 0; i < layers; ++i) {
           auto p = ssg->sampled_sgs[i]->src();
           for (const auto& v : p) {
@@ -257,11 +257,11 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
 
     int epochs = 3;
     for (int i = 0; i < epochs; ++i) {
+      auto ssg = train_sampler->subgraph;
       while (train_sampler->work_offset < train_sampler->work_range[1]) {
         ctx->train();
         if (ctx->training == true) zero_grad();  // should zero grad after every mini batch compute
-        train_sampler->sample_one(graph->config->batch_type, ctx->is_train());
-        auto ssg = train_sampler->subgraph;
+        train_sampler->sample_one(ssg, graph->config->batch_type, ctx->is_train());
         if (graph->config->mini_pull > 0) {  // generate csr structure for backward of pull mode
           for (auto p : ssg->sampled_sgs) {
             p->generate_csr_from_csc();
@@ -616,40 +616,15 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
       // LOG_DEBUG("batch id %d", i);
       // double sample_one_cost = -get_time();
 
+      auto ssg = sampler->subgraph;
+
       double sample_one_cost = -get_time();
-      sampler->sample_one(graph->config->batch_type, ctx->is_train());
+      // sampler->sample_one(graph->config->batch_type, ctx->is_train());
+      sampler->sample_one(ssg, graph->config->batch_type, ctx->is_train());
       sample_one_cost += get_time();
       sample_cost += sample_one_cost;
       // sample_one_cost += get_time();
 
-      auto ssg = sampler->subgraph;
-
-      // printf("layer0: ");
-      // for (auto tnode : ssg->sampled_sgs[1]->dst()) {
-      //   printf("%d ", tnode);
-      // } printf("\n");
-
-      // printf("layer2: ");
-      // for (auto tnode : ssg->sampled_sgs[0]->src()) {
-      //   printf("%d ", tnode);
-      // } printf("\n");
-      // assert(false);
-
-      if (graph->config->mini_pull > 0) {  // generate csr structure for backward of pull mode
-        generate_csr_time -= get_time();
-        for (auto p : ssg->sampled_sgs) {
-          convert_time -= get_time();
-          p->generate_csr_from_csc();
-          convert_time += get_time();
-          debug_time -= get_time();
-          // p->debug_generate_csr_from_csc();
-          debug_time += get_time();
-        }
-        generate_csr_time += get_time();
-        // get_gpu_mem(used_gpu_mem, total_gpu_mem);
-        // LOG_DEBUG("epoch %d batch %d pull gemnerate csr done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, used_gpu_mem,
-        // total_gpu_mem);
-      }
 
       if (type == 0 && graph->rtminfo->epoch >= 3) train_sample_time += sample_cost;
 
@@ -991,28 +966,15 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
       // }
 
       // LOG_DEBUG("batch id %d", i);
+      auto ssg = sampler->subgraph;
+
       double sample_one_cost = -get_time();
       sample_cost -= get_time();
-      sampler->sample_one(graph->config->batch_type, ctx->is_train());
+      sampler->sample_one(ssg, graph->config->batch_type, ctx->is_train());
       sample_cost += get_time();
       sample_one_cost += get_time();
 
       compute_cnt += sampler->get_compute_cnt();
-      // LOG_DEBUG("sample one done");
-      // continue;
-
-      // LOG_DEBUG("epoch %d batch %d, train_nodes %d", graph->rtminfo->epoch, i,
-      // sampler->subgraph->sampled_sgs.back()->v_size); sampler->print_batch_nodes();
-
-      ////////////////// check sampler
-      // sampler->insert_batch_nodes(st);
-
-      // LOG_DEBUG("sample one cost %.3f", sample_one_cost);
-      // get_gpu_mem(used_gpu_mem, total_gpu_mem);
-      // LOG_DEBUG("epoch %d batch %d sample_one done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, used_gpu_mem,
-      // total_gpu_mem);
-
-      auto ssg = sampler->subgraph;
 
       if (type == 0 && graph->rtminfo->epoch >= 3) train_sample_time += sample_cost;
 
