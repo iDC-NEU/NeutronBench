@@ -280,9 +280,9 @@ class SingleGPUSampleGraphOp : public ntsGraphOp {
     ValueType *f_input_buffer = graph_->Nts->getWritableBuffer(f_input, torch::DeviceType::CUDA);
     ValueType *f_output_buffer = graph_->Nts->getWritableBuffer(f_output, torch::DeviceType::CUDA);
     // LOG_DEBUG("forward pull version");
-    subgraphs->sampled_sgs[layer]->update_degree(graph_);
-    subgraphs->sampled_sgs[layer]->compute_weight_forward(graph_);
-    subgraphs->sampled_sgs[layer]->copy_ewf_to_device();
+    // subgraphs->sampled_sgs[layer]->update_degree(graph_);
+    // subgraphs->sampled_sgs[layer]->compute_weight_forward(graph_);
+    // subgraphs->sampled_sgs[layer]->copy_ewf_to_device();
     ValueType *weight_forward = subgraphs->sampled_sgs[layer]->dev_ewf();
     VertexId *row_indices = subgraphs->sampled_sgs[layer]->dev_r_i();
     VertexId *column_offset = subgraphs->sampled_sgs[layer]->dev_c_o();
@@ -310,7 +310,7 @@ class SingleGPUSampleGraphOp : public ntsGraphOp {
     // LOG_DEBUG("tensor_address push_back %p", tensor_address.back());
     ValueType *f_input_grad_buffer = graph_->Nts->getWritableBuffer(f_input_grad, torch::DeviceType::CUDA);
     ValueType *f_output_grad_buffer = graph_->Nts->getWritableBuffer(f_output_grad, torch::DeviceType::CUDA);
-    subgraphs->sampled_sgs[layer]->update_degree(graph_);
+    // subgraphs->sampled_sgs[layer]->update_degree(graph_);
 
     VertexId edge_size = subgraphs->sampled_sgs[layer]->e_size;
     VertexId batch_size = subgraphs->sampled_sgs[layer]->src_size;
@@ -337,8 +337,8 @@ class SingleGPUSampleGraphOp : public ntsGraphOp {
     } else {  // pull
       VertexId *row_offset = subgraphs->sampled_sgs[layer]->dev_r_o();
       VertexId *column_indices = subgraphs->sampled_sgs[layer]->dev_c_i();
-      subgraphs->sampled_sgs[layer]->compute_weight_backward(graph_);
-      subgraphs->sampled_sgs[layer]->copy_ewb_to_device();
+      // subgraphs->sampled_sgs[layer]->compute_weight_backward(graph_);
+      // subgraphs->sampled_sgs[layer]->copy_ewb_to_device();
       weight_backward = subgraphs->sampled_sgs[layer]->dev_ewb();
       // LOG_DEBUG("use pull version of backward");
       if (feature_size <= 512 && false) {

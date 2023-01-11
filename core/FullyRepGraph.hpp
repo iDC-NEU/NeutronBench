@@ -83,33 +83,18 @@ class SampledSubgraph {
     }
   }
 
-  void update_degrees(Graph<Empty> *graph, int layer) {
-    // LOG_DEBUG("udpate degrees");
-    VertexId *outs = graph->out_degree_for_backward;
-    VertexId *ins = graph->in_degree_for_backward;
-    memset(outs, 0, sizeof(outs));
-    memset(ins, 0, sizeof(ins));
-    // printf("vertex %d outs elememt %d ins element %d\n", graph->vertices, sizeof(outs)/sizeof(VertexId),
-    // sizeof(ins)/sizeof(VertexId)); assert(sizeof(outs) / sizeof(VertexId) == graph->vertices); assert(sizeof(ins) /
-    // sizeof(VertexId) == graph->vertices);
-    for (int i = 0; i < graph->vertices; ++i) {
-      outs[i] = 0;
-      ins[i] = 0;
-      // assert(outs[i] == 0);
-      // assert(ins[i] == 0);
+  void compute_weight(Graph<Empty> *graph) {
+    for (size_t i = 0; i < layers; ++i) {
+      sampled_sgs[i]->update_degree(graph);
+      sampled_sgs[i]->compute_weight_forward(graph);
+      sampled_sgs[i]->compute_weight_backward(graph);
     }
-    auto csc_layer = sampled_sgs[layer];
-    for (int i = 0; i < csc_layer->src_size; ++i) {
-      outs[csc_layer->src()[i]]++;
-    }
-    for (int i = 0; i < csc_layer->v_size; ++i) {
-      ins[csc_layer->dst()[i]]++;
-    }
+  }
 
-    // for (int i = 0; i < graph->vertices; ++i) {
-    //     assert(graph->in_degree_for_backward[i] == ins[i]);
-    //     assert(graph->out_degree_for_backward[i] == outs[i]);
-    // }
+  void alloc_dev_array(bool pull = true) {
+    for (int i = 0; i < layers; ++i) {
+      sampled_sgs[i]->alloc_dev_array(pull);
+    }
   }
 
   void random_gen_seed() {
@@ -118,12 +103,14 @@ class SampledSubgraph {
     }
   }
 
-  void trans_to_gpu(bool pull = true) {
+  void trans_graph_to_gpu(bool pull = true) {
     for (int i = 0; i < layers; ++i) {
       // TODO(sanzo): not alloc memory fo csr in push version
-      sampled_sgs[i]->alloc_dev_array(pull);
+      // sampled_sgs[i]->alloc_dev_array(pull);
       // LOG_DEBUG("alloc dev arry done");
       sampled_sgs[i]->copy_data_to_device(pull);
+      sampled_sgs[i]->copy_ewb_to_device();
+      sampled_sgs[i]->copy_ewf_to_device();
       // LOG_DEBUG("copy_data_to device done");
     }
   }

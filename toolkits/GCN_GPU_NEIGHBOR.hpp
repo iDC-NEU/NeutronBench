@@ -375,27 +375,28 @@ class GCN_GPU_NEIGHBOR_impl {
 
       auto ssg = sampler->subgraph;
 
-      if (graph->config->mini_pull > 0) {  // generate csr structure for backward of pull mode
-        generate_csr_time -= get_time();
-        for (auto p : ssg->sampled_sgs) {
-          convert_time -= get_time();
-          p->generate_csr_from_csc();
-          convert_time += get_time();
-          debug_time -= get_time();
-          // p->debug_generate_csr_from_csc();
-          debug_time += get_time();
-        }
-        generate_csr_time += get_time();
-        // get_gpu_mem(used_gpu_mem, total_gpu_mem);
-        // LOG_DEBUG("epoch %d batch %d pull gemnerate csr done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i, used_gpu_mem,
-        // total_gpu_mem);
-      }
+      // if (graph->config->mini_pull > 0) {  // generate csr structure for backward of pull mode
+      //   generate_csr_time -= get_time();
+      //   for (auto p : ssg->sampled_sgs) {
+      //     convert_time -= get_time();
+      //     p->generate_csr_from_csc();
+      //     convert_time += get_time();
+      //     debug_time -= get_time();
+      //     // p->debug_generate_csr_from_csc();
+      //     debug_time += get_time();
+      //   }
+      //   generate_csr_time += get_time();
+      //   // get_gpu_mem(used_gpu_mem, total_gpu_mem);
+      //   // LOG_DEBUG("epoch %d batch %d pull gemnerate csr done, (%.0fM/%.0fM)", graph->rtminfo->epoch, i,
+      //   used_gpu_mem,
+      //   // total_gpu_mem);
+      // }
 
       if (type == 0 && graph->rtminfo->epoch >= 3) train_sample_time += sample_cost;
 
       // std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
       trans_graph_cost -= get_time();
-      ssg->trans_to_gpu(graph->config->mini_pull > 0);  // wheather trans csr data to gpu
+      ssg->trans_graph_to_gpu(graph->config->mini_pull > 0);  // wheather trans csr data to gpu
       trans_graph_cost += get_time();
       // LOG_DEBUG("batch %d tarns_to_gpu done", i);
       // get_gpu_mem(used_gpu_mem, total_gpu_mem);
@@ -728,7 +729,7 @@ class GCN_GPU_NEIGHBOR_impl {
 
       // std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
       trans_graph_cost -= get_time();
-      ssg->trans_to_gpu(graph->config->mini_pull > 0);  // wheather trans csr data to gpu
+      ssg->trans_graph_to_gpu(graph->config->mini_pull > 0);  // wheather trans csr data to gpu
       trans_graph_cost += get_time();
       // LOG_DEBUG("batch %d tarns_to_gpu done", i);
       // get_gpu_mem(used_gpu_mem, total_gpu_mem);

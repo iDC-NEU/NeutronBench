@@ -611,10 +611,15 @@ class Sampler {
       layer_time += get_time();
     }
     std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
-    // LOG_DEBUG("layer %.3f, pre_time %.3f, load_dst_time %.3f, init_co %.3f, processing %.3f, post_time %.3f,",
-    // layer_time, sample_pre_time, sample_load_dst, sample_init_co, sample_processing_time, sample_post_time);
-    // push_one(ssg);
-    // printf("debug: sample one done!\n");
+
+    if (whole_graph->graph_->config->mini_pull > 0) {  // generate csr structure for backward of pull mode
+      for (auto p : ssg->sampled_sgs) {
+        p->generate_csr_from_csc();
+      }
+    }
+
+    ssg->alloc_dev_array(whole_graph->graph_->config->mini_pull > 0);
+    ssg->compute_weight(whole_graph->graph_);
   }
 
   void reverse_sgs() {
