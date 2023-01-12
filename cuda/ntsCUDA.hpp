@@ -102,9 +102,9 @@ class Cuda_Stream {
   ~Cuda_Stream();
   void destory_Stream();
   cudaStream_t getStream();
+  void setNewStream(cudaStream_t cudaStream);
   void CUDA_DEVICE_SYNCHRONIZE();
   cudaStream_t stream;
-  void setNewStream(cudaStream_t cudaStream);
   void move_result_out(float *output, float *input, VertexId_CUDA src, VertexId_CUDA dst, int feature_size,
                        bool sync = true);
   void move_data_in(float *d_pointer, float *h_pointer, VertexId_CUDA start, VertexId_CUDA end, int feature_size,

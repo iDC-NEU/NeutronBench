@@ -84,6 +84,7 @@ Cuda_Stream::~Cuda_Stream() {
 
 void Cuda_Stream::destory_Stream() {
 #if CUDA_ENABLE
+  printf("destrory_stream %p", stream);
   CHECK_CUDA_RESULT(cudaStreamDestroy(stream));
   printf("destory_Stream is done\n");
 #else
@@ -353,7 +354,9 @@ void Cuda_Stream::Scatter_Dst_to_Msg(float* message, float* dst_feature,  // dat
 void Cuda_Stream::setNewStream(cudaStream_t cudaStream) {
 #if CUDA_ENABLE
     destory_Stream();
+    printf("set cuda_steram %p to %p\n", this->stream, cudaStream);
     this->stream = cudaStream;
+    printf("set cuda_steram %p to %p\n", this->stream, cudaStream);
 #else
     printf("CUDA DISABLED Cuda_Stream::getStream\n");
     exit(0);

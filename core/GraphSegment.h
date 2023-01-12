@@ -181,6 +181,7 @@ class InputInfo {
   std::string cache_type = "none";
   std::string cache_policy;
   int batch_switch_acc = -1;
+  int pipelines = 1;
 
   // algorithm related:
   VertexId batch_size;

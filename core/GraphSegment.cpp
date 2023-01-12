@@ -345,6 +345,10 @@ void InputInfo::readFromCfgFile(std::string config_file) {
     } else if (0 == cfg_k.compare("BATCH_SWITCH_ACC")) {
       this->batch_switch_acc = std::atoi(cfg_v.c_str());
       // assert(this->batch_switch_acc > 0);
+    } else if (0 == cfg_k.compare("PIPELINES")) {
+      this->pipelines = std::atoi(cfg_v.c_str());
+      assert(pipelines >= 1);
+      // assert(this->batch_switch_acc > 0);
     }
 
     else {
@@ -411,6 +415,7 @@ void InputInfo::print() {
   std::cout << "cache_policy\t:\t" << cache_policy << std::endl;
   std::cout << "cache_type\t:\t" << cache_type << std::endl;
   std::cout << "batch_switch_acc:\t" << batch_switch_acc << std::endl;
+  std::cout << "pipelines\t:\t" << pipelines << std::endl;
 
   std::cout << "------------------input info--------------" << std::endl;
 }

@@ -30,6 +30,7 @@ class Sampler {
  public:
   std::vector<SampledSubgraph*> work_queue;  // excepted to be single write multi read
   SampledSubgraph* subgraph;
+  SampledSubgraph** subgraph_list;
   std::mutex queue_start_lock;
   int queue_start;
   std::mutex queue_end_lock;
@@ -97,6 +98,107 @@ class Sampler {
     work_offset = work_start;
     work_queue.clear();
     sample_bits = new Bitmap(whole_graph->global_vertices);
+  }
+
+  Sampler(FullyRepGraph* whole_graph_, std::vector<VertexId>& index, bool full_batch = false) {
+    this->full_batch = full_batch;
+    // Sampler(FullyRepGraph* whole_graph_, std::vector<VertexId>& index, Device dev = CPU, int gpu_id = 0) {
+    // this->device = dev;
+    // this->gpu_id = gpu_id;
+    cs = new Cuda_Stream();
+    // assert(index.size() > 0);
+    sample_nids.assign(index.begin(), index.end());
+    assert(sample_nids.size() == index.size());
+    whole_graph = whole_graph_;
+    queue_start = -1;
+    queue_end = 0;
+    work_range[0] = 0;
+    work_range[1] = sample_nids.size();
+    work_offset = 0;
+    // LOG_DEBUG("vertices %d", whole_graph->global_vertices);
+    sample_bits = new Bitmap(whole_graph->global_vertices);
+
+    fanout = whole_graph->graph_->gnnctx->fanout;
+
+    // if (whole_graph_->graph_->config->batch_switch_time <= 0) {
+
+    ////////////////////////////////////////////////////////
+    update_batch_size(whole_graph->graph_->config->batch_size);
+
+    ////////////////////////////////////////////////////////
+    // batch_size = whole_graph->graph_->config->batch_size;
+    // if (work_range[1] < batch_size || full_batch) batch_size = work_range[1];
+    // batch_nums = (work_range[1] + batch_size - 1) / batch_size;
+    ////////////////////////////////////////////////
+
+    // if (whole_graph->graph_->config->batch_type == METIS) {
+    //   batch_nums == batch_nodes.size();
+    // }
+    layers = whole_graph->graph_->gnnctx->layer_size.size() - 1;
+    // all_nodes = sample_nids.size();
+    // assert(layers = 2);
+    // for (int i = 0; i < work_range[1]; i += batch_size) {
+    //     VertexId actl_size = std::min(batch_size, work_range[1] - i);
+    //     work_queue.push_back(new SampledSubgraph(layers, fanout));
+    //     work_queue.back()->allocate_memory(actl_size);
+    // }
+    work_queue.clear();
+    subgraph = new SampledSubgraph(layers, fanout);
+    // pre_alloc_one();
+    // assert (false);
+
+    ////////////////////////////////////////////////
+    batch_size_vec = whole_graph_->graph_->config->batch_size_vec;
+    batch_size_switch_idx = -1;
+    // LOG_DEBUG("show batch_size_vec in Samper constructor functioni:");
+    // for (auto it : batch_size_vec) {
+    //   std::cout << it << " ";
+    // }
+    // std::cout << std::endl;
+
+    sample_rate_vec = whole_graph_->graph_->config->sample_rate_vec;
+    sample_rate_switch_idx = -1;
+    // LOG_DEBUG("show sampel_rate_vec in Samper constructor functioni:");
+    // for (auto it : sample_rate_vec) {
+    //   std::cout << it << " ";
+    // }
+    // std::cout << std::endl;
+    // assert(false);
+  }
+
+  Sampler(FullyRepGraph* whole_graph_, std::vector<VertexId>& index, int pipelines, bool full_batch = false) {
+    this->full_batch = full_batch;
+    cs = new Cuda_Stream();
+    // assert(index.size() > 0);
+    sample_nids.assign(index.begin(), index.end());
+    assert(sample_nids.size() == index.size());
+    whole_graph = whole_graph_;
+    queue_start = -1;
+    queue_end = 0;
+    work_range[0] = 0;
+    work_range[1] = sample_nids.size();
+    work_offset = 0;
+    // LOG_DEBUG("vertices %d", whole_graph->global_vertices);
+    sample_bits = new Bitmap(whole_graph->global_vertices);
+
+    fanout = whole_graph->graph_->gnnctx->fanout;
+
+    update_batch_size(whole_graph->graph_->config->batch_size);
+
+    layers = whole_graph->graph_->gnnctx->layer_size.size() - 1;
+    // }
+    work_queue.clear();
+    subgraph = new SampledSubgraph(layers, fanout);
+    subgraph_list = new SampledSubgraph*[pipelines];
+    for (int i = 0; i < pipelines; ++i) {
+      subgraph_list[i] = new SampledSubgraph(layers, fanout);
+    }
+
+    ////////////////////////////////////////////////
+    batch_size_vec = whole_graph_->graph_->config->batch_size_vec;
+    batch_size_switch_idx = -1;
+    sample_rate_vec = whole_graph_->graph_->config->sample_rate_vec;
+    sample_rate_switch_idx = -1;
   }
 
   void update_metis_data(std::vector<VertexId>& part_ids, std::vector<VertexId>& offsets) {
@@ -203,72 +305,6 @@ class Sampler {
     printf("\n");
   }
 
-  Sampler(FullyRepGraph* whole_graph_, std::vector<VertexId>& index, bool full_batch = false) {
-    this->full_batch = full_batch;
-    // Sampler(FullyRepGraph* whole_graph_, std::vector<VertexId>& index, Device dev = CPU, int gpu_id = 0) {
-    // this->device = dev;
-    // this->gpu_id = gpu_id;
-    cs = new Cuda_Stream();
-    // assert(index.size() > 0);
-    sample_nids.assign(index.begin(), index.end());
-    assert(sample_nids.size() == index.size());
-    whole_graph = whole_graph_;
-    queue_start = -1;
-    queue_end = 0;
-    work_range[0] = 0;
-    work_range[1] = sample_nids.size();
-    work_offset = 0;
-    // LOG_DEBUG("vertices %d", whole_graph->global_vertices);
-    sample_bits = new Bitmap(whole_graph->global_vertices);
-
-    fanout = whole_graph->graph_->gnnctx->fanout;
-
-    // if (whole_graph_->graph_->config->batch_switch_time <= 0) {
-
-    ////////////////////////////////////////////////////////
-    update_batch_size(whole_graph->graph_->config->batch_size);
-
-    ////////////////////////////////////////////////////////
-    // batch_size = whole_graph->graph_->config->batch_size;
-    // if (work_range[1] < batch_size || full_batch) batch_size = work_range[1];
-    // batch_nums = (work_range[1] + batch_size - 1) / batch_size;
-    ////////////////////////////////////////////////
-
-    // if (whole_graph->graph_->config->batch_type == METIS) {
-    //   batch_nums == batch_nodes.size();
-    // }
-    layers = whole_graph->graph_->gnnctx->layer_size.size() - 1;
-    // all_nodes = sample_nids.size();
-    // assert(layers = 2);
-    // for (int i = 0; i < work_range[1]; i += batch_size) {
-    //     VertexId actl_size = std::min(batch_size, work_range[1] - i);
-    //     work_queue.push_back(new SampledSubgraph(layers, fanout));
-    //     work_queue.back()->allocate_memory(actl_size);
-    // }
-    work_queue.clear();
-    subgraph = new SampledSubgraph(layers, fanout);
-    // pre_alloc_one();
-    // assert (false);
-
-    ////////////////////////////////////////////////
-    batch_size_vec = whole_graph_->graph_->config->batch_size_vec;
-    batch_size_switch_idx = -1;
-    // LOG_DEBUG("show batch_size_vec in Samper constructor functioni:");
-    // for (auto it : batch_size_vec) {
-    //   std::cout << it << " ";
-    // }
-    // std::cout << std::endl;
-
-    sample_rate_vec = whole_graph_->graph_->config->sample_rate_vec;
-    sample_rate_switch_idx = -1;
-    // LOG_DEBUG("show sampel_rate_vec in Samper constructor functioni:");
-    // for (auto it : sample_rate_vec) {
-    //   std::cout << it << " ";
-    // }
-    // std::cout << std::endl;
-    // assert(false);
-  }
-
   void update_batch_nums(VertexId nums) { this->batch_nums = nums; }
 
   void update_batch_nums() { this->batch_nums = batch_nodes.size(); }
@@ -297,8 +333,11 @@ class Sampler {
                                    local_feature.size(1), csc_layer->src_size);
   }
 
-  void load_feature_gpu(Cuda_Stream* cuda_stream, NtsVar& local_feature, ValueType* global_feature_buffer) {
-    auto csc_layer = subgraph->sampled_sgs[0];
+  void load_feature_gpu(Cuda_Stream* cuda_stream, SampledSubgraph* ssg, NtsVar& local_feature,
+                        ValueType* global_feature_buffer) {
+    auto csc_layer = ssg->sampled_sgs[0];
+    // LOG_DEBUG("loacl_feature (%d %d) src_size %u", local_feature.size(0), local_feature.size(1),
+    // csc_layer->src_size);
     if (local_feature.size(0) < csc_layer->src_size) {
       local_feature.resize_({csc_layer->src_size, local_feature.size(1)});
     }
@@ -354,14 +393,15 @@ class Sampler {
     return {trans_feature_cost, gather_gpu_cache_cost};
   }
 
-  std::pair<double, double> load_feature_gpu_cache(Cuda_Stream* cuda_stream, NtsVar& local_feature,
-                                                   ValueType* global_feature_buffer, ValueType* dev_cache_feature,
-                                                   VertexId* local_idx, VertexId* local_idx_cache,
-                                                   VertexId* cache_node_hashmap, VertexId* dev_local_idx,
-                                                   VertexId* dev_local_idx_cache, VertexId* dev_cache_node_hashmap) {
+  std::pair<double, double> load_feature_gpu_cache(Cuda_Stream* cuda_stream, SampledSubgraph* ssg,
+                                                   NtsVar& local_feature, ValueType* global_feature_buffer,
+                                                   ValueType* dev_cache_feature, VertexId* local_idx,
+                                                   VertexId* local_idx_cache, VertexId* cache_node_hashmap,
+                                                   VertexId* dev_local_idx, VertexId* dev_local_idx_cache,
+                                                   VertexId* dev_cache_node_hashmap) {
     // std::vector<int> &cache_node_hashmap) {
 
-    auto csc_layer = subgraph->sampled_sgs[0];
+    auto csc_layer = ssg->sampled_sgs[0];
     if (local_feature.size(0) < csc_layer->src_size) {
       local_feature.resize_({csc_layer->src_size, local_feature.size(1)});
     }
@@ -430,8 +470,8 @@ class Sampler {
     }
   }
 
-  void load_label_gpu(Cuda_Stream* cuda_stream, NtsVar& local_label, long* global_label_buffer) {
-    auto csc_layer = subgraph->sampled_sgs[layers - 1];
+  void load_label_gpu(Cuda_Stream* cuda_stream, SampledSubgraph* ssg, NtsVar& local_label, long* global_label_buffer) {
+    auto csc_layer = ssg->sampled_sgs[layers - 1];
     auto classes = whole_graph->graph_->config->classes;
     assert(classes > 0);
     if (classes > 1 &&
@@ -716,6 +756,8 @@ class Sampler {
       std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
     }
   }
+
+  void reverse_sgs(SampledSubgraph* ssg) { std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end()); }
 
   void RandomSample(size_t set_size, size_t num, std::vector<size_t>& out) {
     if (num < set_size) {
