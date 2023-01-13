@@ -47,6 +47,8 @@ class sampCSC {
     // source = nullptr;
     // destination = nullptr;
     // node_idx = nullptr;
+    threads = std::max(1, numa_num_configured_cpus() / 2);
+    LOG_DEBUG("sampCSC thraeds %d", threads);
   }
   sampCSC(VertexId v_) {
     v_size = v_;
@@ -60,6 +62,8 @@ class sampCSC {
     column_offset.resize(v_ + 1);
     destination.resize(v_);
     node_idx = nullptr;
+    threads = std::max(1, numa_num_configured_cpus() / 2);
+    LOG_DEBUG("sampCSC thraeds %d", threads);
   }
 
   sampCSC(VertexId v_, VertexId e_) {
@@ -89,6 +93,8 @@ class sampCSC {
     // edge_weight_forward = new ValueType[e_];
     // edge_weight_backward = new ValueType[e_];
     node_idx = nullptr;
+    threads = std::max(1, numa_num_configured_cpus() / 2);
+    LOG_DEBUG("sampCSC thraeds %d", threads);
   }
 
   ~sampCSC() {
@@ -123,7 +129,8 @@ class sampCSC {
     edge_weight_forward.resize(e_size);
     assert(e_size == column_offset.back());
     assert(v_size + 1 == column_offset.size());
-#pragma omp parallel for
+// omp_set_num_threads(threads);
+#pragma omp parallel for num_threads(threads)
     for (VertexId i = 0; i < v_size; ++i) {
       for (VertexId j = column_offset[i]; j < column_offset[i + 1]; ++j) {
         VertexId src_id = source[row_indices[j]];
@@ -136,7 +143,8 @@ class sampCSC {
   void compute_weight_backward(Graph<Empty>* graph) {
     edge_weight_backward.resize(e_size);
     assert(src_size + 1 == row_offset.size());
-#pragma omp parallel for
+// omp_set_num_threads(threads);
+#pragma omp parallel for num_threads(threads)
     for (VertexId i = 0; i < src_size; ++i) {
       for (VertexId j = row_offset[i]; j < row_offset[i + 1]; ++j) {
         VertexId src_id = source[i];
@@ -150,7 +158,8 @@ class sampCSC {
   void update_degree(Graph<Empty>* graph) {
     VertexId* outs = graph->out_degree_for_backward;
     VertexId* ins = graph->in_degree_for_backward;
-#pragma omp parallel for
+// omp_set_num_threads(threads);
+#pragma omp parallel for num_threads(threads)
     for (int i = 0; i < graph->vertices; ++i) {
       outs[i] = 0;
       ins[i] = 0;
@@ -205,7 +214,8 @@ class sampCSC {
     row_offset.resize(src_size + 1);
     memset(row_offset.data(), 0, sizeof(VertexId) * (src_size + 1));
     assert(dst_size + 1 == column_offset.size());
-#pragma omp parallel for
+// omp_set_num_threads(threads);
+#pragma omp parallel for num_threads(threads)
     for (int i = 0; i < src_size + 1; ++i) {
       assert(row_offset[i] == 0);
     }
@@ -282,7 +292,8 @@ class sampCSC {
     if (!node_idx) {
       node_idx = new VertexId[all_node_num]{};
     }
-#pragma omp parallel for
+// omp_set_num_threads(threads);
+#pragma omp parallel for num_threads(threads)
     for (int i = 0; i < all_node_num; ++i) {
       node_idx[i] = -1;
     }
@@ -344,7 +355,8 @@ class sampCSC {
 //   }
 // method2-= get_time();
 // for (size_t i = 0; i < row_indices.size(); ++i) {
-#pragma omp parallel for
+// omp_set_num_threads(threads);
+#pragma omp parallel for num_threads(threads)
     for (VertexId i = 0; i < e_size; ++i) {
       int src = row_indices[i];
       assert(node_idx[src] != -1);
@@ -395,7 +407,8 @@ class sampCSC {
   }
 
   void init_dst(VertexId* dst) {
-#pragma omp parallel for
+// omp_set_num_threads(threads);
+#pragma omp parallel for num_threads(threads)
     for (int i = 0; i < v_size; ++i) {
       destination[i] = dst[i];
     }
@@ -404,7 +417,8 @@ class sampCSC {
   }
 
   void init_dst(std::vector<VertexId>& dst) {
-#pragma omp parallel for
+// omp_set_num_threads(threads);
+#pragma omp parallel for num_threads(threads)
     for (int i = 0; i < v_size; ++i) {
       destination[i] = dst[i];
     }
@@ -712,6 +726,7 @@ class sampCSC {
   // VertexId* destination;
 
   // std::unordered_map<VertexId, VertexId> src_index;  // set
+  int threads;
   VertexId* node_idx;
 
   VertexId v_size;    // dst_size

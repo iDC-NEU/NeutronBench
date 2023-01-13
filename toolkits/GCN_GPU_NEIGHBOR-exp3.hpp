@@ -47,18 +47,21 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
   Sampler* train_sampler = nullptr;
   Sampler* eval_sampler = nullptr;
   Sampler* test_sampler = nullptr;
-  double all_trans_memory = 0;
-  double all_cache_hit_rate = 0;
+
   std::vector<VertexId> train_nids, val_nids, test_nids;
 
   // double gcn_start_time = 0;
-  double gcn_run_time = 0;
-  double gcn_sample_time = 0;
-  double gcn_gather_cost = 0;
-  double gcn_trans_cost = 0;
-  double gcn_trans_cost_cache = 0;
-  double gcn_gather_cost_cache = 0;
+  double gcn_run_time;
+  double gcn_gather_time;
+  double gcn_sample_time;
+  double gcn_trans_time;
+  double gcn_train_time;
+  double gcn_cache_hit_rate;
+  double gcn_trans_memory;
+
+  int threads;
   float* dev_cache_feature;
+
   VertexId *local_idx, *local_idx_cache, *dev_local_idx, *dev_local_idx_cache;
   Cuda_Stream* cuda_stream;
 
@@ -93,6 +96,7 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
   VertexId* cache_node_hashmap;
   VertexId* dev_cache_node_hashmap;
   int cache_node_num = 0;
+  double used_gpu_mem, total_gpu_mem;
   // std::unordered_map<std::string, std::vector<int>> batch_size_mp;
   // std::vector<int> batch_size_vec;
   ~GCN_GPU_NEIGHBOR_EXP3_impl() { delete active; }
@@ -127,6 +131,15 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     pipelines = graph->config->pipelines;
     pipelines = std::max(1, pipelines);
     torch_stream.clear();
+
+    gcn_run_time = 0;
+    gcn_gather_time = 0;
+    gcn_sample_time = 0;
+    gcn_trans_time = 0;
+    gcn_train_time = 0;
+    gcn_cache_hit_rate = 0;
+    gcn_trans_memory = 0;
+    threads = std::max(1, numa_num_configured_cpus() - 1);
 
     // batch_size_mp["ppi"] = {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 2048, 4096, 9716};
     // batch_size_mp["ppi-large"] = {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 44906};
@@ -165,7 +178,8 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
 // std::cout << "###" << cache_node_num * sizeof(float) * feat_dim << " " << cache_node_num * feat_dim << std::endl;
 // std::cout << "###" << graph->vertices * feat_dim << "l_v_num " << graph->gnnctx->l_v_num << " " << graph->vertices <<
 // std::endl;
-#pragma omp parallel for
+// #pragma omp parallel for
+#pragma omp parallel for num_threads(threads)
     for (int i = 0; i < cache_node_num; ++i) {
       int node_id = cache_node_idx_seq[i];
       assert(node_id < graph->vertices);
@@ -189,7 +203,8 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
 
   void mark_cache_node(std::vector<int>& cache_nodes) {
 // init mask
-#pragma omp parallel for
+// #pragma omp parallel for
+#pragma omp parallel for num_threads(threads)
     for (int i = 0; i < graph->vertices; ++i) {
       cache_node_hashmap[i] = -1;
       assert(cache_node_hashmap[i] == -1);
@@ -218,7 +233,8 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     std::sort(node_idx.begin(), node_idx.end(), [&](const int x, const int y) {
       return graph->out_degree_for_backward[x] > graph->out_degree_for_backward[y];
     });
-#pragma omp parallel for
+// #pragma omp parallel for
+#pragma omp parallel for num_threads(threads)
     for (int i = 1; i < graph->vertices; ++i) {
       assert(graph->out_degree_for_backward[node_idx[i]] <= graph->out_degree_for_backward[node_idx[i - 1]]);
     }
@@ -263,7 +279,6 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
       target_lab = graph->Nts->NewLabelTensor({graph->config->batch_size}, torch::DeviceType::CUDA);
     }
     double max_gpu_used = 0;
-    double used_gpu_mem, total_gpu_mem;
 
     int epochs = 3;
     for (int i = 0; i < epochs; ++i) {
@@ -346,7 +361,8 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     cache_node_hashmap = (VertexId*)cudaMallocPinned(graph->vertices * sizeof(VertexId));
     dev_cache_node_hashmap = (VertexId*)getDevicePointer(cache_node_hashmap);
 
-#pragma omp parallel for
+// #pragma omp parallel for
+#pragma omp parallel for num_threads(threads)
     for (int i = 0; i < graph->vertices; ++i) {
       cache_node_hashmap[i] = -1;
       assert(cache_node_hashmap[i] == -1);
@@ -394,7 +410,6 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
   }
 
   void init_nn() {
-    // double used_gpu_mem, total_gpu_mem;
     // get_gpu_mem(used_gpu_mem, total_gpu_mem);
     // LOG_DEBUG("init_nn(): gcn_gpu_mem %.3fM", used_gpu_mem);
 
@@ -484,7 +499,8 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
         std::vector<std::vector<ValueType>> result_vector;
         result_vector.resize(vertexs.size());
 
-#pragma omp parallel for
+// #pragma omp parallel for
+#pragma omp parallel for num_threads(threads)
         for (int i = 0; i < vertexs.size(); i++) {
           result_vector[i].resize(feature_size);
           memcpy(result_vector[i].data(), ntsVarBuffer + (vertexs[i] - start) * feature_size,
@@ -535,8 +551,8 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     }
   }
 
-  // float Forward(Sampler* sampler, int type = 0) {
-  std::tuple<float, double> Forward(Sampler* sampler, int type = 0) {
+  // std::tuple<float, double>
+  float Forward(Sampler* sampler, int type = 0) {
     graph->rtminfo->forward = true;
     correct = 0;
     train_nodes = 0;
@@ -559,6 +575,15 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
 
     // node sampling
     sampler->zero_debug_time();
+    double epoch_sample_time = 0;
+    double epoch_gather_time = 0;
+    double epoch_transfer_graph_time = 0;
+    double epoch_transfer_feat_time = 0;
+    double epoch_transfer_label_time = 0;
+    double epoch_train_time = 0;
+    int epoch_cache_hit = 0;
+    int epoch_all_node = 0;
+
     double sample_cost = 0;
     double trans_feature_cost = 0;
     double gather_gpu_cache_cost = 0;
@@ -566,9 +591,6 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     double trans_graph_cost = 0;
     double gather_feature_time = 0;
     double gather_label_time = 0;
-    // double epoch_trans_time = 0;
-    int epoch_cache_hit = 0;
-    int epoch_cache_all = 0;
 
     double forward_nn_cost = 0;
     double forward_acc_cost = 0;
@@ -588,15 +610,6 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     int batch_num = sampler->batch_nums;
     uint64_t compute_cnt = 0;
 
-    // if (hosts > 1) {
-    //   if (type == 0 && graph->rtminfo->epoch >= 3) mpi_comm_time -= get_time();
-    //   MPI_Allreduce(&batch_num, &max_batch_num, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
-    //   MPI_Allreduce(&batch_num, &min_batch_num, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
-    //   if (type == 0 && graph->rtminfo->epoch >= 3) mpi_comm_time += get_time();
-    // } else {
-    //   max_batch_num = batch_num;
-    // }
-
     ////////////////////////////////////pipeline version////////////////////////////////////
     ////////////////////////////////////pipeline version////////////////////////////////////
     NtsVar tmp_X0[pipelines];
@@ -613,7 +626,6 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
       }
     }
 
-    double used_gpu_mem, total_gpu_mem;
     // get_gpu_mem(used_gpu_mem, total_gpu_mem);
     // LOG_DEBUG("after init x target, used: %.3fM", used_gpu_mem);
 
@@ -621,43 +633,44 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     for (int tid = 0; tid < pipelines; ++tid) {
       threads[tid] = std::thread(
           [&](int thread_id) {
-            // LOG_DEBUG("thread id %d", thread_id);
-
+            ////////////////////////////////// sample //////////////////////////////////
             std::unique_lock<std::mutex> sample_lock(sample_mutex, std::defer_lock);
             sample_lock.lock();
             while (sampler->work_offset < sampler->work_range[1]) {
-              // sample
               auto ssg = sampler->subgraph_list[thread_id];
+              epoch_sample_time -= get_time();
               sampler->sample_one(ssg, graph->config->batch_type, ctx->is_train());
-
+              epoch_sample_time += get_time();
               cudaStreamSynchronize(cuda_stream_list[thread_id].stream);
               sample_lock.unlock();
+              // get_gpu_mem(used_gpu_mem, total_gpu_mem);
 
-              get_gpu_mem(used_gpu_mem, total_gpu_mem);
-
-              // transfer
+              ////////////////////////////////// transfer //////////////////////////////////
               std::unique_lock<std::mutex> transfer_lock(transfer_mutex, std::defer_lock);
               transfer_lock.lock();
-
-              ssg->trans_graph_to_gpu_async(cuda_stream_list[thread_id].stream,
-                                            graph->config->mini_pull > 0);  // trans subgraph to gpu
-              get_gpu_mem(used_gpu_mem, total_gpu_mem);
+              epoch_transfer_graph_time -= get_time();
+              ssg->trans_graph_to_gpu_async(cuda_stream_list[thread_id].stream, graph->config->mini_pull > 0);
+              epoch_transfer_graph_time += get_time();
+              // get_gpu_mem(used_gpu_mem, total_gpu_mem);
 
               if (graph->config->cache_type == "none") {  // trans feature use zero copy (omit gather feature)
                 // get_gpu_mem(used_gpu_mem, total_gpu_mem);
                 // LOG_DEBUG("!!!!!start trans feat %.3fM", used_gpu_mem);
+                epoch_transfer_feat_time -= get_time();
                 sampler->load_feature_gpu(&cuda_stream_list[thread_id], ssg, tmp_X0[thread_id],
                                           gnndatum->dev_local_feature);
-                get_gpu_mem(used_gpu_mem, total_gpu_mem);
+                epoch_transfer_feat_time += get_time();
+                // get_gpu_mem(used_gpu_mem, total_gpu_mem);
               } else if (graph->config->cache_type == "gpu_memory" ||
                          graph->config->cache_type == "rate") {  // trans freature which is not cache in gpu
+                epoch_transfer_feat_time -= get_time();
                 auto [trans_feature_tmp, gather_gpu_cache_tmp] = sampler->load_feature_gpu_cache(
                     &cuda_stream_list[thread_id], ssg, tmp_X0[thread_id], gnndatum->dev_local_feature,
                     dev_cache_feature, local_idx, local_idx_cache, cache_node_hashmap, dev_local_idx,
                     dev_local_idx_cache, dev_cache_node_hashmap);
-                trans_feature_cost += trans_feature_tmp;
-                gather_gpu_cache_cost += gather_gpu_cache_tmp;
-                epoch_cache_all += ssg->sampled_sgs[0]->src().size();
+                epoch_transfer_feat_time += get_time();
+
+                epoch_all_node += ssg->sampled_sgs[0]->src().size();
                 for (auto& it : ssg->sampled_sgs[0]->src()) {
                   if (cache_node_hashmap[it] != -1) {
                     epoch_cache_hit++;
@@ -667,20 +680,22 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
                 std::cout << "cache_type: " << graph->config->cache_type << " is not support!" << std::endl;
                 assert(false);
               }
+              epoch_transfer_label_time -= get_time();
               sampler->load_label_gpu(&cuda_stream_list[thread_id], ssg, tmp_target_lab[thread_id],
                                       gnndatum->dev_local_label);
 
+              epoch_transfer_label_time += get_time();
               cudaStreamSynchronize(cuda_stream_list[thread_id].stream);
               transfer_lock.unlock();
 
-              // train
+              ////////////////////////////////// train //////////////////////////////////
               std::unique_lock<std::mutex> train_lock(train_mutex, std::defer_lock);
               train_lock.lock();
 
               at::cuda::setCurrentCUDAStream(torch_stream[thread_id]);
-              ctx->train();
               if (ctx->training == true) zero_grad();  // should zero grad after every mini batch compute
 
+              epoch_train_time -= get_time();
               for (int l = 0; l < layers; l++) {  // forward
                 graph->rtminfo->curr_layer = l;
                 if (l == 0) {
@@ -710,6 +725,7 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
               } else {
                 f1_epoch += f1_score(X[layers], tmp_target_lab[thread_id], graph->config->classes == 1);
               }
+              epoch_train_time += get_time();
 
               cudaStreamSynchronize(cuda_stream_list[thread_id].stream);
               train_lock.unlock();
@@ -725,7 +741,6 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     for (int tid = 0; tid < pipelines; ++tid) {
       threads[tid].join();
     }
-
     // ###########################pipeline version#################################
     // ###########################pipeline version#################################
 
@@ -739,7 +754,6 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     // } else {
     //   target_lab = graph->Nts->NewLabelTensor({graph->config->batch_size}, torch::DeviceType::CUDA);
     // }
-    // double used_gpu_mem, total_gpu_mem;
     // sampler->metis_batch_id = 0;
     // int batch_id = 0;
     // double forward_cost = 0;
@@ -830,7 +844,7 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     //     gather_gpu_cache_cost += gather_gpu_cache_tmp;
     //     // gather_feature_time += gather_gpu_cache_tmp;
     //     one_batch_cost += get_time();
-    //     epoch_cache_all += ssg->sampled_sgs[0]->src().size();
+    //     epoch_all_node += ssg->sampled_sgs[0]->src().size();
     //     for (auto& it : ssg->sampled_sgs[0]->src()) {
     //       if (cache_node_hashmap[it] != -1) {
     //         epoch_cache_hit++;
@@ -952,21 +966,6 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     assert(sampler->work_offset == sampler->work_range[1]);
     loss_epoch /= sampler->batch_nums;
 
-    // for (int i = 0; i < layers; ++i) {
-    //   sampler->subgraph->sampled_sgs[i]->print_debug_time();
-    // }
-    // LOG_DEBUG("all train nodes: %d, all sample nodes: %d", sampler->sample_nids.size(), st.size());
-
-    if (hosts > 1) {
-      if (type == 0 && graph->rtminfo->epoch >= 3) rpc_wait_time -= get_time();
-      while (ctx->training && batch != max_batch_num) {
-        UpdateZero();
-        batch++;
-      }
-      rpc->stop_running();
-      if (type == 0 && graph->rtminfo->epoch >= 3) rpc_wait_time += get_time();
-    }
-    epoch_time += get_time();
     sampler->restart();
 
     if (graph->config->classes > 1) {
@@ -974,47 +973,37 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
       MPI_Allreduce(MPI_IN_PLACE, &f1_epoch, 1, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
       acc = f1_epoch / hosts;
     } else {
-      if (type == 0 && graph->rtminfo->epoch >= 3) mpi_comm_time -= get_time();
+      if (type == 0 && graph->rtminfo->epoch >= graph->config->time_skip) mpi_comm_time -= get_time();
       MPI_Allreduce(MPI_IN_PLACE, &correct, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
       MPI_Allreduce(MPI_IN_PLACE, &train_nodes, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
-      if (type == 0 && graph->rtminfo->epoch >= 3) mpi_comm_time += get_time();
+      if (type == 0 && graph->rtminfo->epoch >= graph->config->time_skip) mpi_comm_time += get_time();
       acc = 1.0 * correct / train_nodes;
     }
     LOG_DEBUG("Train ACC %.3f", acc);
 
-    // return acc;
-    // LOG_DEBUG("trans_cost %.3f\n", trans_feature_cost + trans_label_cost + trans_graph_cost);
-    // LOG_DEBUG("epoch_cache_hit %d", epoch_cache_hit);
-    double epoch_trans_time = trans_feature_cost + trans_label_cost + trans_graph_cost;
-    // double epoch_trans_time_cache = (trans_feature_cost / epoch_cache_all * (epoch_cache_all - epoch_cache_hit)) +
-    // trans_label_cost + trans_graph_cost;
-    double epoch_gather_time = gather_feature_time + gather_label_time;
-
-    // double epoch_gather_time_cache = (gather_feature_time / epoch_cache_all * (epoch_cache_all - epoch_cache_hit)) +
-    // gather_label_time;
-    double epoch_cache_miss = (epoch_cache_all - epoch_cache_hit);
+    double epoch_transfer_time = epoch_transfer_feat_time + epoch_transfer_label_time + epoch_transfer_graph_time;
+    double epoch_run_time = epoch_sample_time + epoch_transfer_time + epoch_gather_time + epoch_train_time;
+    double epoch_cache_miss = (epoch_all_node - epoch_cache_hit);
     double epoch_trans_memory = epoch_cache_miss * graph->gnnctx->layer_size[0] * sizeof(ValueType) / 1024 / 1024;
-    if (graph->rtminfo->epoch >= 3) {
-      gcn_trans_cost += epoch_trans_time;
-      // gcn_trans_cost_cache += epoch_trans_time_cache;
-      gcn_gather_cost += epoch_gather_time;
-      // gcn_gather_cost_cache += epoch_gather_time_cache;
-      all_cache_hit_rate += 1.0 * epoch_cache_hit / epoch_cache_all;
-      all_trans_memory += epoch_trans_memory;
+    double epoch_cache_hit_rate = epoch_all_node > 0 ? 1.0 * epoch_cache_hit / epoch_all_node : 0;
+    if (graph->rtminfo->epoch >= graph->config->time_skip) {
+      gcn_run_time += epoch_run_time;
+      gcn_sample_time += epoch_sample_time;
+      gcn_gather_time += epoch_gather_time;
+      gcn_trans_time += epoch_transfer_time;
+      gcn_train_time += epoch_train_time;
+      gcn_cache_hit_rate += epoch_cache_hit_rate;
+      gcn_trans_memory += epoch_trans_memory;
     }
-
-    // double used_gpu_mem, total_gpu_mem;
     get_gpu_mem(used_gpu_mem, total_gpu_mem);
     LOG_INFO(
-        "Epoch %03d epoch_time %.3f train_time %.3f sample_time %.3f trans_time %.3f(feat %.3f,label %.3f, graph %.3f) "
-        " gather_time %.3f(feat %.3f label %.3f) gpu_mem %.3fM cache_hit_rate %.3f trans_memory %.3fM",
-        graph->rtminfo->epoch, epoch_time, train_cost, sample_cost, epoch_trans_time, trans_feature_cost,
-        trans_label_cost, trans_graph_cost, epoch_gather_time, gather_feature_time, gather_label_time, used_gpu_mem,
-        epoch_cache_hit * 1.0 / epoch_cache_all, epoch_trans_memory);
-    // LOG_INFO("Epoch %03d epoch_trans_time_cache %.3f gather_gpu_cache_cost %.3f", epoch_trans_time_cache,
-    // gather_gpu_cache_cost);
-    return {acc, 1};
-    // return {acc, forward_cost};
+        // "Epoch %03d epoch_time %.3f sample_time %.3f gather_time %.3f(feat %.3f label %.3f) trans_time %.3f(feat
+        // %.3f,label %.3f, graph %.3f) train_time %.3f "
+        "Epoch %03d epoch_time %.3f sample_time %.3f gather_time %.3f trans_time %.3f train_time %.3f "
+        "cache_hit_rate %.3f trans_memory %.3fM gpu_mem %.3fM",
+        graph->rtminfo->epoch, epoch_run_time, epoch_sample_time, epoch_gather_time, epoch_transfer_time,
+        epoch_train_time, epoch_cache_hit_rate, epoch_trans_memory, used_gpu_mem);
+    return acc;
   }
 
   float EvalForward(Sampler* sampler, int type = 0) {
@@ -1058,10 +1047,10 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     uint64_t compute_cnt = 0;
 
     if (hosts > 1) {
-      if (type == 0 && graph->rtminfo->epoch >= 3) mpi_comm_time -= get_time();
+      if (type == 0 && graph->rtminfo->epoch >= graph->config->time_skip) mpi_comm_time -= get_time();
       MPI_Allreduce(&batch_num, &max_batch_num, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
       MPI_Allreduce(&batch_num, &min_batch_num, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
-      if (type == 0 && graph->rtminfo->epoch >= 3) mpi_comm_time += get_time();
+      if (type == 0 && graph->rtminfo->epoch >= graph->config->time_skip) mpi_comm_time += get_time();
     } else {
       max_batch_num = batch_num;
     }
@@ -1078,7 +1067,6 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     }
 
     // LOG_DEBUG("epoch %d start compute", graph->rtminfo->epoch);
-    double used_gpu_mem, total_gpu_mem;
 
     // for (int i = 0; i < layers; ++i) {
     //   sampler->subgraph->sampled_sgs[i]->zero_debug_time();
@@ -1106,7 +1094,7 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
 
       compute_cnt += sampler->get_compute_cnt();
 
-      if (type == 0 && graph->rtminfo->epoch >= 3) train_sample_time += sample_cost;
+      if (type == 0 && graph->rtminfo->epoch >= graph->config->time_skip) train_sample_time += sample_cost;
 
       // std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
       trans_graph_cost -= get_time();
@@ -1219,13 +1207,13 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     // LOG_DEBUG("all train nodes: %d, all sample nodes: %d", sampler->sample_nids.size(), st.size());
 
     if (hosts > 1) {
-      if (type == 0 && graph->rtminfo->epoch >= 3) rpc_wait_time -= get_time();
+      if (type == 0 && graph->rtminfo->epoch >= graph->config->time_skip) rpc_wait_time -= get_time();
       while (ctx->training && batch != max_batch_num) {
         UpdateZero();
         batch++;
       }
       rpc->stop_running();
-      if (type == 0 && graph->rtminfo->epoch >= 3) rpc_wait_time += get_time();
+      if (type == 0 && graph->rtminfo->epoch >= graph->config->time_skip) rpc_wait_time += get_time();
     }
 
     sampler->restart();
@@ -1241,10 +1229,10 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
       MPI_Allreduce(MPI_IN_PLACE, &f1_epoch, 1, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
       acc = f1_epoch / hosts;
     } else {
-      if (type == 0 && graph->rtminfo->epoch >= 3) mpi_comm_time -= get_time();
+      if (type == 0 && graph->rtminfo->epoch >= graph->config->time_skip) mpi_comm_time -= get_time();
       MPI_Allreduce(MPI_IN_PLACE, &correct, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
       MPI_Allreduce(MPI_IN_PLACE, &train_nodes, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
-      if (type == 0 && graph->rtminfo->epoch >= 3) mpi_comm_time += get_time();
+      if (type == 0 && graph->rtminfo->epoch >= graph->config->time_skip) mpi_comm_time += get_time();
       acc = 1.0 * correct / train_nodes;
     }
 
@@ -1260,20 +1248,14 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
   }
 
   float run() {
-    // double used_gpu_mem, total_gpu_mem;
     // get_gpu_mem(used_gpu_mem, total_gpu_mem);
     // LOG_DEBUG("run(): gcn_gpu_mem %.3fM", used_gpu_mem);
-    gcn_run_time = gcn_gather_cost = gcn_trans_cost = 0;
-    gcn_sample_time = 0;
-    // epoch_cache_hit = 0;
-    double pre_time = -get_time();
     if (graph->partition_id == 0) {
       LOG_INFO("GNNmini::[Dist.GPU.GCNimpl] running [%d] Epoches\n", iterations);
     }
     // get train/val/test node index. (may be move this to GNNDatum)
     BatchType batch_type = graph->config->batch_type;
     assert(best_val_acc == 0);
-
     init_nids();
     LOG_INFO("label rate: %.3f, train/val/test: (%d/%d/%d) (%.3f/%.3f/%.3f)",
              1.0 * (train_nids.size() + val_nids.size() + test_nids.size()) / graph->vertices, train_nids.size(),
@@ -1282,7 +1264,6 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
 
     cuda_stream_list = new Cuda_Stream[pipelines];
     auto default_stream = at::cuda::getDefaultCUDAStream();
-    printf("defatu stream %p\n", default_stream);
     for (int i = 0; i < pipelines; i++) {
       torch_stream.push_back(at::cuda::getStreamFromPool(true));
       auto stream = torch_stream[i].stream();
@@ -1299,14 +1280,9 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     // train_sampler = new Sampler(fully_rep_graph, train_nids);
     train_sampler = new Sampler(fully_rep_graph, train_nids, pipelines, false);
     eval_sampler = new Sampler(fully_rep_graph, val_nids, true);  // true mean full batch
-    // eval_sampler->update_fanout(-1);                            // val not sample
     test_sampler = new Sampler(fully_rep_graph, test_nids, true);  // true mean full batch
+    // eval_sampler->update_fanout(-1);                            // val not sample
 
-    pre_time += get_time();
-
-    double train_time = 0;
-    double val_time = 0;
-    double test_time = 0;
     double run_time = -get_time();
     float config_run_time = graph->config->run_time;
     if (config_run_time > 0) {
@@ -1314,25 +1290,19 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
       iterations = INT_MAX;
       LOG_DEBUG("iterations %d config_run_time %.3f", iterations, config_run_time);
     }
-    gcn_run_time = 0;
 
+    double cache_init_time = -get_time();
     if (graph->config->cache_type == "gpu_memory") {
       // determine_cache_node_idx(graph->vertices * graph->config->cache_rate);
       double max_gpu_mem = get_gpu_idle_mem();
-
       for (int ti = 0; ti < 3; ++ti) {  // clear gpu cache memory
         c10::cuda::CUDACachingAllocator::emptyCache();
       }
-
-      double used_gpu_mem, total_gpu_mem;
       get_gpu_mem(used_gpu_mem, total_gpu_mem);
       LOG_DEBUG("used %.3f total %.3f (after emptyCache)", used_gpu_mem, total_gpu_mem);
-
-      // printf("feat dim: %d\n", graph->gnnctx->layer_size[0]);
       double free_memory = total_gpu_mem - used_gpu_mem - 200;
       int memory_nodes = free_memory * 1024 * 1024 / sizeof(ValueType) / graph->gnnctx->layer_size[0];
       determine_cache_node_idx(memory_nodes);
-
       get_gpu_mem(used_gpu_mem, total_gpu_mem);
       LOG_DEBUG("used %.3f total %.3f (after cache feature)", used_gpu_mem, total_gpu_mem);
     } else if (graph->config->cache_type == "rate") {
@@ -1344,75 +1314,52 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
       std::cout << "cache_type: " << graph->config->cache_type << " is not support!" << std::endl;
       assert(false);
     }
+    cache_init_time += get_time();
 
+    // move to constructor
+    double iteration_time = 0;
     for (int i_i = 0; i_i < iterations; i_i++) {
+      double one_iteration_time = -get_time();
       if (config_run_time > 0 && gcn_run_time >= config_run_time) {
         iterations = i_i;
         break;
       }
       graph->rtminfo->epoch = i_i;
-
       ctx->train();
-      // if (i_i >= graph->config->time_skip) train_time -= get_time();
-      // float train_acc = Forward(train_sampler, 0);
-      // auto [train_acc, epoch_time, trans_cost, cache_hit] = Forward(train_sampler, 0);
-      auto [train_acc, epoch_time] = Forward(train_sampler, 0);
+      float train_acc = Forward(train_sampler, 0);
       float train_loss = loss_epoch;
-
-      // update batch size after the whole epoch training
-      // if (graph->config->batch_switch_time > 0) {
-      //   train_sampler->update_batch_size_from_time(gcn_run_time);
-      // }
-
-      // if (graph->config->sample_switch_time > 0) {
-      //   train_sampler->update_sample_rate_from_time(gcn_run_time);
-      // }
-
-      // float val_acc = EvalForward(eval_sampler, 1);
-      // LOG_DEBUG("Epoch %03d val_acc %.3f", i_i, val_acc);
-
-      // float test_acc = 0;
-      // if (graph->partition_id == 0) {
-      //   double used_gpu_mem, total_gpu_mem;
-      //   get_gpu_mem(used_gpu_mem, total_gpu_mem);
-      //   LOG_INFO("Epoch %03d epoch_train_time %.3f trans_cost %.3f gpu_mem %.3fM",
-      //            i_i, epoch_time, trans_cost, used_gpu_mem);
-      // }
-      double used_gpu_mem, total_gpu_mem;
-      get_gpu_mem(used_gpu_mem, total_gpu_mem);
-      printf("epoch %d used %.3f total %.3f\n", i_i, used_gpu_mem, total_gpu_mem);
+      one_iteration_time += get_time();
+      if (i_i >= graph->config->time_skip) iteration_time += one_iteration_time;
     }
-    double used_gpu_mem, total_gpu_mem;
-    get_gpu_mem(used_gpu_mem, total_gpu_mem);
-    LOG_DEBUG("div %d epoch", graph->config->epochs - 3);
-    gcn_trans_cost /= (graph->config->epochs - 3);
-    gcn_run_time /= (graph->config->epochs - 3);
-    gcn_gather_cost /= (graph->config->epochs - 3);
-    gcn_sample_time /= (graph->config->epochs - 3);
-    all_cache_hit_rate /= (graph->config->epochs - 3);
-    all_trans_memory /= (graph->config->epochs - 3);
-    // all_cache_hit / all
-    double gcn_train_time = gcn_run_time - gcn_trans_cost - gcn_gather_cost - gcn_sample_time;
-    LOG_DEBUG(
-        "dataset %s gcn_cache_rate %.3f gcn_batch_size %d gcn_gpu_run_mem %.3fM gcn_run_time %.3f gcn_gather_time %.3f "
-        "(%.3f) gcn_trans_time %.3f (%.3f), prepare_time %.3f (%.3f) gcn_sample_time %.3f (%.3f) train_time %.3f "
-        "(%.3f) compute_time %.3f (%.3f) cache_hit_rate %.3f trans_memory %.3fM",
-        graph->config->dataset_name.c_str(), graph->config->cache_rate, graph->config->batch_size, used_gpu_mem,
-        gcn_run_time, gcn_gather_cost, gcn_gather_cost / gcn_run_time, gcn_trans_cost, gcn_trans_cost / gcn_run_time,
-        (gcn_gather_cost + gcn_trans_cost), (gcn_gather_cost + gcn_trans_cost) / gcn_run_time, gcn_sample_time,
-        gcn_sample_time / gcn_run_time, gcn_train_time, gcn_train_time / gcn_run_time,
-        (gcn_train_time + gcn_sample_time), (gcn_train_time + gcn_sample_time) / gcn_run_time, all_cache_hit_rate,
-        all_trans_memory);
 
-    // if (hosts > 1) rpc->exit();
+    LOG_DEBUG("average %d epoch", graph->config->epochs - graph->config->time_skip);
+    iteration_time /= (graph->config->epochs - graph->config->time_skip);
+    LOG_DEBUG("one_epoch_time %.3f, cache_init_time %.3f", iteration_time, cache_init_time);
+
+    gcn_run_time /= (graph->config->epochs - graph->config->time_skip);
+    gcn_sample_time /= (graph->config->epochs - graph->config->time_skip);
+    gcn_gather_time /= (graph->config->epochs - graph->config->time_skip);
+    gcn_trans_time /= (graph->config->epochs - graph->config->time_skip);
+    gcn_train_time /= (graph->config->epochs - graph->config->time_skip);
+    gcn_trans_memory /= (graph->config->epochs - graph->config->time_skip);
+    gcn_cache_hit_rate /= (graph->config->epochs - graph->config->time_skip);
+
+    LOG_DEBUG("gcn_run_time - sum_4_time %.3f",
+              gcn_run_time - gcn_sample_time - gcn_gather_time - gcn_train_time - gcn_trans_time);
+    gcn_run_time = gcn_sample_time + gcn_gather_time + gcn_train_time + gcn_trans_time;
+    get_gpu_mem(used_gpu_mem, total_gpu_mem);
+
+    LOG_DEBUG(
+        "dataset %s cache_rate %.3f batch_size %d used_memmory %.3fM gcn_run_time %.3f gcn_sample_time %.3f (%.3f)  "
+        "gcn_gather_time %.3f "
+        "(%.3f) gcn_trans_time %.3f (%.3f) gcn_train_time %.3f (%.3f); prepare_time %.3f (%.3f) compute_time %.3f "
+        "(%.3f) cache_hit_rate %.3f trans_memory %.3fM",
+        graph->config->dataset_name.c_str(), graph->config->cache_rate, graph->config->batch_size, used_gpu_mem,
+        gcn_run_time, gcn_sample_time, gcn_sample_time / gcn_run_time, gcn_gather_time, gcn_gather_time / gcn_run_time,
+        gcn_trans_time, gcn_trans_time / gcn_run_time, gcn_train_time, gcn_train_time / gcn_run_time,
+        (gcn_sample_time + gcn_gather_time + gcn_trans_time),
+        (gcn_sample_time + gcn_gather_time + gcn_trans_time) / gcn_run_time, (gcn_train_time),
+        (gcn_train_time) / gcn_run_time, gcn_cache_hit_rate, gcn_trans_memory);
     return best_val_acc;
   }
-
-  // void batch_size_mem_run_time() {
-  //   std::vector<int> batch_size_list {512, 1024, 512, 1024};
-  //   for (auto it : batch_size_list) {
-  //     graph->config->batch_size = it;
-  //     run();
-  //   }
-  // }
 };

@@ -324,6 +324,7 @@ class SingleGPUSampleGraphOp : public ntsGraphOp {
     ValueType *weight_backward = nullptr;
     // std::cout << "after init parameters" << std::endl;
     if (graph_->config->mini_pull == 0) {
+      assert(false);
       VertexId *column_offset = subgraphs->sampled_sgs[layer]->dev_c_o();
       VertexId *row_indices = subgraphs->sampled_sgs[layer]->dev_r_i();
       subgraphs->sampled_sgs[layer]->compute_weight_forward(graph_);

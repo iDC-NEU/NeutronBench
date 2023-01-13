@@ -26,11 +26,17 @@ Copyright (c) 2015-2016 Xiaowei Zhu, Tsinghua University
 
 inline bool file_exists(std::string filename) {
   struct stat st;
+  if (stat(filename.c_str(), &st) != 0) {
+    printf("%s not exist!\n", filename.c_str());
+  }
   return stat(filename.c_str(), &st) == 0;
 }
 
 inline long file_size(std::string filename) {
   struct stat st;
+  if (stat(filename.c_str(), &st) != 0) {
+    printf("%s file_size is not correct!\n", filename.c_str());
+  }
   assert(stat(filename.c_str(), &st) == 0);
   return st.st_size;
 }

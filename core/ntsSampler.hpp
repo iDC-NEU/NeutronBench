@@ -64,6 +64,8 @@ class Sampler {
   double layer_time = 0;
   int best_acc_epoch = -1;
   float best_val_acc = 0.0;
+
+  int threads;
   // int batch_size;
   // int layers;
 
@@ -98,6 +100,8 @@ class Sampler {
     work_offset = work_start;
     work_queue.clear();
     sample_bits = new Bitmap(whole_graph->global_vertices);
+    threads = std::max(1, numa_num_configured_cpus() / 2);
+    LOG_DEBUG("Sampeler thraeds %d", threads);
   }
 
   Sampler(FullyRepGraph* whole_graph_, std::vector<VertexId>& index, bool full_batch = false) {
@@ -164,6 +168,8 @@ class Sampler {
     // }
     // std::cout << std::endl;
     // assert(false);
+    threads = std::max(1, numa_num_configured_cpus() / 2);
+    LOG_DEBUG("Sampeler thraeds %d", threads);
   }
 
   Sampler(FullyRepGraph* whole_graph_, std::vector<VertexId>& index, int pipelines, bool full_batch = false) {
@@ -199,6 +205,8 @@ class Sampler {
     batch_size_switch_idx = -1;
     sample_rate_vec = whole_graph_->graph_->config->sample_rate_vec;
     sample_rate_switch_idx = -1;
+    threads = std::max(1, numa_num_configured_cpus() / 2);
+    LOG_DEBUG("Sampeler thraeds %d", threads);
   }
 
   void update_metis_data(std::vector<VertexId>& part_ids, std::vector<VertexId>& offsets) {
@@ -508,7 +516,7 @@ class Sampler {
       f_output = graph->Nts->NewLeafKLongTensor({dst_size});
     }
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(threads)
     for (int i = 0; i < dst_size; i++) {
       f_output[i] = whole[dst[i] - graph->partition_offset[graph->partition_id]];
     }
@@ -673,7 +681,7 @@ class Sampler {
         // LOG_DEBUG("dst size %d", csc_layer->v_size);
         // LOG_DEBUG("after init_dst csc v_size %d, pre src size %d", csc_layer->v_size, ssg->sampled_sgs[i -
         // 1]->src_size);
-#pragma omp parallel for
+#pragma omp parallel for num_threads(threads)
         for (int j = 0; j < csc_layer->v_size; ++j) {
           // std::cout << "dst size " << csc_layer->dst().size() << std::endl;
           // std::cout << "pre src size " << ssg->sampled_sgs[i - 1]->src().size() << std::endl;
