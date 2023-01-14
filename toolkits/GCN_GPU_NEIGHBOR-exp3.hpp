@@ -161,8 +161,10 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
       if (type == 0) {
         train_nids.push_back(i + graph->partition_offset[graph->partition_id]);
       } else if (type == 1) {
+        // std::cout << "type = 1" << std::endl;
         val_nids.push_back(i + graph->partition_offset[graph->partition_id]);
       } else if (type == 2) {
+        // std::cout << "type = 3" << std::endl;
         test_nids.push_back(i + graph->partition_offset[graph->partition_id]);
       }
     }
@@ -299,7 +301,7 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
         if (hosts > 1) {
           X[0] = nts::op::get_feature_from_global(*rpc, ssg->sampled_sgs[0]->src().data(),
                                                   ssg->sampled_sgs[0]->src_size, F, graph);
-          // if (type == 0 && graph->rtminfo->epoch >= 3) rpc_comm_time += tmp_time;
+          // if (type == 0 && graph->rtminfo->epoch >= graph->config->time_skip) rpc_comm_time += tmp_time;
         } else {
           X[0] = nts::op::get_feature(ssg->sampled_sgs[0]->src().data(), ssg->sampled_sgs[0]->src_size, F, graph);
         }
@@ -428,13 +430,19 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     beta2 = 0.999;
     epsilon = 1e-9;
     gnndatum = new GNNDatum(graph->gnnctx, graph);
-    LOG_DEBUG("after gnndataum");
     if (0 == graph->config->feature_file.compare("random")) {
       gnndatum->random_generate();
+      LOG_DEBUG("generate feat_label_mask is done");
     } else {
       gnndatum->readFeature_Label_Mask(graph->config->feature_file, graph->config->label_file,
                                        graph->config->mask_file);
+      LOG_DEBUG("read feature_label_mask is done");
     }
+    int val_cnt = 0;
+    for (int i = 0; i < graph->gnnctx->l_v_num; ++i) {
+      if (gnndatum->local_mask[i] == 1) val_cnt++;
+    }
+    std::cout << "val_cjt " << val_cnt << std::endl;
 
     // get_gpu_mem(used_gpu_mem, total_gpu_mem);
     // LOG_DEBUG("init_nn() after read_feature: gcn_gpu_mem %.3fM", used_gpu_mem);
@@ -516,13 +524,13 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
   void Update() {
     for (int i = 0; i < P.size(); i++) {
       // accumulate the gradient using all_reduce
-      if (ctx->is_train() && graph->rtminfo->epoch >= 3) mpi_comm_time -= get_time();
+      if (ctx->is_train() && graph->rtminfo->epoch >= graph->config->time_skip) mpi_comm_time -= get_time();
       if (graph->gnnctx->l_v_num == 0) {
         P[i]->all_reduce_to_gradient(torch::zeros_like(P[i]->W));
       } else {
         P[i]->all_reduce_to_gradient(P[i]->W.grad().cpu());
       }
-      if (ctx->is_train() && graph->rtminfo->epoch >= 3) mpi_comm_time += get_time();
+      if (ctx->is_train() && graph->rtminfo->epoch >= graph->config->time_skip) mpi_comm_time += get_time();
       // update parameters with Adam optimizer
       P[i]->learnC2G_with_decay_Adam();
       // P[i]->learnC2C_with_Adam();
@@ -576,7 +584,8 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     // node sampling
     sampler->zero_debug_time();
     double epoch_sample_time = 0;
-    double epoch_gather_time = 0;
+    double epoch_gather_label_time = 0;
+    double epoch_gather_feat_time = 0;
     double epoch_transfer_graph_time = 0;
     double epoch_transfer_feat_time = 0;
     double epoch_transfer_label_time = 0;
@@ -759,196 +768,132 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     // double forward_cost = 0;
 
     // while (sampler->work_offset < sampler->work_range[1]) {
-    //   // for (VertexId i = 0; i < sampler->batch_nums; ++i) {
-    //   ctx->train();
-    //   if (graph->config->run_time > 0 && gcn_run_time >= graph->config->run_time) {
-    //     break;
-    //   }
-
-    //   forward_other_cost -= get_time();
     //   if (ctx->training == true) zero_grad();  // should zero grad after every mini batch compute
-    //   forward_other_cost += get_time();
-
-    //   double one_batch_cost = -get_time();
-    //   // LOG_DEBUG("batch id %d", i);
-    //   // double sample_one_cost = -get_time();
-
     //   auto ssg = sampler->subgraph;
-
-    //   double sample_one_cost = -get_time();
-    //   // sampler->sample_one(graph->config->batch_type, ctx->is_train());
+    //   epoch_sample_time -= get_time();
     //   sampler->sample_one(ssg, graph->config->batch_type, ctx->is_train());
-    //   sample_one_cost += get_time();
-    //   sample_cost += sample_one_cost;
-    //   // sample_one_cost += get_time();
+    //   epoch_sample_time += get_time();
 
-    //   if (type == 0 && graph->rtminfo->epoch >= 3) train_sample_time += sample_cost;
-
-    //   trans_graph_cost -= get_time();
-    //   // ssg->trans_graph_to_gpu(graph->config->mini_pull > 0);  // trans subgraph to gpu
+    //   epoch_transfer_graph_time -= get_time();
     //   ssg->trans_graph_to_gpu_async(cuda_stream_list[0].stream, graph->config->mini_pull > 0);  // trans subgraph to
     //   gpu
     //   // ssg->trans_graph_to_gpu_async(cuda_stream->stream, graph->config->mini_pull > 0);  // trans subgraph to gpu
-    //   trans_graph_cost += get_time();
+    //   epoch_transfer_graph_time += get_time();
 
-    //   //////////////////////////////////////////////start gather and trans feature (explicit
-    //   /// version)/////////////////////////////////////////////////////
-    //   // // double gather_feature_cost = -get_time();
-    //   // gather_feature_time -= get_time();
-    //   // if (hosts > 1) {
-    //   //   X[0] = nts::op::get_feature_from_global(*rpc, ssg->sampled_sgs[0]->src().data(),
-    //   //   ssg->sampled_sgs[0]->src_size, F, graph);
-    //   //   // if (type == 0 && graph->rtminfo->epoch >= 3) rpc_comm_time += tmp_time;
-    //   // } else {
-    //   //   X[0] = nts::op::get_feature(ssg->sampled_sgs[0]->src().data(), ssg->sampled_sgs[0]->src_size, F, graph);
-    //   // }
-    //   // gather_feature_time += get_time();
-    //   // // gather_feature_cost += get_time();
-    //   // // gather_feature_time += gather_feature_cost;
-
-    //   // // double trans_feature_gpu_cost = -get_time();
-    //   // trans_feature_cost -= get_time();
-    //   // X[0] = X[0].cuda().set_requires_grad(true);
-    //   // trans_feature_cost += get_time();
-    //   // // trans_feature_gpu_cost += get_time();
-    //   // // trans_feature_cost += trans_feature_gpu_cost;
-    //   //////////////////////////////////////////////end gather and trans feature (explicit
-    //   /// version)/////////////////////////////////////////////////////
-
-    //   ////////////////////////////////////////////// trans feature (zero copy or cache
-    //   /// version)/////////////////////////////////////////////////////
-    //   // if (graph->config->cache_rate <= 0) { // trans feature use zero
-    //   // graph->config->cache_type = "none";
-    //   if (graph->config->cache_type == "none") {  // trans feature use zero copy (omit gather feature)
-    //     trans_feature_cost -= get_time();
-    //     // sampler->load_feature_gpu(X[0], gnndatum->dev_local_feature);
-    //     // sampler->load_feature_gpu(cuda_stream, ssg, X[0], gnndatum->dev_local_feature);
-    //     sampler->load_feature_gpu(&cuda_stream_list[0], ssg, X[0], gnndatum->dev_local_feature);
-    //     trans_feature_cost += get_time();
-    //     // } else if (graph->config->cache_type == "gpu_memory" && graph->rtminfo->epoch >= 5){ // trans freature
-    //     which
-    //     // is not cache in gpu
-    //   } else if (graph->config->cache_type == "gpu_memory" ||
-    //              graph->config->cache_type == "rate") {  // trans freature which is not cache in gpu
-    //     // LOG_DEBUG("start load_farture_gpu_cache");
-    //     // trans_feature_cost -= get_time();
-    //     // auto [trans_feature_tmp, gather_gpu_cache_tmp] = sampler->load_feature_gpu_cache(
-    //     //     X[0], gnndatum->dev_local_feature, dev_cache_feature, local_idx, local_idx_cache, cache_node_hashmap,
-    //     //     dev_local_idx, dev_local_idx_cache, dev_cache_node_hashmap);
-
-    //     auto [trans_feature_tmp, gather_gpu_cache_tmp] = sampler->load_feature_gpu_cache(
-    //         &cuda_stream_list[0], ssg, X[0], gnndatum->dev_local_feature, dev_cache_feature, local_idx,
-    //         local_idx_cache, cache_node_hashmap, dev_local_idx, dev_local_idx_cache, dev_cache_node_hashmap);
-    //     // trans_feature_cost += get_time();
-    //     trans_feature_cost += trans_feature_tmp;
-    //     gather_gpu_cache_cost += gather_gpu_cache_tmp;
-    //     // gather_feature_time += gather_gpu_cache_tmp;
-    //     one_batch_cost += get_time();
-    //     epoch_all_node += ssg->sampled_sgs[0]->src().size();
-    //     for (auto& it : ssg->sampled_sgs[0]->src()) {
-    //       if (cache_node_hashmap[it] != -1) {
-    //         epoch_cache_hit++;
-    //       }
-    //     }
-    //     one_batch_cost -= get_time();
+    //   ///////////start gather and trans feature (explicit version) /////////////
+    //   // double gather_feature_cost = -get_time();
+    //   epoch_gather_feat_time -= get_time();
+    //   if (hosts > 1) {
+    //     X[0] = nts::op::get_feature_from_global(*rpc, ssg->sampled_sgs[0]->src().data(),
+    //     ssg->sampled_sgs[0]->src_size,
+    //                                             F, graph);
+    //     // if (type == 0 && graph->rtminfo->epoch >= graph->config->time_skip) rpc_comm_time += tmp_time;
     //   } else {
-    //     std::cout << "cache_type: " << graph->config->cache_type << " is not support!" << std::endl;
-    //     assert(false);
+    //     X[0] = nts::op::get_feature(ssg->sampled_sgs[0]->src().data(), ssg->sampled_sgs[0]->src_size, F, graph);
     //   }
-    //   //////////////////////////////////////////////end trans feature (zero copy or cache
-    //   /// version)/////////////////////////////////////////////////////
+    //   epoch_gather_feat_time += get_time();
+    //   // gather_feature_cost += get_time();
+    //   // gather_feature_time += gather_feature_cost;
 
-    //   /////////////////////////////////////////////////start trans target_lab
-    //   ///(explicit)//////////////////////////////////////////////////
-    //   // double gather_label_cost = -get_time();
-    //   // if (hosts > 1) {
-    //   //   target_lab = nts::op::get_label_from_global(ssg->sampled_sgs.back()->dst().data(),
-    //   //   ssg->sampled_sgs.back()->v_size, L_GT_C, graph);
-    //   //   // if (type == 0 && graph->rtminfo->epoch >= 3) rpc_comm_time += tmp_time;
+    //   // double trans_feature_gpu_cost = -get_time();
+    //   epoch_transfer_feat_time -= get_time();
+    //   X[0] = X[0].cuda().set_requires_grad(true);
+    //   epoch_transfer_feat_time += get_time();
+    //   // trans_feature_gpu_cost += get_time();
+    //   // trans_feature_cost += trans_feature_gpu_cost;
+    //   //#########start gather and trans feature (explicit version) ############
+
+    //   /////////// trans feature (zero copy or cache  version)//////////////////
+    //   // // if (graph->config->cache_rate <= 0) { // trans feature use zero
+    //   // // graph->config->cache_type = "none";
+    //   // if (graph->config->cache_type == "none") {  // trans feature use zero copy (omit gather feature)
+    //   //   trans_feature_cost -= get_time();
+    //   //   // sampler->load_feature_gpu(X[0], gnndatum->dev_local_feature);
+    //   //   // sampler->load_feature_gpu(cuda_stream, ssg, X[0], gnndatum->dev_local_feature);
+    //   //   epoch_transfer_feat_time -= get_time();
+    //   //   sampler->load_feature_gpu(&cuda_stream_list[0], ssg, X[0], gnndatum->dev_local_feature);
+    //   //   epoch_transfer_feat_time += get_time();
+    //   //   // trans freature which is not cache in gpu
+    //   //   // } else if (graph->config->cache_type == "gpu_memory" && graph->rtminfo->epoch >= 5){
+    //   // } else if (graph->config->cache_type == "gpu_memory" ||
+    //   //            graph->config->cache_type == "rate") {  // trans freature which is not cache in gpu
+    //   //   // trans_feature_cost -= get_time();
+    //   //   // auto [trans_feature_tmp, gather_gpu_cache_tmp] = sampler->load_feature_gpu_cache(
+    //   //   //     X[0], gnndatum->dev_local_feature, dev_cache_feature, local_idx, local_idx_cache,
+    //   cache_node_hashmap,
+    //   //   //     dev_local_idx, dev_local_idx_cache, dev_cache_node_hashmap);
+
+    //   //   epoch_transfer_feat_time -= get_time();
+    //   //   auto [trans_feature_tmp, gather_gpu_cache_tmp] = sampler->load_feature_gpu_cache(
+    //   //       &cuda_stream_list[0], ssg, X[0], gnndatum->dev_local_feature, dev_cache_feature, local_idx,
+    //   //       local_idx_cache, cache_node_hashmap, dev_local_idx, dev_local_idx_cache, dev_cache_node_hashmap);
+    //   //   epoch_transfer_feat_time += get_time();
+
+    //   //   epoch_all_node += ssg->sampled_sgs[0]->src().size();
+    //   //   for (auto& it : ssg->sampled_sgs[0]->src()) {
+    //   //     if (cache_node_hashmap[it] != -1) {
+    //   //       epoch_cache_hit++;
+    //   //     }
+    //   //   }
+
     //   // } else {
-    //   //   target_lab = nts::op::get_label(ssg->sampled_sgs.back()->dst().data(), ssg->sampled_sgs.back()->v_size,
-    //   //   L_GT_C, graph);
+    //   //   std::cout << "cache_type: " << graph->config->cache_type << " is not support!" << std::endl;
+    //   //   assert(false);
     //   // }
-    //   // gather_label_cost += get_time();
-    //   // gather_label_time += gather_label_cost;
+    //   ///####/end trans feature (zero copy or cache version) ############/
 
-    //   // // double trans_label_gpu_cost = -get_time();
-    //   // trans_label_cost -= get_time();
-    //   // target_lab = target_lab.cuda();
-    //   // trans_label_cost += get_time();
-    //   // // trans_label_gpu_cost += get_time();
-    //   // // trans_label_cost += trans_label_gpu_cost;
-    //   /////////////////////////////////////////////////end trans target_lab
-    //   ///(explicit)//////////////////////////////////////////////////
+    //   ////////start trans target_lab (explicit)//////////
+    //   epoch_gather_label_time -= get_time();
+    //   if (hosts > 1) {
+    //     target_lab = nts::op::get_label_from_global(ssg->sampled_sgs.back()->dst().data(),
+    //                                                 ssg->sampled_sgs.back()->v_size, L_GT_C, graph);
+    //     // if (type == 0 && graph->rtminfo->epoch >= graph->config->time_skip) rpc_comm_time += tmp_time;
+    //   } else {
+    //     target_lab =
+    //         nts::op::get_label(ssg->sampled_sgs.back()->dst().data(), ssg->sampled_sgs.back()->v_size, L_GT_C,
+    //         graph);
+    //   }
+    //   epoch_gather_label_time += get_time();
 
-    //   /////////////////////////////////////////////////start trans target_lab (zero
-    //   /// copy)//////////////////////////////////////////////////
-    //   trans_label_cost -= get_time();
+    //   // double trans_label_gpu_cost = -get_time();
+    //   epoch_transfer_label_time -= get_time();
+    //   target_lab = target_lab.cuda();
+    //   epoch_transfer_label_time += get_time();
+    //   ///////end trans target_lab (explicit)///////
+
+    //   /////////start trans target_lab (zero copy) //////
     //   // sampler->load_label_gpu(target_lab, gnndatum->dev_local_label);
-    //   sampler->load_label_gpu(&cuda_stream_list[0], ssg, target_lab, gnndatum->dev_local_label);
-    //   trans_label_cost += get_time();
-    //   /////////////////////////////////////////////////end trans target_lab (zero
-    //   /// copy)//////////////////////////////////////////////////
+    //   // epoch_transfer_label_time -= get_time();
+    //   // sampler->load_label_gpu(&cuda_stream_list[0], ssg, target_lab, gnndatum->dev_local_label);
+    //   // epoch_transfer_label_time += get_time();
+    //   // /end trans target_lab (zero  copy)////////
 
-    //   train_cost -= get_time();
-
+    //   epoch_train_time -= get_time();
     //   at::cuda::setCurrentCUDAStream(torch_stream[0]);
     //   for (int l = 0; l < layers; l++) {  // forward
-    //     // LOG_DEBUG("start compute layer %d", l);
     //     graph->rtminfo->curr_layer = l;
-    //     forward_graph_cost -= get_time();
     //     // NtsVar Y_i = ctx->runGraphOp<nts::op::SingleGPUSampleGraphOp>(ssg, graph, l, X[l]);
     //     NtsVar Y_i = ctx->runGraphOp<nts::op::SingleGPUSampleGraphOp>(ssg, graph, l, X[l], &cuda_stream_list[0]);
-    //     forward_graph_cost += get_time();
-
-    //     forward_nn_cost -= get_time();
     //     X[l + 1] = ctx->runVertexForward([&](NtsVar n_i) { return vertexForward(n_i); }, Y_i);
-    //     forward_nn_cost += get_time();
     //   }
 
-    //   forward_loss_cost -= get_time();
     //   auto loss_ = Loss(X[layers], target_lab, graph->config->classes == 1);
     //   loss_epoch += loss_.item<float>();
-    //   forward_loss_cost += get_time();
 
     //   if (ctx->training == true) {
-    //     forward_append_cost -= get_time();
     //     ctx->appendNNOp(X[layers], loss_);
-    //     forward_append_cost += get_time();
-
-    //     // LOG_DEBUG("start backward done");
-    //     backward_cost -= get_time();
-    //     ctx->b_nn_time = 0;
     //     ctx->self_backward(false);
-    //     backward_nn_time += ctx->b_nn_time;
-    //     backward_cost += get_time();
-    //     update_cost -= get_time();
     //     Update();
-    //     update_cost += get_time();
     //   }
-
-    //   train_cost += get_time();
-
-    //   one_batch_cost += get_time();
-
-    //   forward_acc_cost -= get_time();
     //   if (graph->config->classes == 1) {
     //     correct += get_correct(X[layers], target_lab, graph->config->classes == 1);
     //     train_nodes += target_lab.size(0);
     //   } else {
     //     f1_epoch += f1_score(X[layers], target_lab, graph->config->classes == 1);
     //   }
-    //   forward_acc_cost += get_time();
+    //   epoch_train_time += get_time();
 
     //   sampler->reverse_sgs();
-    //   // printf("gcn_run_time %.3f one_batfh_cost %.3f ", gcn_run_time, one_batch_cost);
-    //   if (graph->rtminfo->epoch >= 3) {
-    //     gcn_run_time += one_batch_cost;
-    //     gcn_sample_time += sample_one_cost;
-    //   }
-    //   // forward_cost += one_batch_cost;
-    //   forward_cost += one_batch_cost - sample_one_cost;  // omit sample cost
-
     //   ///////////////////////////// Evalutation ////////////////////////////////////////
     //   // do evaluation after one batch
     //   // ctx->eval();
@@ -982,6 +927,7 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     LOG_DEBUG("Train ACC %.3f", acc);
 
     double epoch_transfer_time = epoch_transfer_feat_time + epoch_transfer_label_time + epoch_transfer_graph_time;
+    double epoch_gather_time = epoch_gather_feat_time + epoch_gather_label_time;
     double epoch_run_time = epoch_sample_time + epoch_transfer_time + epoch_gather_time + epoch_train_time;
     double epoch_cache_miss = (epoch_all_node - epoch_cache_hit);
     double epoch_trans_memory = epoch_cache_miss * graph->gnnctx->layer_size[0] * sizeof(ValueType) / 1024 / 1024;
@@ -1279,6 +1225,9 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
 
     // train_sampler = new Sampler(fully_rep_graph, train_nids);
     train_sampler = new Sampler(fully_rep_graph, train_nids, pipelines, false);
+    LOG_DEBUG("train sampler done %d", train_nids.size());
+    LOG_DEBUG("eval sampler done %d", val_nids.size());
+    LOG_DEBUG("test sampler done %d", test_nids.size());
     eval_sampler = new Sampler(fully_rep_graph, val_nids, true);  // true mean full batch
     test_sampler = new Sampler(fully_rep_graph, test_nids, true);  // true mean full batch
     // eval_sampler->update_fanout(-1);                            // val not sample
