@@ -35,10 +35,8 @@ class SampledSubgraph {
     fanout.clear();
     sampled_sgs.clear();
     curr_layer = 0;
-    // threads = std::max(1, numa_num_configured_cpus());
-    threads = std::max(1, numa_num_configured_cpus() / 2);
+    threads = std::max(1, numa_num_configured_cpus());
     LOG_DEBUG("SamplerSubgraph thraeds %d", threads);
-    // threads = std::max(1, numa_num_configured_cpus() / 2);
     seeds = new unsigned[threads];
   }
   SampledSubgraph(int layers_, int batch_size_, const std::vector<int> &fanout_) {
@@ -48,10 +46,8 @@ class SampledSubgraph {
     sampled_sgs.clear();
     curr_layer = 0;
     curr_dst_size = batch_size;
-    // threads = std::max(1, numa_num_configured_cpus());
-    threads = std::max(1, numa_num_configured_cpus() / 2);
+    threads = std::max(1, numa_num_configured_cpus());
     LOG_DEBUG("SamplerSubgraph thraeds %d", threads);
-    // threads = std::max(1, numa_num_configured_cpus() / 2);
     seeds = new unsigned[threads];
   }
 
@@ -60,10 +56,8 @@ class SampledSubgraph {
     fanout = fanout_;
     sampled_sgs.clear();
     curr_layer = 0;
-    // threads = std::max(1, numa_num_configured_cpus());
-    threads = std::max(1, numa_num_configured_cpus() / 2);
+    threads = std::max(1, numa_num_configured_cpus());
     LOG_DEBUG("SamplerSubgraph thraeds %d", threads);
-    // threads = std::max(1, numa_num_configured_cpus() / 2);
     // seeds = new unsigned[threads];
     for (int i = 0; i < layers; ++i) {
       sampled_sgs.push_back(new sampCSC(0));
@@ -212,7 +206,6 @@ class SampledSubgraph {
     //  void compute_one_layer(std::function<void(VertexId local_dst,
     //                 VertexId* column_offset, VertexId* row_indices)>sparse_slot,VertexId layer){
 
-    // threads = 30;
     // omp_set_num_threads(threads);
 #pragma omp parallel for num_threads(threads)
     for (VertexId begin_v_i = 0; begin_v_i < sampled_sgs[layer]->v_size; begin_v_i += 1) {
@@ -277,7 +270,7 @@ class FullyRepGraph {
     partition_id = graph->partition_id;
     partition_offset = graph->partition_offset;
     graph_ = graph;
-    threads = std::max(1, numa_num_configured_cpus() / 2);
+    threads = std::max(1, numa_num_configured_cpus());
     LOG_DEBUG("SamplerSubgraph thraeds %d", threads);
   }
   void SyncAndLog(const char *data) {

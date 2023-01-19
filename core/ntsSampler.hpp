@@ -100,7 +100,7 @@ class Sampler {
     work_offset = work_start;
     work_queue.clear();
     sample_bits = new Bitmap(whole_graph->global_vertices);
-    threads = std::max(1, numa_num_configured_cpus() / 2);
+    threads = std::max(1, numa_num_configured_cpus());
     LOG_DEBUG("Sampeler thraeds %d", threads);
   }
 
@@ -168,7 +168,7 @@ class Sampler {
     // }
     // std::cout << std::endl;
     // assert(false);
-    threads = std::max(1, numa_num_configured_cpus() / 2);
+    threads = std::max(1, numa_num_configured_cpus());
     LOG_DEBUG("Sampeler thraeds %d", threads);
   }
 
@@ -205,7 +205,7 @@ class Sampler {
     batch_size_switch_idx = -1;
     sample_rate_vec = whole_graph_->graph_->config->sample_rate_vec;
     sample_rate_switch_idx = -1;
-    threads = std::max(1, numa_num_configured_cpus() / 2);
+    threads = std::max(1, numa_num_configured_cpus());
     LOG_DEBUG("Sampeler thraeds %d", threads);
   }
 
