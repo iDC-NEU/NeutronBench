@@ -289,7 +289,7 @@ class GCN_CPU_NEIGHBOR_impl {
         }
         // }
         generate_csr_time += get_time();
-        LOG_DEBUG("epoch %d batch %d pull gemnerate csr done", graph->rtminfo->epoch, i);
+        // LOG_DEBUG("epoch %d batch %d pull gemnerate csr done", graph->rtminfo->epoch, i);
       }
 
       if (type == 0 && graph->rtminfo->epoch >= 3) train_sample_time += sample_cost;

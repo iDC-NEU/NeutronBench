@@ -271,7 +271,8 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     mark_cache_node(node_idx);
   }
 
-  double get_gpu_idle_mem() {  // pre train some epochs to get idle memory of GPU when training
+  // pre train some epochs to get idle memory of GPU when training
+  double get_gpu_idle_mem() {
     X[0] = graph->Nts->NewLeafTensor({1000, F.size(1)}, torch::DeviceType::CUDA);
     NtsVar target_lab;
     if (graph->config->classes > 1) {
@@ -282,35 +283,22 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     }
     double max_gpu_used = 0;
 
-    int epochs = 3;
+    int epochs = 1;
     for (int i = 0; i < epochs; ++i) {
       auto ssg = train_sampler->subgraph;
       while (train_sampler->work_offset < train_sampler->work_range[1]) {
-        ctx->train();
         if (ctx->training == true) zero_grad();  // should zero grad after every mini batch compute
         train_sampler->sample_one(ssg, graph->config->batch_type, ctx->is_train());
-        if (graph->config->mini_pull > 0) {  // generate csr structure for backward of pull mode
-          for (auto p : ssg->sampled_sgs) {
-            p->generate_csr_from_csc();
-          }
-        }
-
-        ssg->trans_graph_to_gpu(graph->config->mini_pull > 0);  // trans subgraph to gpu
-        //////////////////////////////////////////////start gather and trans feature (explicit
-        /// version)/////////////////////////////////////////////////////
+        ssg->trans_graph_to_gpu_async(cuda_stream_list[0].stream,
+                                      graph->config->mini_pull > 0);  // trans subgraph to gpu
         if (hosts > 1) {
           X[0] = nts::op::get_feature_from_global(*rpc, ssg->sampled_sgs[0]->src().data(),
                                                   ssg->sampled_sgs[0]->src_size, F, graph);
-          // if (type == 0 && graph->rtminfo->epoch >= graph->config->time_skip) rpc_comm_time += tmp_time;
         } else {
           X[0] = nts::op::get_feature(ssg->sampled_sgs[0]->src().data(), ssg->sampled_sgs[0]->src_size, F, graph);
         }
         X[0] = X[0].cuda().set_requires_grad(true);
-        //////////////////////////////////////////////end gather and trans feature (explicit
-        /// version)/////////////////////////////////////////////////////
 
-        /////////////////////////////////////////////////start trans target_lab
-        ///(explicit)//////////////////////////////////////////////////
         if (hosts > 1) {
           target_lab = nts::op::get_label_from_global(ssg->sampled_sgs.back()->dst().data(),
                                                       ssg->sampled_sgs.back()->v_size, L_GT_C, graph);
@@ -319,22 +307,20 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
               nts::op::get_label(ssg->sampled_sgs.back()->dst().data(), ssg->sampled_sgs.back()->v_size, L_GT_C, graph);
         }
         target_lab = target_lab.cuda();
-        /////////////////////////////////////////////////end trans target_lab
-        ///(explicit)//////////////////////////////////////////////////
 
-        for (int l = 0; l < layers; l++) {  // forward
+        for (int l = 0; l < layers; l++) {
           graph->rtminfo->curr_layer = l;
-          NtsVar Y_i = ctx->runGraphOp<nts::op::SingleGPUSampleGraphOp>(ssg, graph, l, X[l]);
+          NtsVar Y_i = ctx->runGraphOp<nts::op::SingleGPUSampleGraphOp>(ssg, graph, l, X[l], &cuda_stream_list[0]);
           X[l + 1] = ctx->runVertexForward([&](NtsVar n_i) { return vertexForward(n_i); }, Y_i);
         }
 
         auto loss_ = Loss(X[layers], target_lab, graph->config->classes == 1);
-        loss_epoch += loss_.item<float>();
         if (ctx->training == true) {
           ctx->appendNNOp(X[layers], loss_);
           ctx->self_backward(false);
-          Update();
+          // Update();
         }
+
         if (graph->config->classes == 1) {
           get_correct(X[layers], target_lab, graph->config->classes == 1);
           // target_lab.size(0);
@@ -346,9 +332,107 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
       train_sampler->restart();
       get_gpu_mem(used_gpu_mem, total_gpu_mem);
       max_gpu_used = std::max(used_gpu_mem, max_gpu_used);
-      LOG_DEBUG("epoch %d used %.3f total %.3f", i, max_gpu_used, total_gpu_mem);
+      LOG_DEBUG("get_gpu_idle_mem(): used %.3f max_used %.3f total %.3f", used_gpu_mem, max_gpu_used, total_gpu_mem);
     }
-    LOG_DEBUG("max_gpu_used %.3f total %.3f", max_gpu_used, total_gpu_mem);
+    return max_gpu_used;
+  }
+
+  // pre train some epochs to get idle memory of GPU when training
+  double get_gpu_idle_mem_pipe() {
+    double max_gpu_used = 0;
+
+    NtsVar tmp_X0[pipelines];
+    NtsVar tmp_target_lab[pipelines];
+
+    for (int i = 0; i < pipelines; i++) {
+      tmp_X0[i] = graph->Nts->NewLeafTensor({1000, F.size(1)}, torch::DeviceType::CUDA);
+      if (graph->config->classes > 1) {
+        tmp_target_lab[i] =
+            graph->Nts->NewLabelTensor({graph->config->batch_size, graph->config->classes}, torch::DeviceType::CUDA);
+      } else {
+        tmp_target_lab[i] = graph->Nts->NewLabelTensor({graph->config->batch_size}, torch::DeviceType::CUDA);
+      }
+    }
+
+    auto sampler = train_sampler;
+
+    for (int i = 0; i < 1; ++i) {
+      std::thread threads[pipelines];
+      for (int tid = 0; tid < pipelines; ++tid) {
+        threads[tid] = std::thread(
+            [&](int thread_id) {
+              ////////////////////////////////// sample //////////////////////////////////
+              std::unique_lock<std::mutex> sample_lock(sample_mutex, std::defer_lock);
+              sample_lock.lock();
+              while (sampler->work_offset < sampler->work_range[1]) {
+                auto ssg = sampler->subgraph_list[thread_id];
+                sampler->sample_one(ssg, graph->config->batch_type, ctx->is_train());
+                cudaStreamSynchronize(cuda_stream_list[thread_id].stream);
+                sample_lock.unlock();
+                // get_gpu_mem(used_gpu_mem, total_gpu_mem);
+
+                ////////////////////////////////// transfer //////////////////////////////////
+                std::unique_lock<std::mutex> transfer_lock(transfer_mutex, std::defer_lock);
+                transfer_lock.lock();
+                ssg->trans_graph_to_gpu_async(cuda_stream_list[thread_id].stream, graph->config->mini_pull > 0);
+                sampler->load_feature_gpu(&cuda_stream_list[thread_id], ssg, tmp_X0[thread_id],
+                                          gnndatum->dev_local_feature);
+                sampler->load_label_gpu(&cuda_stream_list[thread_id], ssg, tmp_target_lab[thread_id],
+                                        gnndatum->dev_local_label);
+                cudaStreamSynchronize(cuda_stream_list[thread_id].stream);
+                transfer_lock.unlock();
+
+                ////////////////////////////////// train //////////////////////////////////
+                std::unique_lock<std::mutex> train_lock(train_mutex, std::defer_lock);
+                train_lock.lock();
+                at::cuda::setCurrentCUDAStream(torch_stream[thread_id]);
+                if (ctx->training == true) zero_grad();  // should zero grad after every mini batch compute
+                for (int l = 0; l < layers; l++) {       // forward
+                  graph->rtminfo->curr_layer = l;
+                  if (l == 0) {
+                    NtsVar Y_i = ctx->runGraphOp<nts::op::SingleGPUSampleGraphOp>(ssg, graph, l, tmp_X0[thread_id],
+                                                                                  &cuda_stream_list[thread_id]);
+                    X[l + 1] = ctx->runVertexForward([&](NtsVar n_i) { return vertexForward(n_i); }, Y_i);
+                  } else {
+                    NtsVar Y_i = ctx->runGraphOp<nts::op::SingleGPUSampleGraphOp>(ssg, graph, l, X[l],
+                                                                                  &cuda_stream_list[thread_id]);
+                    X[l + 1] = ctx->runVertexForward([&](NtsVar n_i) { return vertexForward(n_i); }, Y_i);
+                  }
+                }
+
+                auto loss_ = Loss(X[layers], tmp_target_lab[thread_id], graph->config->classes == 1);
+                if (ctx->training == true) {
+                  ctx->appendNNOp(X[layers], loss_);
+                  ctx->self_backward(false);
+                  // Update();
+                }
+
+                if (graph->config->classes == 1) {
+                  get_correct(X[layers], tmp_target_lab[thread_id], graph->config->classes == 1);
+                } else {
+                  f1_score(X[layers], tmp_target_lab[thread_id], graph->config->classes == 1);
+                }
+                cudaStreamSynchronize(cuda_stream_list[thread_id].stream);
+                train_lock.unlock();
+
+                sample_lock.lock();
+                sampler->reverse_sgs(ssg);
+              }
+              sample_lock.unlock();
+            },
+            tid);
+      }
+
+      for (int tid = 0; tid < pipelines; ++tid) {
+        threads[tid].join();
+      }
+      sampler->restart();
+
+      get_gpu_mem(used_gpu_mem, total_gpu_mem);
+      max_gpu_used = std::max(used_gpu_mem, max_gpu_used);
+      LOG_DEBUG("get_gpu_idle_mem_pipe(): epoch %d used %.3f max_used %.3f total %.3f", i, used_gpu_mem, max_gpu_used,
+                total_gpu_mem);
+    }
     return max_gpu_used;
   }
 
@@ -544,6 +628,12 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     }
   }
 
+  void empty_gpu_cache() {
+    for (int ti = 0; ti < 5; ++ti) {  // clear gpu cache memory
+      c10::cuda::CUDACachingAllocator::emptyCache();
+    }
+  }
+
   NtsVar vertexForward(NtsVar& n_i) {
     int l = graph->rtminfo->curr_layer;
     if (l == layers - 1) {  // last layer
@@ -582,7 +672,7 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     // }std::cout << std::endl;
 
     // node sampling
-    sampler->zero_debug_time();
+    // sampler->zero_debug_time();
     double epoch_sample_time = 0;
     double epoch_gather_label_time = 0;
     double epoch_gather_feat_time = 0;
@@ -640,23 +730,41 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
 
     std::thread threads[pipelines];
     for (int tid = 0; tid < pipelines; ++tid) {
+      // LOG_DEBUG("thread %d", tid);
       threads[tid] = std::thread(
           [&](int thread_id) {
             ////////////////////////////////// sample //////////////////////////////////
             std::unique_lock<std::mutex> sample_lock(sample_mutex, std::defer_lock);
             sample_lock.lock();
+            // LOG_DEBUG("start sample");
             while (sampler->work_offset < sampler->work_range[1]) {
               auto ssg = sampler->subgraph_list[thread_id];
               epoch_sample_time -= get_time();
               sampler->sample_one(ssg, graph->config->batch_type, ctx->is_train());
               epoch_sample_time += get_time();
               cudaStreamSynchronize(cuda_stream_list[thread_id].stream);
+
+              // if (sampler->work_offset == graph->config->batch_size) {
+              //   std::cout << "batch nodes: ";
+              //   for (int i = 0; i < 10; ++i) {
+              //     std::cout << ssg->sampled_sgs.back()->dst()[i] << " ";
+              //   }
+              //   std::cout << "\n";
+
+              //   std::cout << "1-hop nodes: ";
+              //   for (int i = 0; i < 10; ++i) {
+              //     std::cout << ssg->sampled_sgs.back()->src()[i] << " ";
+              //   }
+              //   std::cout << "\n";
+              // }
+
               sample_lock.unlock();
               // get_gpu_mem(used_gpu_mem, total_gpu_mem);
 
               ////////////////////////////////// transfer //////////////////////////////////
               std::unique_lock<std::mutex> transfer_lock(transfer_mutex, std::defer_lock);
               transfer_lock.lock();
+              // LOG_DEBUG("start transfer");
               epoch_transfer_graph_time -= get_time();
               ssg->trans_graph_to_gpu_async(cuda_stream_list[thread_id].stream, graph->config->mini_pull > 0);
               epoch_transfer_graph_time += get_time();
@@ -672,19 +780,22 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
                 // get_gpu_mem(used_gpu_mem, total_gpu_mem);
               } else if (graph->config->cache_type == "gpu_memory" ||
                          graph->config->cache_type == "rate") {  // trans freature which is not cache in gpu
-                epoch_transfer_feat_time -= get_time();
+                // epoch_transfer_feat_time -= get_time();
                 auto [trans_feature_tmp, gather_gpu_cache_tmp] = sampler->load_feature_gpu_cache(
                     &cuda_stream_list[thread_id], ssg, tmp_X0[thread_id], gnndatum->dev_local_feature,
                     dev_cache_feature, local_idx, local_idx_cache, cache_node_hashmap, dev_local_idx,
                     dev_local_idx_cache, dev_cache_node_hashmap);
-                epoch_transfer_feat_time += get_time();
+                // epoch_transfer_feat_time += get_time();
+                epoch_transfer_feat_time += trans_feature_tmp;
+                epoch_gather_feat_time += gather_gpu_cache_tmp;
 
-                epoch_all_node += ssg->sampled_sgs[0]->src().size();
-                for (auto& it : ssg->sampled_sgs[0]->src()) {
-                  if (cache_node_hashmap[it] != -1) {
-                    epoch_cache_hit++;
-                  }
-                }
+                // epoch_all_node += ssg->sampled_sgs[0]->src().size();
+                // for (auto& it : ssg->sampled_sgs[0]->src()) {
+                //   if (cache_node_hashmap[it] != -1) {
+                //     epoch_cache_hit++;
+                //   }
+                // }
+
               } else {
                 std::cout << "cache_type: " << graph->config->cache_type << " is not support!" << std::endl;
                 assert(false);
@@ -700,6 +811,7 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
               ////////////////////////////////// train //////////////////////////////////
               std::unique_lock<std::mutex> train_lock(train_mutex, std::defer_lock);
               train_lock.lock();
+              // LOG_DEBUG("start cmpute");
 
               at::cuda::setCurrentCUDAStream(torch_stream[thread_id]);
               if (ctx->training == true) zero_grad();  // should zero grad after every mini batch compute
@@ -743,6 +855,7 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
               sampler->reverse_sgs(ssg);
             }
             sample_lock.unlock();
+            return;
           },
           tid);
     }
@@ -764,9 +877,6 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     //   target_lab = graph->Nts->NewLabelTensor({graph->config->batch_size}, torch::DeviceType::CUDA);
     // }
     // sampler->metis_batch_id = 0;
-    // int batch_id = 0;
-    // double forward_cost = 0;
-
     // while (sampler->work_offset < sampler->work_range[1]) {
     //   if (ctx->training == true) zero_grad();  // should zero grad after every mini batch compute
     //   auto ssg = sampler->subgraph;
@@ -781,7 +891,6 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     //   epoch_transfer_graph_time += get_time();
 
     //   ///////////start gather and trans feature (explicit version) /////////////
-    //   // double gather_feature_cost = -get_time();
     //   epoch_gather_feat_time -= get_time();
     //   if (hosts > 1) {
     //     X[0] = nts::op::get_feature_from_global(*rpc, ssg->sampled_sgs[0]->src().data(),
@@ -792,16 +901,11 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     //     X[0] = nts::op::get_feature(ssg->sampled_sgs[0]->src().data(), ssg->sampled_sgs[0]->src_size, F, graph);
     //   }
     //   epoch_gather_feat_time += get_time();
-    //   // gather_feature_cost += get_time();
-    //   // gather_feature_time += gather_feature_cost;
 
-    //   // double trans_feature_gpu_cost = -get_time();
     //   epoch_transfer_feat_time -= get_time();
     //   X[0] = X[0].cuda().set_requires_grad(true);
     //   epoch_transfer_feat_time += get_time();
-    //   // trans_feature_gpu_cost += get_time();
-    //   // trans_feature_cost += trans_feature_gpu_cost;
-    //   //#########start gather and trans feature (explicit version) ############
+    //   //#########end gather and trans feature (explicit version) ############
 
     //   /////////// trans feature (zero copy or cache  version)//////////////////
     //   // // if (graph->config->cache_rate <= 0) { // trans feature use zero
@@ -901,7 +1005,6 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     //   // float val_acc = EvalForward(eval_sampler, 1);
     //   // eval_cost += get_time();
     //   /////////////////////////////////////////////////////////////////////
-    //   batch_id++;
     // }
     // ###########################old version#################################
     // ###########################old version#################################
@@ -924,7 +1027,7 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
       if (type == 0 && graph->rtminfo->epoch >= graph->config->time_skip) mpi_comm_time += get_time();
       acc = 1.0 * correct / train_nodes;
     }
-    LOG_DEBUG("Train ACC %.3f", acc);
+    LOG_DEBUG("Train ACC %d/%d %.3f", correct, train_nodes, acc);
 
     double epoch_transfer_time = epoch_transfer_feat_time + epoch_transfer_label_time + epoch_transfer_graph_time;
     double epoch_gather_time = epoch_gather_feat_time + epoch_gather_label_time;
@@ -943,8 +1046,6 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     }
     get_gpu_mem(used_gpu_mem, total_gpu_mem);
     LOG_INFO(
-        // "Epoch %03d epoch_time %.3f sample_time %.3f gather_time %.3f(feat %.3f label %.3f) trans_time %.3f(feat
-        // %.3f,label %.3f, graph %.3f) train_time %.3f "
         "Epoch %03d epoch_time %.3f sample_time %.3f gather_time %.3f trans_time %.3f train_time %.3f "
         "cache_hit_rate %.3f trans_memory %.3fM gpu_mem %.3fM",
         graph->rtminfo->epoch, epoch_run_time, epoch_sample_time, epoch_gather_time, epoch_transfer_time,
@@ -1225,9 +1326,6 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
 
     // train_sampler = new Sampler(fully_rep_graph, train_nids);
     train_sampler = new Sampler(fully_rep_graph, train_nids, pipelines, false);
-    LOG_DEBUG("train sampler done %d", train_nids.size());
-    LOG_DEBUG("eval sampler done %d", val_nids.size());
-    LOG_DEBUG("test sampler done %d", test_nids.size());
     eval_sampler = new Sampler(fully_rep_graph, val_nids, true);  // true mean full batch
     test_sampler = new Sampler(fully_rep_graph, test_nids, true);  // true mean full batch
     // eval_sampler->update_fanout(-1);                            // val not sample
@@ -1242,14 +1340,16 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
 
     double cache_init_time = -get_time();
     if (graph->config->cache_type == "gpu_memory") {
-      // determine_cache_node_idx(graph->vertices * graph->config->cache_rate);
-      double max_gpu_mem = get_gpu_idle_mem();
-      for (int ti = 0; ti < 3; ++ti) {  // clear gpu cache memory
-        c10::cuda::CUDACachingAllocator::emptyCache();
-      }
+      // LOG_DEBUG("start get_gpu_idle_mem()");
+      // double max_gpu_mem = get_gpu_idle_mem();
+      LOG_DEBUG("start get_gpu_idle_mem_pipe()");
+      double max_gpu_mem = get_gpu_idle_mem_pipe();
+      LOG_DEBUG("release gpu memory");
+      empty_gpu_cache();
       get_gpu_mem(used_gpu_mem, total_gpu_mem);
       LOG_DEBUG("used %.3f total %.3f (after emptyCache)", used_gpu_mem, total_gpu_mem);
-      double free_memory = total_gpu_mem - used_gpu_mem - 200;
+      // double free_memory = total_gpu_mem - max_gpu_mem - 200;
+      double free_memory = total_gpu_mem - max_gpu_mem - 100;
       int memory_nodes = free_memory * 1024 * 1024 / sizeof(ValueType) / graph->gnnctx->layer_size[0];
       determine_cache_node_idx(memory_nodes);
       get_gpu_mem(used_gpu_mem, total_gpu_mem);
@@ -1268,17 +1368,20 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     // move to constructor
     double iteration_time = 0;
     for (int i_i = 0; i_i < iterations; i_i++) {
-      double one_iteration_time = -get_time();
       if (config_run_time > 0 && gcn_run_time >= config_run_time) {
         iterations = i_i;
         break;
       }
       graph->rtminfo->epoch = i_i;
       ctx->train();
+      double one_iteration_time = -get_time();
       float train_acc = Forward(train_sampler, 0);
       float train_loss = loss_epoch;
       one_iteration_time += get_time();
       if (i_i >= graph->config->time_skip) iteration_time += one_iteration_time;
+      // get_gpu_mem(used_gpu_mem, total_gpu_mem);
+      // LOG_DEBUG("Forward after empty_gpu_cache() %.3f", used_gpu_mem);
+      // empty_gpu_cache();
     }
 
     LOG_DEBUG("average %d epoch", graph->config->epochs - graph->config->time_skip);
