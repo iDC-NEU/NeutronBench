@@ -771,7 +771,8 @@ class Sampler {
     if (num < set_size) {
       std::unordered_set<size_t> sampled_idxs;
       while (sampled_idxs.size() < num) {
-        sampled_idxs.insert(rand_int(set_size));
+        // sampled_idxs.insert(rand_int(set_size));
+        sampled_idxs.insert(rand_int_seed(set_size));
       }
       out.insert(out.end(), sampled_idxs.begin(), sampled_idxs.end());
     } else {

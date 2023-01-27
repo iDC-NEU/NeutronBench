@@ -273,6 +273,14 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
 
   // pre train some epochs to get idle memory of GPU when training
   double get_gpu_idle_mem() {
+    // store degree
+    VertexId* outs_bak = new VertexId[graph->vertices];
+    VertexId* ins_bak = new VertexId[graph->vertices];
+    for (int i = 0; i < graph->vertices; ++i) {
+      outs_bak[i] = graph->out_degree_for_backward[i];
+      ins_bak[i] = graph->in_degree_for_backward[i];
+    }
+
     X[0] = graph->Nts->NewLeafTensor({1000, F.size(1)}, torch::DeviceType::CUDA);
     NtsVar target_lab;
     if (graph->config->classes > 1) {
@@ -334,11 +342,28 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
       max_gpu_used = std::max(used_gpu_mem, max_gpu_used);
       LOG_DEBUG("get_gpu_idle_mem(): used %.3f max_used %.3f total %.3f", used_gpu_mem, max_gpu_used, total_gpu_mem);
     }
+
+    // restore degree
+    for (int i = 0; i < graph->vertices; ++i) {
+      graph->out_degree_for_backward[i] = outs_bak[i];
+      graph->in_degree_for_backward[i] = ins_bak[i];
+    }
+    delete[] outs_bak;
+    delete[] ins_bak;
+
     return max_gpu_used;
   }
 
   // pre train some epochs to get idle memory of GPU when training
   double get_gpu_idle_mem_pipe() {
+    // store degree
+    VertexId* outs_bak = new VertexId[graph->vertices];
+    VertexId* ins_bak = new VertexId[graph->vertices];
+    for (int i = 0; i < graph->vertices; ++i) {
+      outs_bak[i] = graph->out_degree_for_backward[i];
+      ins_bak[i] = graph->in_degree_for_backward[i];
+    }
+
     double max_gpu_used = 0;
 
     NtsVar tmp_X0[pipelines];
@@ -433,6 +458,15 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
       LOG_DEBUG("get_gpu_idle_mem_pipe(): epoch %d used %.3f max_used %.3f total %.3f", i, used_gpu_mem, max_gpu_used,
                 total_gpu_mem);
     }
+
+    // restore degree
+    for (int i = 0; i < graph->vertices; ++i) {
+      graph->out_degree_for_backward[i] = outs_bak[i];
+      graph->in_degree_for_backward[i] = ins_bak[i];
+    }
+    delete[] outs_bak;
+    delete[] ins_bak;
+
     return max_gpu_used;
   }
 
@@ -451,7 +485,7 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
 #pragma omp parallel for num_threads(threads)
     for (int i = 0; i < graph->vertices; ++i) {
       cache_node_hashmap[i] = -1;
-      assert(cache_node_hashmap[i] == -1);
+      // assert(cache_node_hashmap[i] == -1);
     }
 
     if (graph->config->cache_policy == "sample") {
@@ -526,7 +560,6 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     for (int i = 0; i < graph->gnnctx->l_v_num; ++i) {
       if (gnndatum->local_mask[i] == 1) val_cnt++;
     }
-    std::cout << "val_cjt " << val_cnt << std::endl;
 
     // get_gpu_mem(used_gpu_mem, total_gpu_mem);
     // LOG_DEBUG("init_nn() after read_feature: gcn_gpu_mem %.3fM", used_gpu_mem);
@@ -634,6 +667,27 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     }
   }
 
+  void debug_batch_sample_info(Sampler* sampler, SampledSubgraph* ssg) {
+    // if (sampler->work_offset == graph->config->batch_size) {
+    std::cout << "batch nodes: ";
+    for (int i = 0; i < 10; ++i) {
+      std::cout << ssg->sampled_sgs.back()->dst()[i] << " ";
+    }
+    std::cout << "\n";
+
+    std::cout << "1-hop nodes: ";
+    for (int i = 0; i < 10; ++i) {
+      std::cout << ssg->sampled_sgs.back()->src()[i] << " ";
+    }
+    size_t sum = 0;
+    std::cout << "1-hop nodes: ";
+    for (auto v : ssg->sampled_sgs.back()->src()) {
+      sum += v;
+    }
+    std::cout << ", sum = " << sum << std::endl;
+    // }
+  }
+
   NtsVar vertexForward(NtsVar& n_i) {
     int l = graph->rtminfo->curr_layer;
     if (l == layers - 1) {  // last layer
@@ -651,6 +705,7 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
 
   // std::tuple<float, double>
   float Forward(Sampler* sampler, int type = 0) {
+    double pre_time = -get_time();
     graph->rtminfo->forward = true;
     correct = 0;
     train_nodes = 0;
@@ -724,15 +779,19 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
         tmp_target_lab[i] = graph->Nts->NewLabelTensor({graph->config->batch_size}, torch::DeviceType::CUDA);
       }
     }
+    pre_time += get_time();
 
     // get_gpu_mem(used_gpu_mem, total_gpu_mem);
     // LOG_DEBUG("after init x target, used: %.3fM", used_gpu_mem);
 
+    // int thread_id = 0;
+    //////// disable thread
     std::thread threads[pipelines];
     for (int tid = 0; tid < pipelines; ++tid) {
       // LOG_DEBUG("thread %d", tid);
       threads[tid] = std::thread(
           [&](int thread_id) {
+            //////// disable thread
             ////////////////////////////////// sample //////////////////////////////////
             std::unique_lock<std::mutex> sample_lock(sample_mutex, std::defer_lock);
             sample_lock.lock();
@@ -744,19 +803,8 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
               epoch_sample_time += get_time();
               cudaStreamSynchronize(cuda_stream_list[thread_id].stream);
 
-              // if (sampler->work_offset == graph->config->batch_size) {
-              //   std::cout << "batch nodes: ";
-              //   for (int i = 0; i < 10; ++i) {
-              //     std::cout << ssg->sampled_sgs.back()->dst()[i] << " ";
-              //   }
-              //   std::cout << "\n";
-
-              //   std::cout << "1-hop nodes: ";
-              //   for (int i = 0; i < 10; ++i) {
-              //     std::cout << ssg->sampled_sgs.back()->src()[i] << " ";
-              //   }
-              //   std::cout << "\n";
-              // }
+              // debug_batch_sample_info(sampler, ssg);
+              // assert(false);
 
               sample_lock.unlock();
               // get_gpu_mem(used_gpu_mem, total_gpu_mem);
@@ -789,13 +837,14 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
                 epoch_transfer_feat_time += trans_feature_tmp;
                 epoch_gather_feat_time += gather_gpu_cache_tmp;
 
-                // epoch_all_node += ssg->sampled_sgs[0]->src().size();
-                // for (auto& it : ssg->sampled_sgs[0]->src()) {
-                //   if (cache_node_hashmap[it] != -1) {
-                //     epoch_cache_hit++;
-                //   }
-                // }
-
+                debug_time -= get_time();
+                epoch_all_node += ssg->sampled_sgs[0]->src().size();
+                for (auto& it : ssg->sampled_sgs[0]->src()) {
+                  if (cache_node_hashmap[it] != -1) {
+                    epoch_cache_hit++;
+                  }
+                }
+                debug_time += get_time();
               } else {
                 std::cout << "cache_type: " << graph->config->cache_type << " is not support!" << std::endl;
                 assert(false);
@@ -855,14 +904,16 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
               sampler->reverse_sgs(ssg);
             }
             sample_lock.unlock();
+            /////// disable thread
             return;
           },
           tid);
     }
-
     for (int tid = 0; tid < pipelines; ++tid) {
       threads[tid].join();
     }
+    // ///// disable thread
+
     // ###########################pipeline version#################################
     // ###########################pipeline version#################################
 
@@ -1011,6 +1062,7 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
 
     // LOG_DEBUG("sampler worker_offset %d range %d", sampler->work_offset, sampler->work_range[1]);
 
+    double post_time = -get_time();
     assert(sampler->work_offset == sampler->work_range[1]);
     loss_epoch /= sampler->batch_nums;
 
@@ -1050,6 +1102,9 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
         "cache_hit_rate %.3f trans_memory %.3fM gpu_mem %.3fM",
         graph->rtminfo->epoch, epoch_run_time, epoch_sample_time, epoch_gather_time, epoch_transfer_time,
         epoch_train_time, epoch_cache_hit_rate, epoch_trans_memory, used_gpu_mem);
+    post_time += get_time();
+
+    LOG_DEBUG("pre_time %.3f post_time %.3f debug_time %.3f", pre_time, post_time, debug_time);
     return acc;
   }
 

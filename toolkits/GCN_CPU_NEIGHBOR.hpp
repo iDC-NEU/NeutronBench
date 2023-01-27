@@ -2,6 +2,7 @@
 #include "core/ntsPeerRPC.hpp"
 #include "utils/cuda_memory.hpp"
 #include "utils/torch_func.hpp"
+#include "utils/utils.hpp"
 
 class GCN_CPU_NEIGHBOR_impl {
  public:
@@ -431,11 +432,6 @@ class GCN_CPU_NEIGHBOR_impl {
       // LOG_DEBUG("zero_grad(%d) addr %p", i, P[i]);
       P[i]->zero_grad();
     }
-  }
-
-  void shuffle_vec(std::vector<VertexId>& vec) {
-    unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-    std::shuffle(vec.begin(), vec.end(), std::default_random_engine(seed));
   }
 
   float run() {

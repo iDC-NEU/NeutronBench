@@ -107,7 +107,8 @@ class GNNDatum {
     std::vector<int> shuffle_nodes(gnnctx->l_v_num);
     std::iota(shuffle_nodes.begin(), shuffle_nodes.end(), 0);
     assert(shuffle_nodes.back() == gnnctx->l_v_num - 1);
-    shuffle_vec(shuffle_nodes);
+    // shuffle_vec(shuffle_nodes);
+    shuffle_vec_seed(shuffle_nodes);
     // std::cout << "after shuffle ";
     // for (int i = 0; i < 10; ++i) {
     //   std::cout << shuffle_nodes[i] << " ";

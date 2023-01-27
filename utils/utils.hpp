@@ -9,8 +9,13 @@
 template <typename T>
 void shuffle_vec(std::vector<T>& vec) {
   // unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-  unsigned seed = 2000;
-  static thread_local std::mt19937 generator(seed);
+  static thread_local std::mt19937 generator;
+  std::shuffle(vec.begin(), vec.end(), generator);
+}
+
+template <typename T>
+void shuffle_vec_seed(std::vector<T>& vec) {
+  static thread_local std::mt19937 generator(2000);
   std::shuffle(vec.begin(), vec.end(), generator);
 }
 
