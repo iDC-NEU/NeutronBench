@@ -92,7 +92,7 @@ class sampCSC {
     // row_indices = new VertexId[e_];
     // edge_weight_forward = new ValueType[e_];
     // edge_weight_backward = new ValueType[e_];
-    node_idx = nullptr;
+    // node_idx = nullptr;
     threads = std::max(1, numa_num_configured_cpus());
     LOG_DEBUG("sampCSC thraeds %d", threads);
   }
