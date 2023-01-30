@@ -61,7 +61,7 @@ class sampCSC {
     size_dev_edge_max = 0;
     column_offset.resize(v_ + 1);
     destination.resize(v_);
-    node_idx = nullptr;
+    // node_idx = nullptr;
     threads = std::max(1, numa_num_configured_cpus());
     LOG_DEBUG("sampCSC thraeds %d", threads);
   }
