@@ -170,6 +170,7 @@ class InputInfo {
   // int dynamic_sample = -1;
 
   float batch_switch_time = -1;
+  int threads = -1;
   std::string batch_size_vec_string;
   std::vector<int> batch_size_vec;
 

@@ -784,43 +784,29 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     // get_gpu_mem(used_gpu_mem, total_gpu_mem);
     // LOG_DEBUG("after init x target, used: %.3fM", used_gpu_mem);
 
-    // int thread_id = 0;
-    //////// disable thread
     std::thread threads[pipelines];
     for (int tid = 0; tid < pipelines; ++tid) {
-      // LOG_DEBUG("thread %d", tid);
       threads[tid] = std::thread(
           [&](int thread_id) {
-            //////// disable thread
             ////////////////////////////////// sample //////////////////////////////////
             std::unique_lock<std::mutex> sample_lock(sample_mutex, std::defer_lock);
+            std::unique_lock<std::mutex> transfer_lock(transfer_mutex, std::defer_lock);
+            std::unique_lock<std::mutex> train_lock(train_mutex, std::defer_lock);
             sample_lock.lock();
-            // LOG_DEBUG("start sample");
             while (sampler->work_offset < sampler->work_range[1]) {
               auto ssg = sampler->subgraph_list[thread_id];
               epoch_sample_time -= get_time();
               sampler->sample_one(ssg, graph->config->batch_type, ctx->is_train());
               epoch_sample_time += get_time();
               cudaStreamSynchronize(cuda_stream_list[thread_id].stream);
-
-              // debug_batch_sample_info(sampler, ssg);
-              // assert(false);
-
               sample_lock.unlock();
-              // get_gpu_mem(used_gpu_mem, total_gpu_mem);
 
               ////////////////////////////////// transfer //////////////////////////////////
-              std::unique_lock<std::mutex> transfer_lock(transfer_mutex, std::defer_lock);
               transfer_lock.lock();
-              // LOG_DEBUG("start transfer");
               epoch_transfer_graph_time -= get_time();
               ssg->trans_graph_to_gpu_async(cuda_stream_list[thread_id].stream, graph->config->mini_pull > 0);
               epoch_transfer_graph_time += get_time();
-              // get_gpu_mem(used_gpu_mem, total_gpu_mem);
-
               if (graph->config->cache_type == "none") {  // trans feature use zero copy (omit gather feature)
-                // get_gpu_mem(used_gpu_mem, total_gpu_mem);
-                // LOG_DEBUG("!!!!!start trans feat %.3fM", used_gpu_mem);
                 epoch_transfer_feat_time -= get_time();
                 sampler->load_feature_gpu(&cuda_stream_list[thread_id], ssg, tmp_X0[thread_id],
                                           gnndatum->dev_local_feature);
@@ -858,13 +844,9 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
               transfer_lock.unlock();
 
               ////////////////////////////////// train //////////////////////////////////
-              std::unique_lock<std::mutex> train_lock(train_mutex, std::defer_lock);
               train_lock.lock();
-              // LOG_DEBUG("start cmpute");
-
               at::cuda::setCurrentCUDAStream(torch_stream[thread_id]);
               if (ctx->training == true) zero_grad();  // should zero grad after every mini batch compute
-
               epoch_train_time -= get_time();
               for (int l = 0; l < layers; l++) {  // forward
                 graph->rtminfo->curr_layer = l;
@@ -884,7 +866,6 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
 
               if (ctx->training == true) {
                 ctx->appendNNOp(X[layers], loss_);
-                // ctx->b_nn_time = 0;
                 ctx->self_backward(false);
                 Update();
               }

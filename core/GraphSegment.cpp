@@ -295,6 +295,9 @@ void InputInfo::readFromCfgFile(std::string config_file) {
     } else if (0 == cfg_k.compare("BATCH_SWITCH_TIME")) {
       this->batch_switch_time = std::atof(cfg_v.c_str());
       // printf("batch_switch_time %.3f\n", batch_switch_time);
+    } else if (0 == cfg_k.compare("THREADS")) {
+      this->threads = std::atoi(cfg_v.c_str());
+      // printf("batch_switch_time %.3f\n", batch_switch_time);
     }
 
     // else if (0 == cfg_k.compare("DYNAMIC_SAMPLE")) {
@@ -416,6 +419,7 @@ void InputInfo::print() {
   std::cout << "cache_type\t:\t" << cache_type << std::endl;
   std::cout << "batch_switch_acc:\t" << batch_switch_acc << std::endl;
   std::cout << "pipelines\t:\t" << pipelines << std::endl;
+  std::cout << "threads\t:\t" << threads << std::endl;
 
   std::cout << "------------------input info--------------" << std::endl;
 }

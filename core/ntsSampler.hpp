@@ -106,7 +106,7 @@ class Sampler {
     work_offset = work_start;
     work_queue.clear();
     sample_bits = new Bitmap(whole_graph->global_vertices);
-    threads = std::max(1, numa_num_configured_cpus());
+    update_threads();
     LOG_DEBUG("Sampeler thraeds %d", threads);
   }
 
@@ -174,7 +174,7 @@ class Sampler {
     // }
     // std::cout << std::endl;
     // assert(false);
-    threads = std::max(1, numa_num_configured_cpus());
+    update_threads();
     LOG_DEBUG("Sampeler thraeds %d", threads);
   }
 
@@ -212,8 +212,16 @@ class Sampler {
     batch_size_switch_idx = -1;
     sample_rate_vec = whole_graph_->graph_->config->sample_rate_vec;
     sample_rate_switch_idx = -1;
-    threads = std::max(1, numa_num_configured_cpus());
+    update_threads();
     LOG_DEBUG("Sampeler thraeds %d", threads);
+  }
+
+  void update_threads() {
+    if (whole_graph->graph_->config->threads > 0 && whole_graph->graph_->config->threads <= numa_num_configured_cpus()) {
+      threads = whole_graph->graph_->config->threads;
+    } else {
+      threads = std::max(1, numa_num_configured_cpus() - 1);
+    }
   }
 
   void update_metis_data(std::vector<VertexId>& part_ids, std::vector<VertexId>& offsets) {
