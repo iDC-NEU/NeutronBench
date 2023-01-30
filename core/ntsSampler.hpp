@@ -61,6 +61,9 @@ class Sampler {
   double sample_init_co = 0;
   double sample_post_time = 0;
   double sample_processing_time = 0;
+  double sample_convert_graph_time = 0;
+  double sample_compute_weight = 0;
+
   double layer_time = 0;
   int best_acc_epoch = -1;
   float best_val_acc = 0.0;
@@ -70,6 +73,7 @@ class Sampler {
   // int layers;
 
   Bitmap* sample_bits;
+  VertexId* node_idx;
 
   int gpu_id = 0;
   Device device = CPU;
@@ -81,6 +85,8 @@ class Sampler {
     sample_post_time = 0;
     sample_processing_time = 0;
     layer_time = 0;
+    sample_convert_graph_time = 0;
+    sample_compute_weight = 0;
   }
 
   // template<typename T>
@@ -186,6 +192,7 @@ class Sampler {
     work_offset = 0;
     // LOG_DEBUG("vertices %d", whole_graph->global_vertices);
     sample_bits = new Bitmap(whole_graph->global_vertices);
+    node_idx = new VertexId[whole_graph->global_vertices];
 
     fanout = whole_graph->graph_->gnnctx->fanout;
 
@@ -681,13 +688,11 @@ class Sampler {
         // LOG_DEBUG("dst size %d", csc_layer->v_size);
         // LOG_DEBUG("after init_dst csc v_size %d, pre src size %d", csc_layer->v_size, ssg->sampled_sgs[i -
         // 1]->src_size);
-#pragma omp parallel for num_threads(threads)
-        for (int j = 0; j < csc_layer->v_size; ++j) {
-          // std::cout << "dst size " << csc_layer->dst().size() << std::endl;
-          // std::cout << "pre src size " << ssg->sampled_sgs[i - 1]->src().size() << std::endl;
-          // std::cout << j << " " << csc_layer->dst()[j] <<  " " << ssg->sampled_sgs[i - 1]->src()[j] << std::endl;
-          assert(csc_layer->dst()[j] == ssg->sampled_sgs[i - 1]->src()[j]);
-        }
+
+        // #pragma omp parallel for num_threads(threads)
+        //         for (int j = 0; j < csc_layer->v_size; ++j) {
+        //           assert(csc_layer->dst()[j] == ssg->sampled_sgs[i - 1]->src()[j]);
+        //         }
       }
       // LOG_DEBUG("sample_one layer %d init_dst done", i);
       // LOG_DEBUG("after init dst");
@@ -725,38 +730,142 @@ class Sampler {
 
       // LOG_DEBUG("sample_init_co cost %.3f", sample_init_co);
 
-      sample_bits->clear();
       sample_processing_time -= get_time();
+      sample_bits->clear();
       // LOG_DEBUG("fanout_i %d\n", fanout_i[i]);
       // ssg->sample_processing(std::bind(&Sampler::NeighborUniformSample, this, std::placeholders::_1,
       // std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5));
       ssg->sample_processing(
           [&](VertexId fanout_i, VertexId dst, VertexId* column_offset, VertexId* row_indices, VertexId id) {
-            this->NeighborUniformSample(fanout_i, dst, column_offset, row_indices, id);
-            // this->NeighborUniformSample_reservoir(fanout_i, dst, column_offset, row_indices, id);
+            // this->NeighborUniformSample(fanout_i, dst, column_offset, row_indices, id);
+
+            auto whole_offset = whole_graph->column_offset;
+            auto whole_indices = whole_graph->row_indices;
+            VertexId edge_nums = whole_offset[dst + 1] - whole_offset[dst];
+            fanout_i = column_offset[id + 1] - column_offset[id];
+
+            if (whole_graph->graph_->config->sample_rate > 0) {
+              VertexId tmp_fanout = std::max(whole_graph->graph_->config->lower_fanout,
+                                             int(edge_nums * whole_graph->graph_->config->sample_rate));
+              // LOG_DEBUG("neightbor sample fanout %d, edge %d sample rate %d", fanout_i, edge_nums, tmp_fanout);
+              fanout_i = tmp_fanout;
+            }
+
+            VertexId actl_fanout = min(fanout_i, edge_nums);
+            assert(column_offset[id + 1] - column_offset[id] == actl_fanout);
+
+            std::vector<size_t> sorted_idxs;
+            // double random_time = -get_time();
+            // sorted_idxs.reserve(fanout_i);
+            // RandomSample(edge_nums, fanout_i, sorted_idxs);
+
+            // if (edge_nums < fanout_i) {
+            //   std::unordered_set<size_t> sampled_idxs;
+            //   while (sampled_idxs.size() < edge_nums) {
+            //     // sampled_idxs.insert(rand_int(fanout_i));
+            //     // sampled_idxs.insert(rand_int_seed(fanout_i));
+            //     sampled_idxs.insert(random_uniform_int(0, fanout_i - 1));
+            //   }
+            //   sorted_idxs.insert(sorted_idxs.end(), sampled_idxs.begin(), sampled_idxs.end());
+            // } else {
+            //   for (size_t i = 0; i < fanout_i; ++i) {
+            //     sorted_idxs.push_back(i);
+            //   }
+            // }
+
+            // // random_time = -get_time();
+            // assert(sorted_idxs.size() == fanout_i);
+            // int pos = column_offset[id];
+            // for (auto& idx : sorted_idxs) {
+            //   row_indices[pos++] = whole_indices[whole_offset[dst] + idx];
+            //   sample_bits->set_bit(whole_indices[whole_offset[dst] + idx]);
+            // }
+            // assert(pos == column_offset[id + 1]);
+
+            ///////////// no sorted_idxs copy //////////////////
+            int pos = column_offset[id];
+            if (edge_nums < fanout_i) {
+              std::unordered_set<size_t> sampled_idxs;
+              while (sampled_idxs.size() < edge_nums) {
+                // sampled_idxs.insert(rand_int(fanout_i));
+                // sampled_idxs.insert(rand_int_seed(fanout_i));
+                sampled_idxs.insert(random_uniform_int(0, fanout_i - 1));
+              }
+
+              for (auto& idx : sampled_idxs) {
+                row_indices[pos++] = whole_indices[whole_offset[dst] + idx];
+                sample_bits->set_bit(whole_indices[whole_offset[dst] + idx]);
+              }
+
+              // sorted_idxs.insert(sorted_idxs.end(), sampled_idxs.begin(), sampled_idxs.end());
+            } else {
+              for (size_t i = 0; i < fanout_i; ++i) {
+                // sorted_idxs.push_back(i);
+
+                row_indices[pos++] = whole_indices[whole_offset[dst] + i];
+                sample_bits->set_bit(whole_indices[whole_offset[dst] + i]);
+              }
+            }
           });
+
+      // ssg->sample_processing(
+      //     [&](VertexId fanout_i, VertexId dst, VertexId* column_offset, VertexId* row_indices, VertexId id) {
+      //       // this->NeighborUniformSample(fanout_i, dst, column_offset, row_indices, id);
+      //         VertexId nbr_size = whole_graph->column_offset[dst+1] - whole_graph->column_offset[dst];
+      //         int num = column_offset[id + 1] - column_offset[id];
+      //         std::unordered_map<VertexId, int> sampled_idxs;
+      //         int pos = 0;
+      //         if(num > fanout_i){
+      //             while (sampled_idxs.size() < num) {
+      //                 VertexId rand = random_uniform_int(0,nbr_size - 1);
+      //                 sampled_idxs.insert(std::pair<size_t, int>(rand, 1));
+      //             }
+      //             VertexId src_idx = whole_graph->column_offset[dst];
+      //             for (auto it = sampled_idxs.begin(); it != sampled_idxs.end(); it++) {
+      //                 // ssg->sampled_sgs[i]->sample_ans[column_offset[id] + pos] = whole_graph->row_indices[src_idx
+      //                 + it->first]; row_indices[column_offset[id] + pos] = whole_graph->row_indices[src_idx +
+      //                 it->first]; pos++; sample_bits->set_bit(whole_graph->row_indices[src_idx + it->first]);
+      //             }
+      //         }
+      //         else{
+      //             VertexId src_idx = whole_graph->column_offset[dst];
+      //             for(VertexId idx = 0; idx < num; idx++){
+      //                 // ssg->sampled_sgs[i]->sample_ans[column_offset[id] + pos] = whole_graph->row_indices[src_idx
+      //                 + idx]; row_indices[column_offset[id] + pos] = whole_graph->row_indices[src_idx + idx]; pos++;
+      //                 sample_bits->set_bit(whole_graph->row_indices[src_idx + idx]);
+      //             }
+      //         }
+      //     });
+
       sample_processing_time += get_time();
       // LOG_DEBUG("sample_one layer %d processing done", i);
 
       // whole_graph->SyncAndLog("sample_processing");
       sample_post_time -= get_time();
-      ssg->sample_postprocessing(sample_bits, i);
       // ssg->sample_postprocessing();
+      ssg->sample_postprocessing(sample_bits, i, node_idx);
+    
       sample_post_time += get_time();
-      // LOG_DEBUG("sample_one layer %d post_processing done", i);
-      // LOG_DEBUG("sample_post %.3f", sample_post);
       layer_time += get_time();
     }
     std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
 
+    sample_convert_graph_time -= get_time();
     if (whole_graph->graph_->config->mini_pull > 0) {  // generate csr structure for backward of pull mode
       for (auto p : ssg->sampled_sgs) {
         p->generate_csr_from_csc();
       }
     }
+    sample_convert_graph_time += get_time();
 
     ssg->alloc_dev_array(whole_graph->graph_->config->mini_pull > 0);
+    sample_compute_weight -= get_time();
     ssg->compute_weight(whole_graph->graph_);
+
+    // auto [degree_time, weight_time] = ssg->compute_weight(whole_graph->graph_);
+    // sample_degree_time += degree_time;
+    // sample_weight_time += weight_time;
+    sample_compute_weight += get_time();
   }
 
   void reverse_sgs() {
@@ -772,7 +881,8 @@ class Sampler {
       std::unordered_set<size_t> sampled_idxs;
       while (sampled_idxs.size() < num) {
         // sampled_idxs.insert(rand_int(set_size));
-        sampled_idxs.insert(rand_int_seed(set_size));
+        // sampled_idxs.insert(rand_int_seed(set_size));
+        sampled_idxs.insert(random_uniform_int(0, set_size - 1));
       }
       out.insert(out.end(), sampled_idxs.begin(), sampled_idxs.end());
     } else {

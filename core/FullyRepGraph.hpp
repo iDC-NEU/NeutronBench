@@ -81,11 +81,20 @@ class SampledSubgraph {
   }
 
   void compute_weight(Graph<Empty> *graph) {
+  // std::pair<double, double> compute_weight(Graph<Empty> *graph) {
+    // double update_degree_time = 0;
+    // double compute_weight_time = 0;
     for (size_t i = 0; i < layers; ++i) {
+      // update_degree_time -= get_time();
       sampled_sgs[i]->update_degree(graph);
+      // update_degree_time += get_time();
+
+      // compute_weight_time -= get_time();
       sampled_sgs[i]->compute_weight_forward(graph);
       sampled_sgs[i]->compute_weight_backward(graph);
+      // compute_weight_time += get_time();
     }
+    // return {update_degree_time, compute_weight_time};
   }
 
   void alloc_dev_array(bool pull = true) {
@@ -194,8 +203,8 @@ class SampledSubgraph {
   //     curr_layer++;
   // }
 
-  void sample_postprocessing(Bitmap *bits, int layer) {
-    sampled_sgs[layer]->postprocessing(bits);
+  void sample_postprocessing(Bitmap *bits, int layer, VertexId* node_idx) {
+    sampled_sgs[layer]->postprocessing(bits, node_idx);
     curr_dst_size = sampled_sgs[layer]->src_size;
     // curr_layer++;
   }

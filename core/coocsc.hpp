@@ -104,7 +104,7 @@ class sampCSC {
     source.clear();
     row_offset.clear();
     column_indices.clear();
-    delete[] node_idx;
+    // delete[] node_idx;
   }
 
   // void init(std::vector<VertexId>& column_offset, std::vector<VertexId>& row_indices, std::vector<VertexId>& source,
@@ -158,21 +158,43 @@ class sampCSC {
   void update_degree(Graph<Empty>* graph) {
     VertexId* outs = graph->out_degree_for_backward;
     VertexId* ins = graph->in_degree_for_backward;
-// omp_set_num_threads(threads);
-#pragma omp parallel for num_threads(threads)
-    for (int i = 0; i < graph->vertices; ++i) {
-      outs[i] = 0;
-      ins[i] = 0;
-    }
+    // omp_set_num_threads(threads);
+    // #pragma omp parallel for num_threads(threads)
+    // for (int i = 0; i < graph->vertices; ++i) {
+    //   outs[i] = 0;
+    //   ins[i] = 0;
+    // }
+    
+    // int dst_size = v_size;
+    // for (int i = 0; i < dst_size; ++i) {
+    //   ins[destination[i]] += column_offset[i + 1] - column_offset[i];
+    //   // #pragma omp parallel for num_threads(threads)
+    //   for (int j = column_offset[i]; j < column_offset[i + 1]; ++j) {
+    //     int local_src = row_indices[j];
+    //     outs[source[local_src]]++;
+    //   }
+    // }
     int dst_size = v_size;
+    #pragma omp parallel for num_threads(threads)
+    for (int i = 0; i < dst_size; ++i) {
+      ins[destination[i]] = 0;
+    }
+    
+    #pragma omp parallel for num_threads(threads)
     for (int i = 0; i < dst_size; ++i) {
       ins[destination[i]] += column_offset[i + 1] - column_offset[i];
-      // #pragma omp parallel for
-      for (int j = column_offset[i]; j < column_offset[i + 1]; ++j) {
-        int local_src = row_indices[j];
-        outs[source[local_src]]++;
-      }
     }
+    
+    #pragma omp parallel for num_threads(threads)
+    for (int i = 0; i < src_size; ++i) {
+      outs[source[i]] = 0;
+    }
+
+    #pragma omp parallel for num_threads(threads)
+    for (int i = 0; i < src_size; ++i) {
+      outs[source[i]] += row_offset[i + 1] - row_offset[i];
+    }
+
     // long sum_ins = 0, sum_outs = 0;
     // for (int i = 0; i < graph->vertices; ++i) {
     //     sum_ins += ins[i];
@@ -211,38 +233,66 @@ class sampCSC {
 
     int dst_size = v_size;
     int edge_size = e_size;
-    row_offset.resize(src_size + 1);
-    memset(row_offset.data(), 0, sizeof(VertexId) * (src_size + 1));
-    assert(dst_size + 1 == column_offset.size());
+    // row_offset.resize(src_size + 1);
+    // memset(row_offset.data(), 0, sizeof(VertexId) * (src_size + 1));
+
+    row_offset = std::vector<VertexId>(src_size + 1, 0);
+    // assert(dst_size + 1 == column_offset.size());
+
 // omp_set_num_threads(threads);
-#pragma omp parallel for num_threads(threads)
-    for (int i = 0; i < src_size + 1; ++i) {
-      assert(row_offset[i] == 0);
+// #pragma omp parallel for num_threads(threads)
+//     for (int i = 0; i < src_size + 1; ++i) {
+//       assert(row_offset[i] == 0);
+//     }
+
+//     for (int i = 0; i < dst_size; ++i) {
+//       // #pragma omp parallel for
+// // #pragma omp parallel for num_threads(4)
+//       for (int j = column_offset[i]; j < column_offset[i + 1]; ++j) {
+//         int local_src = row_indices[j];
+//         row_offset[local_src + 1]++;
+//       }
+//     }
+
+
+// #pragma omp parallel for num_threads(threads)
+    for(VertexId i = 0; i < edge_size; i++){
+        row_offset[row_indices[i] + 1]++;
     }
-    for (int i = 0; i < dst_size; ++i) {
-      // #pragma omp parallel for
-      for (int j = column_offset[i]; j < column_offset[i + 1]; ++j) {
-        int local_src = row_indices[j];
-        row_offset[local_src + 1]++;
-      }
-    }
+
     for (int i = 1; i <= src_size; ++i) {
       row_offset[i] += row_offset[i - 1];
     }
     assert(row_offset[src_size] == column_offset[v_size]);
     assert(row_offset[src_size] == e_size);
     assert(row_offset.size() == src_size + 1);
-    std::vector<int> tmp_row_offset(row_offset.begin(), row_offset.end());
+
     column_indices.resize(e_size);
 
-    // #pragma omp parallel for
+    // std::vector<int> tmp_row_offset(row_offset.begin(), row_offset.end());
+    // // #pragma omp parallel for
+    // for (int i = 0; i < dst_size; ++i) {
+    //   // #pragma omp parallel for
+    //   for (int j = column_offset[i]; j < column_offset[i + 1]; ++j) {
+    //     int local_src = row_indices[j];
+    //     column_indices[tmp_row_offset[local_src]++] = i;
+    //   }
+    // }
+
+
     for (int i = 0; i < dst_size; ++i) {
-      // #pragma omp parallel for
       for (int j = column_offset[i]; j < column_offset[i + 1]; ++j) {
         int local_src = row_indices[j];
-        column_indices[tmp_row_offset[local_src]++] = i;
+        column_indices[row_offset[local_src]++] = i;
       }
     }
+
+    for (int i = src_size; i > 0; --i) {
+      row_offset[i] = row_offset[i - 1];
+    }
+    row_offset[0] = 0;
+
+
     // LOG_DEBUG("afrt dome");
     // for (int i= 0; i < src_size; ++i) {
     //     assert(tmp_row_offset[i] == row_offset[i + 1]);
@@ -276,7 +326,8 @@ class sampCSC {
   //   }
   // }
 
-  void postprocessing(Bitmap* bits) {
+  
+  void postprocessing(Bitmap* bits, VertexId* node_idx) {
     // std::unordered_set<int> st;
     // for (VertexId i = 0; i < e_size; ++i) {
     //     VertexId node_id = row_indices[i];
@@ -287,48 +338,49 @@ class sampCSC {
     // assert(st.size() == bits->get_ones());
     //////////////////////////////
     VertexId all_node_num = bits->get_size();
-    VertexId unique_node_num = bits->get_ones();
 
-    if (!node_idx) {
-      node_idx = new VertexId[all_node_num]{};
-    }
+    // if (!node_idx) {
+    //   node_idx = new VertexId[all_node_num]{};
+    // }
 // omp_set_num_threads(threads);
-#pragma omp parallel for num_threads(threads)
-    for (int i = 0; i < all_node_num; ++i) {
-      node_idx[i] = -1;
-    }
+// #pragma omp parallel for num_threads(threads)
+    // for (int i = 0; i < all_node_num; ++i) {
+    //   node_idx[i] = -1;
+    // }
 
     // std::vector<int> node_idx(bits->size, -1);
-    source.resize(unique_node_num);
-
+    // VertexId unique_node_num = bits->get_ones();
+    // source.resize(unique_node_num);
+    source.clear();
     src_size = 0;
-    for (int i = 0; i < all_node_num; ++i) {
-      if (bits->get_bit(i) > 0) {
-        // source.push_back(i); // TODO(pre-alloc)
-        source[src_size] = i;
-        node_idx[i] = src_size++;
-      }
-    }
-
-    // int length = WORD_OFFSET(all_node_num) + 1;
-    // for(VertexId i_src=0;i_src<all_node_num;i_src+=64){
-    //     unsigned long word= bits->data[WORD_OFFSET(i_src)];
-    //     VertexId vtx=i_src;
-    //     VertexId offset=0;
-    //     while(word != 0){
-    //         if(word & 1){
-    //             // printf("#dst %d %d\n",vtx+offset, src_size);
-    //             //ssg->sampled_sgs[i]->src_index.insert(std::make_pair(vtx+offset, src_size));
-    //             // src_index_array[vtx+offset]=ssg->sampled_sgs[i]->src_size;
-    //             // ssg->sampled_sgs[i]->source.push_back(vtx+offset);
-    //             // ssg->sampled_sgs[i]->src_size++;
-    //             source[src_size] = vtx + offset;
-    //             node_idx[vtx + offset] = src_size++;
-    //         }
-    //         offset++;
-    //         word = word >> 1;
-    //     }
+    // for (int i = 0; i < all_node_num; ++i) {
+    //   if (bits->get_bit(i) > 0) {
+    //     // source.push_back(i); // TODO(pre-alloc)
+    //     source[src_size] = i;
+    //     node_idx[i] = src_size++;
+    //   }
     // }
+
+    int length = WORD_OFFSET(all_node_num) + 1;
+    for(VertexId i_src=0;i_src<all_node_num;i_src+=64){
+        unsigned long word= bits->data[WORD_OFFSET(i_src)];
+        VertexId vtx=i_src;
+        VertexId offset=0;
+        while(word != 0){
+            if(word & 1){
+                // printf("#dst %d %d\n",vtx+offset, src_size);
+                //ssg->sampled_sgs[i]->src_index.insert(std::make_pair(vtx+offset, src_size));
+                // src_index_array[vtx+offset]=ssg->sampled_sgs[i]->src_size;
+                // ssg->sampled_sgs[i]->source.push_back(vtx+offset);
+                // ssg->sampled_sgs[i]->src_size++;
+                // source[src_size] = vtx + offset;
+                source.push_back(vtx + offset);
+                node_idx[vtx + offset] = src_size++;
+            }
+            offset++;
+            word = word >> 1;
+        }
+    }
 
     assert(src_size == source.size());
     /////////// check
@@ -359,7 +411,7 @@ class sampCSC {
 #pragma omp parallel for num_threads(threads)
     for (VertexId i = 0; i < e_size; ++i) {
       int src = row_indices[i];
-      assert(node_idx[src] != -1);
+      // assert(node_idx[src] != -1);
       row_indices[i] = node_idx[src];
       // row_indices[i] = node_idx[row_indices[i]];
     }
@@ -727,7 +779,7 @@ class sampCSC {
 
   // std::unordered_map<VertexId, VertexId> src_index;  // set
   int threads;
-  VertexId* node_idx;
+  // VertexId* node_idx;
 
   VertexId v_size;    // dst_size
   VertexId e_size;    // edge size
