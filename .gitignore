@@ -23,3 +23,9 @@ tmp.cfg
 
 # no zip files
 *.zip
+
+# ignore data change
+data/
+
+# ignore exp
+exp/

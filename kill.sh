@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # check input args
 if [ $# -ne 1 ]; then
   echo "Usage: ./$0 xxx"
