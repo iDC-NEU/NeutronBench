@@ -489,7 +489,7 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     cache_node_idx_seq.resize(graph->vertices);
     std::iota(cache_node_idx_seq.begin(), cache_node_idx_seq.end(), 0);
     // cache_node_hashmap.resize(graph->vertices);
-    cache_node_hashmap = (VertexId*)cudaMallocPinned(graph->vertices * sizeof(VertexId));
+    cache_node_hashmap = (VertexId*)cudaMallocPinned(1ll * graph->vertices * sizeof(VertexId));
     dev_cache_node_hashmap = (VertexId*)getDevicePointer(cache_node_hashmap);
 
     // #pragma omp parallel for
