@@ -114,13 +114,13 @@ class GNNDatum {
     //   std::cout << shuffle_nodes[i] << " ";
     // } std::cout << std::endl;
     int tmpN = gnnctx->l_v_num;
-    for (int i = 0; i < tmpN / 10 * 6; ++i) {
+    for (int i = 0; i < tmpN / 100 * 65; ++i) {
       local_mask[shuffle_nodes[i]] = 0;
     }
-    for (int i = tmpN / 10 * 6; i < tmpN / 10 * 8; ++i) {
+    for (int i = tmpN / 100 * 65; i < tmpN / 100 * 75; ++i) {
       local_mask[shuffle_nodes[i]] = 1;
     }
-    for (int i = tmpN / 10 * 8; i < shuffle_nodes.size(); ++i) {
+    for (int i = tmpN / 100 * 75; i < shuffle_nodes.size(); ++i) {
       local_mask[shuffle_nodes[i]] = 2;
     }
 
