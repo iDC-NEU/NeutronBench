@@ -75,7 +75,8 @@ NtsVar get_feature(VertexId *src, VertexId src_size, NtsVar &whole, Graph<Empty>
   NtsVar f_output = graph->Nts->NewKeyTensor({src_size, feature_size}, torch::DeviceType::CPU);
   ValueType *f_input_buffer = graph->Nts->getWritableBuffer(whole, torch::DeviceType::CPU);
   ValueType *f_output_buffer = graph->Nts->getWritableBuffer(f_output, torch::DeviceType::CPU);
-#pragma omp parallel for
+  int threads = std::max(1, numa_num_configured_cpus() / 2 - 1);
+#pragma omp parallel for num_threads(threads)
   for (int i = 0; i < src_size; i++) {
     memcpy(f_output_buffer + i * feature_size, f_input_buffer + src[i] * feature_size,
            feature_size * sizeof(ValueType));
