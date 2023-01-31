@@ -20,6 +20,9 @@ a.out
 
 # no tmp cfg
 tmp.cfg
+test.*
+test1*
+tmp/
 
 # no zip files
 *.zip
