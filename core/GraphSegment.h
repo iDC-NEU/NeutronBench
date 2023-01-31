@@ -193,6 +193,7 @@ class InputInfo {
   ValueType drop_rate;
   BatchType batch_type;
   int classes = 1;
+  std::string mode;
 
   void readFromCfgFile(std::string config_file);
   void print();

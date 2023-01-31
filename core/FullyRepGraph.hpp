@@ -35,7 +35,7 @@ class SampledSubgraph {
     fanout.clear();
     sampled_sgs.clear();
     curr_layer = 0;
-    threads = std::max(1, numa_num_configured_cpus());
+    threads = std::max(1, numa_num_configured_cpus() / 2 - 1);
     LOG_DEBUG("SamplerSubgraph thraeds %d", threads);
     seeds = new unsigned[threads];
   }
@@ -46,7 +46,7 @@ class SampledSubgraph {
     sampled_sgs.clear();
     curr_layer = 0;
     curr_dst_size = batch_size;
-    threads = std::max(1, numa_num_configured_cpus());
+    threads = std::max(1, numa_num_configured_cpus() / 2 - 1);
     LOG_DEBUG("SamplerSubgraph thraeds %d", threads);
     seeds = new unsigned[threads];
   }
@@ -56,7 +56,7 @@ class SampledSubgraph {
     fanout = fanout_;
     sampled_sgs.clear();
     curr_layer = 0;
-    threads = std::max(1, numa_num_configured_cpus());
+    threads = std::max(1, numa_num_configured_cpus() / 2 - 1);
     LOG_DEBUG("SamplerSubgraph thraeds %d", threads);
     // seeds = new unsigned[threads];
     for (int i = 0; i < layers; ++i) {
@@ -279,7 +279,7 @@ class FullyRepGraph {
     partition_id = graph->partition_id;
     partition_offset = graph->partition_offset;
     graph_ = graph;
-    threads = std::max(1, numa_num_configured_cpus());
+    threads = std::max(1, numa_num_configured_cpus() / 2 - 1);
     LOG_DEBUG("SamplerSubgraph thraeds %d", threads);
   }
   void SyncAndLog(const char *data) {

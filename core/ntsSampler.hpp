@@ -220,7 +220,7 @@ class Sampler {
     if (whole_graph->graph_->config->threads > 0 && whole_graph->graph_->config->threads <= numa_num_configured_cpus()) {
       threads = whole_graph->graph_->config->threads;
     } else {
-      threads = std::max(1, numa_num_configured_cpus() - 1);
+      threads = std::max(1, numa_num_configured_cpus() / 2 - 1);
     }
   }
 

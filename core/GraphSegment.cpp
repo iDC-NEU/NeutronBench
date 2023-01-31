@@ -352,6 +352,8 @@ void InputInfo::readFromCfgFile(std::string config_file) {
       this->pipelines = std::atoi(cfg_v.c_str());
       assert(pipelines >= 1);
       // assert(this->batch_switch_acc > 0);
+    } else if (0 == cfg_k.compare("MODE")) {
+      this->mode = cfg_v.c_str();
     }
 
     else {
@@ -420,6 +422,7 @@ void InputInfo::print() {
   std::cout << "batch_switch_acc:\t" << batch_switch_acc << std::endl;
   std::cout << "pipelines\t:\t" << pipelines << std::endl;
   std::cout << "threads\t:\t" << threads << std::endl;
+  std::cout << "mode\t:\t" << mode << std::endl;
 
   std::cout << "------------------input info--------------" << std::endl;
 }
