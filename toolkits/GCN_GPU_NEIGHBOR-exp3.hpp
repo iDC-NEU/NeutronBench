@@ -254,9 +254,14 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     mark_cache_node(node_idx);
   }
 
+  void cache_random_node(std::vector<int>& node_idx) {
+    shuffle_vec_seed(node_idx);
+    mark_cache_node(node_idx);
+  }
+
   void cache_sample(std::vector<int>& node_idx) {
     std::vector<int> node_sample_cnt(node_idx.size(), 0);
-    int epochs = 3;
+    int epochs = 1;
     auto ssg = train_sampler->subgraph;
     for (int i = 0; i < epochs; ++i) {
       while (train_sampler->work_offset < train_sampler->work_range[1]) {
@@ -274,11 +279,9 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     }
     sort(node_idx.begin(), node_idx.end(),
          [&](const int x, const int y) { return node_sample_cnt[x] > node_sample_cnt[y]; });
-    for (int i = 1; i < node_idx.size(); ++i) {
-      // LOG_DEBUG("%d id (%d %d) cnt(%d %d)", i, node_idx[i - 1], node_idx[i], node_sample_cnt[node_idx[i - 1]],
-      // node_sample_cnt[node_idx[i]]);
-      assert(node_sample_cnt[node_idx[i - 1]] >= node_sample_cnt[node_idx[i]]);
-    }
+    // for (int i = 1; i < node_idx.size(); ++i) {
+    //   assert(node_sample_cnt[node_idx[i - 1]] >= node_sample_cnt[node_idx[i]]);
+    // }
     mark_cache_node(node_idx);
   }
 
@@ -502,9 +505,12 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     if (graph->config->cache_policy == "sample") {
       LOG_DEBUG("cache_sample");
       cache_sample(cache_node_idx_seq);
-    } else {  // default cache high degree
+    } else if (graph->config->cache_policy == "degree") {  // default cache high degree
       LOG_DEBUG("cache_high_degree");
       cache_high_degree(cache_node_idx_seq);
+    } else if (graph->config->cache_policy == "random") {  // default cache high degree
+      LOG_DEBUG("cache_random_node");
+      cache_random_node(cache_node_idx_seq);
     }
     gater_cpu_cache_feature_and_trans_to_gpu();
   }
@@ -1176,6 +1182,9 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
       get_gpu_mem(used_gpu_mem, total_gpu_mem);
       LOG_DEBUG("used %.3f total %.3f (after cache feature)", used_gpu_mem, total_gpu_mem);
     } else if (graph->config->cache_type == "rate") {
+      assert(graph->config->cache_rate >= 0 && graph->config->cache_rate <= 1);
+      determine_cache_node_idx(graph->vertices * graph->config->cache_rate);
+    } else if (graph->config->cache_type == "random") {
       assert(graph->config->cache_rate >= 0 && graph->config->cache_rate <= 1);
       determine_cache_node_idx(graph->vertices * graph->config->cache_rate);
     } else if (graph->config->cache_type == "none") {
