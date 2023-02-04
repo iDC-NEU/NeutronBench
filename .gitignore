@@ -4,31 +4,38 @@ build/
 # no editor files
 .vscode/
 
-# no image
+
+# no log files
+*.log
+*.pdf
 *.png
 *.img
+log/
 
-# no log file
-# *.log
-*.pdf
 
-# no data directory
-data/**/
+# no data files
+data/
+
 
 # no exe bin
 a.out
-
-# no tmp cfg
-tmp.cfg
+*.o
 test.*
 test1*
+
+
+# no tmp file
+tmp.cfg
 tmp/
 
 # no zip files
 *.zip
 
-# ignore data change
-data/
-
 # ignore exp
 exp/
+
+
+# config files
+node_modules/
+saved_modules/
+package-lock.json
