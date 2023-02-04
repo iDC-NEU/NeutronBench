@@ -48,7 +48,7 @@ class sampCSC {
     // destination = nullptr;
     // node_idx = nullptr;
     threads = std::max(1, numa_num_configured_cpus() / 2 - 1);
-    LOG_DEBUG("sampCSC thraeds %d", threads);
+    // LOG_DEBUG("sampCSC thraeds %d", threads);
   }
   sampCSC(VertexId v_) {
     v_size = v_;
@@ -63,7 +63,7 @@ class sampCSC {
     destination.resize(v_);
     // node_idx = nullptr;
     threads = std::max(1, numa_num_configured_cpus() / 2 - 1);
-    LOG_DEBUG("sampCSC thraeds %d", threads);
+    // LOG_DEBUG("sampCSC thraeds %d", threads);
   }
 
   sampCSC(VertexId v_, VertexId e_) {
@@ -94,7 +94,7 @@ class sampCSC {
     // edge_weight_backward = new ValueType[e_];
     // node_idx = nullptr;
     threads = std::max(1, numa_num_configured_cpus() / 2 - 1);
-    LOG_DEBUG("sampCSC thraeds %d", threads);
+    // LOG_DEBUG("sampCSC thraeds %d", threads);
   }
 
   ~sampCSC() {
@@ -381,7 +381,6 @@ class sampCSC {
             word = word >> 1;
         }
     }
-
     assert(src_size == source.size());
     /////////// check
 //     VertexId *temp = new VertexId[e_size];

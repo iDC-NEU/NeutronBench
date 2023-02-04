@@ -107,7 +107,7 @@ class Sampler {
     work_queue.clear();
     sample_bits = new Bitmap(whole_graph->global_vertices);
     update_threads();
-    LOG_DEBUG("Sampeler thraeds %d", threads);
+    // LOG_DEBUG("Sampeler thraeds %d", threads);
   }
 
   Sampler(FullyRepGraph* whole_graph_, std::vector<VertexId>& index, bool full_batch = false) {
@@ -127,6 +127,7 @@ class Sampler {
     work_offset = 0;
     // LOG_DEBUG("vertices %d", whole_graph->global_vertices);
     sample_bits = new Bitmap(whole_graph->global_vertices);
+    node_idx = new VertexId[whole_graph->global_vertices];
 
     fanout = whole_graph->graph_->gnnctx->fanout;
 
@@ -175,7 +176,7 @@ class Sampler {
     // std::cout << std::endl;
     // assert(false);
     update_threads();
-    LOG_DEBUG("Sampeler thraeds %d", threads);
+    // LOG_DEBUG("Sampeler thraeds %d", threads);
   }
 
   Sampler(FullyRepGraph* whole_graph_, std::vector<VertexId>& index, int pipelines, bool full_batch = false) {
@@ -213,7 +214,7 @@ class Sampler {
     sample_rate_vec = whole_graph_->graph_->config->sample_rate_vec;
     sample_rate_switch_idx = -1;
     update_threads();
-    LOG_DEBUG("Sampeler thraeds %d", threads);
+    // LOG_DEBUG("Sampeler thraeds %d", threads);
   }
 
   void update_threads() {
@@ -647,11 +648,6 @@ class Sampler {
   void sample_one(int type = 0, bool phase = true) { sample_one(subgraph, type, phase); }
 
   void sample_one(SampledSubgraph* ssg, int type = 0, bool phase = true) {
-    // zero_debug_time();
-    // void reservoir_sample(int layers, int batch_size_, const
-    // std::vector<int>& fanout_, int type = 0){ LOG_DEBUG("layers %d batch_size
-    // %d fanout %d-%d", layers, batch_size_, fanout_[0], fanout_[1]);
-    // LOG_DEBUG("work_offset %d work_range[1] %d phase %d", work_offset, work_range[1], phase);
     assert(work_offset < work_range[1]);
     // assert(batch_size == batch_size_);
     VertexId actl_batch_size = std::min(batch_size, work_range[1] - work_offset);
