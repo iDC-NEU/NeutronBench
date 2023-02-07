@@ -321,8 +321,8 @@ class Sampler {
     }
   }
 
-  void show_fanout() {
-    printf("eval fanout: ");
+  void show_fanout(std::string info) {
+    std::cout << info << " ";
     for (auto& it : fanout) {
       printf("%d, ", it);
     }

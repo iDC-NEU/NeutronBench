@@ -214,6 +214,8 @@ void InputInfo::readFromCfgFile(std::string config_file) {
       this->layer_string = cfg_v;
     } else if (0 == cfg_k.compare("FANOUT")) {
       this->fanout_string = cfg_v;
+    } else if (0 == cfg_k.compare("VALFANOUT")) {
+      this->val_fanout_string = cfg_v;
     } else if (0 == cfg_k.compare("EDGE_FILE")) {
       this->edge_file = cfg_v.append("\0");
       int start = this->edge_file.find("data") + 5;  // 5 means "data/"
@@ -354,6 +356,8 @@ void InputInfo::readFromCfgFile(std::string config_file) {
       // assert(this->batch_switch_acc > 0);
     } else if (0 == cfg_k.compare("MODE")) {
       this->mode = cfg_v.c_str();
+    } else if (0 == cfg_k.compare("BEST_PARAMETER")) {
+      this->best_parameter = std::atoi(cfg_v.c_str());
     }
 
     else {
@@ -369,6 +373,7 @@ void InputInfo::print() {
   std::cout << "epochs\t\t:\t" << epochs << std::endl;
   std::cout << "layers\t\t:\t" << layer_string << std::endl;
   std::cout << "fanout\t\t:\t" << fanout_string << std::endl;
+  std::cout << "val_fanout\t:\t" << val_fanout_string << std::endl;
   std::cout << "batch_size\t:\t" << batch_size << std::endl;
   // std::cout << "batch_type\t\t:\t" << batch_type << std::endl;
   std::cout << "batch_type\t:\t";
@@ -423,6 +428,7 @@ void InputInfo::print() {
   std::cout << "pipelines\t:\t" << pipelines << std::endl;
   std::cout << "threads\t:\t" << threads << std::endl;
   std::cout << "mode\t:\t" << mode << std::endl;
+  std::cout << "best_parameter\t:\t" << best_parameter << std::endl;
 
   std::cout << "------------------input info--------------" << std::endl;
 }

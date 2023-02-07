@@ -77,8 +77,12 @@ class GCN_GPU_NEIGHBOR_impl {
     active->fill();
 
     graph->init_gnnctx(graph->config->layer_string);
-    graph->init_gnnctx_fanout(graph->config->fanout_string);
+    // graph->init_gnnctx_fanout(graph->config->fanout_string);
+    graph->init_gnnctx_fanout(graph->gnnctx->fanout, graph->config->fanout_string);
+    graph->init_gnnctx_fanout(graph->gnnctx->val_fanout, graph->config->val_fanout_string);
+    assert(graph->gnnctx->fanout.size() == graph->gnnctx->val_fanout.size());
     reverse(graph->gnnctx->fanout.begin(), graph->gnnctx->fanout.end());
+    reverse(graph->gnnctx->val_fanout.begin(), graph->gnnctx->val_fanout.end());
     graph->init_rtminfo();
     graph->rtminfo->process_local = graph->config->process_local;
     graph->rtminfo->reduce_comm = graph->config->process_local;
@@ -493,6 +497,18 @@ class GCN_GPU_NEIGHBOR_impl {
     }
   }
 
+  void saveW() {
+    for (int i = 0; i < layers; ++i) {
+      P[i]->save_W("/home/hdd/sanzo/neutron-sanzo/saved_modules", graph->config->dataset_name, i);
+    }
+  }
+
+  void loadW() {
+    for (int i = 0; i < layers; ++i) {
+      P[i]->load_W("/home/hdd/sanzo/neutron-sanzo/saved_modules", graph->config->dataset_name, i);
+    }
+  }
+
   float run() {
     double pre_time = -get_time();
     if (graph->partition_id == 0) {
@@ -527,10 +543,11 @@ class GCN_GPU_NEIGHBOR_impl {
       train_nids.erase(train_nids.begin() + static_cast<int>(sz * (1 - graph->config->del_frac)), train_nids.end());
     }
     train_sampler = new Sampler(fully_rep_graph, train_nids);
+    // train_sampler->show_fanout("train sampler");
     eval_sampler = new Sampler(fully_rep_graph, val_nids, true);  // true mean full batch
-    eval_sampler->update_fanout(-1);                              // val not sample
-    // eval_sampler->update_fanout({16, 32});                               // val not sample
-    // eval_sampler->show_fanout();
+    // eval_sampler->update_fanout(-1);        ÷            // val not sample
+    eval_sampler->update_fanout(graph->gnnctx->val_fanout);  // val not sample
+    // eval_sampler->show_fanout("val sampler");
     test_sampler = new Sampler(fully_rep_graph, test_nids, true);  // true mean full batch
 
     if (batch_type == METIS) {
@@ -570,51 +587,53 @@ class GCN_GPU_NEIGHBOR_impl {
       }
       graph->rtminfo->epoch = i_i;
 
+      // update batch size should before Forward()
+      if (graph->config->batch_switch_time > 0) {
+        bool ret = train_sampler->update_batch_size_from_time(gcn_run_time);
+
+        // load best parameter
+        if (ret && graph->config->best_parameter > 0) {
+          loadW();
+          // double tmp_val_acc = EvalForward(eval_sampler, 1);
+          // LOG_DEBUG("after loadW val_acc %.3f best_val_acc %.3f", tmp_val_acc, best_val_acc);
+        }
+      }
+
       ctx->train();
       auto [train_acc, epoch_train_time] = Forward(train_sampler, 0);
       float train_loss = loss_epoch;
 
-      // update batch size after the whole epoch training
-      if (graph->config->batch_switch_time > 0) {
-        bool ret = train_sampler->update_batch_size_from_time(gcn_run_time);
-      }
-
       ctx->eval();
       double val_train_cost = -get_time();
       float val_acc = EvalForward(eval_sampler, 1);
-      best_val_acc = std::max(best_val_acc, val_acc);
       val_train_cost += get_time();
+      float val_loss = loss_epoch;
+
+      if (graph->partition_id == 0) {
+        printf(
+            "Epoch %03d train_loss %.3f train_acc %.3f val_loss %.3f val_acc %.3f (train_time %.3f val_time %.3f, "
+            "gcn_run_time %.3f)\n",
+            i_i, train_loss, train_acc, val_loss, val_acc, epoch_train_time, val_train_cost, gcn_run_time);
+      }
+
+      if (val_acc > best_val_acc) {
+        best_val_acc = val_acc;
+
+        // save best parameter
+        if (graph->config->best_parameter > 0) {
+          saveW();
+          LOG_DEBUG("saveW: best_val_acc %.3f", best_val_acc);
+        }
+      }
+
       if (graph->config->sample_switch_time > 0) {
         train_sampler->update_sample_rate_from_time(gcn_run_time);
       }
       if (graph->config->batch_switch_acc > 0) {
         train_sampler->update_batch_size_from_acc(i_i, val_acc, gcn_run_time);
       }
-      if (graph->partition_id == 0) {
-        printf("Epoch %03d train_loss %.3f train_acc %.3f val_acc %.3f (train_time %.3f val_time %.3f)\n", i_i,
-               train_loss, train_acc, val_acc, epoch_train_time, val_train_cost);
-      }
     }
 
-    /////////////////////////////////////////////////////////////////////
-    // do evaluation after one batch
-    // ctx->eval();
-    // double eval_cost = -get_time();
-    // float val_acc = EvalForward(eval_sampler, 1);
-    // eval_cost += get_time();
-    /////////////////////////////////////////////////////////////////////
-
-    ///////////////////////////////////////////////////
-    // if (val_acc > best_val_acc) {
-    //   LOG_DEBUG("val_acc %.3f best_val_acc %.3f", val_acc, best_val_acc);
-    //   best_val_acc = val_acc;
-    //   LOG_DEBUG("save_W to /home/hdd/sanzo/neutron-sanzo/saved_modules");
-    //   for (int i = 0; i < layers; ++i) {
-    //     P[i]->save_W("/home/hdd/sanzo/neutron-sanzo/saved_modules", i);
-    //     // P[i]->load_W("/home/hdd/sanzo/neutron-sanzo/saved_modules", i);
-    //   }
-    // }
-    ///////////////////////////////////////////////////
 
     delete active;
     return best_val_acc;

@@ -298,6 +298,21 @@ class Graph {
     // assert (false);
   }
 
+  void init_gnnctx_fanout(std::vector<int> &t_fanout, std::string fanout_string) {
+    std::stringstream ss(fanout_string);
+    std::string number;
+    t_fanout.clear();
+    char c = fanout_string.find(',') != std::string::npos ? ',' : '-';
+    while (std::getline(ss, number, c)) {
+      t_fanout.push_back(std::stoi(number));
+    }
+    // std::cout << "c = " << c << std::endl;
+    // for (auto it : gnnctx->fanout) {
+    //   std::cout << it << " ";
+    // } std::cout << std::endl;
+    // assert (false);
+  }
+
   void init_gnnctx(std::string layer_string) {
     gnnctx = new GNNContext();
     std::stringstream ss(layer_string);

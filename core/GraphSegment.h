@@ -154,6 +154,7 @@ class InputInfo {
   std::string algorithm;
   std::string layer_string;
   std::string fanout_string;
+  std::string val_fanout_string = "";
   std::string feature_file;
   std::string edge_file;
   std::string label_file;
@@ -167,6 +168,7 @@ class InputInfo {
   int mini_pull = 1;
   float sample_rate = -1;
   double run_time = -1;
+  int best_parameter = 0;
   // int dynamic_sample = -1;
 
   float batch_switch_time = -1;
@@ -230,6 +232,7 @@ class GNNContext {
  public:
   std::vector<int> layer_size;  // feature size at each layer, 0 is input feature
   std::vector<int> fanout;      // feature size at each layer, 0 is input feature
+  std::vector<int> val_fanout;  // feature size at each layer, 0 is input feature
   size_t max_layer;
   size_t label_num;
   size_t p_id;     // partition id

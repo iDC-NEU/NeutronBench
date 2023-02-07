@@ -608,15 +608,20 @@ struct Parameter : torch::nn::Module {
   ValueType l_r;
   ValueType weight_decay;
 
-  void save_W(std::string save_dir, int layer) {
-    LOG_DEBUG("save to %s", (save_dir + "/W" + std::to_string(layer)).c_str());
-    torch::save(W, save_dir + "/W" + std::to_string(layer));
+  void save_W(std::string save_dir, std::string dataset, int layer) {
+    std::string filepath = save_dir + "/" + dataset + "-W" + std::to_string(layer);
+    torch::save(W, filepath);
   }
 
-  void load_W(std::string load_dir, int layer) {
-    LOG_DEBUG("load to %s", (load_dir + "/W" + std::to_string(layer)).c_str());
+  void load_W(std::string load_dir, std::string dataset, int layer) {
+    std::string filepath = load_dir + "/" + dataset + "-W" + std::to_string(layer);
+    if (!file_exists(filepath)) {
+      LOG_DEBUG("load_W(): %s not exist", filepath.c_str());
+      return;
+    }
+    // LOG_DEBUG("load to %s", (load_dir + "/" + dataset + "-W" + std::to_string(layer)).c_str());
     torch::Device GPU(torch::kCUDA, 0);
-    torch::load(W, load_dir + "/W" + std::to_string(layer));
+    torch::load(W, filepath);
     // W.to(GPU);
   }
 
