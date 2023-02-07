@@ -994,7 +994,7 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
       // /####/end trans feature (zero copy or cache version) ############/
 
       ///////start trans target_lab (zero copy) //////
-      sampler->load_label_gpu(target_lab, gnndatum->dev_local_label);
+      // sampler->load_label_gpu(target_lab, gnndatum->dev_local_label);
       epoch_transfer_label_time -= get_time();
       sampler->load_label_gpu(&cuda_stream_list[0], ssg, target_lab, gnndatum->dev_local_label);
       epoch_transfer_label_time += get_time();
