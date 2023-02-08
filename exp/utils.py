@@ -149,10 +149,11 @@ def plot_bar(x_name, y_name, datas, labels, filename='bar.pdf', color=None):
   # color：b:blue、g:green、r:red、c:cyan、m:magenta、y:yellow、k:black、w:white、、、
   # 线型：-  --   -.  :    ,
   # marker：.  ,   o   v    <    *    +    1
-  plt.figure(figsize=(6, 4))
+  plt.figure(figsize=(6, 3))
   plt.grid(linestyle="-.")  # 设置背景网格线为虚线
   # linestyle = "-"
   x = np.arange(len(x_name))
+  fontsize = 12
   # n 为有几个柱子
   # total_width, n = 0.8, 2
   total_width, n = 0.8, len(datas)
@@ -169,7 +170,7 @@ def plot_bar(x_name, y_name, datas, labels, filename='bar.pdf', color=None):
   plt.ylim(low, up + 1)
   # plt.xlabel("Amount of Data", fontsize=15)
   # plt.ylabel(f"Time (s)", fontsize=20)
-  plt.ylabel(y_name, fontsize=12)
+  plt.ylabel(y_name, fontsize=fontsize)
   # labels = ['GraphScope', 'NTS']
 
   # 'tomato', 'blue', 'orange', 'green', 'purple', 'deepskyblue'
@@ -180,12 +181,12 @@ def plot_bar(x_name, y_name, datas, labels, filename='bar.pdf', color=None):
     plt.bar(x + width * i, data, width=width, color=color[i], edgecolor='w')  # , edgecolor='k',)
     
 
-  plt.xticks(x + offset, labels=x_name, fontsize=12, rotation=0)
-  plt.yticks(fontsize=12)
+  plt.xticks(x + offset, labels=x_name, fontsize=fontsize, rotation=0)
+  plt.yticks(fontsize=fontsize)
 
   # num1, num2 = 1, 1.1
   # plt.legend(labels=labels, ncol=4, prop={'size': 11}, bbox_to_anchor=(num1, num2))
-  plt.legend(labels=labels, ncol=4, prop={'size': 11}, loc='best')
+  plt.legend(labels=labels, ncol=2, prop={'size': fontsize}, loc='best')
 
   plt.tight_layout()
   print(f"save to {filename}")
@@ -205,7 +206,7 @@ def plot_stack_bar(x_name, y_name, datas, labels, filename='bar.pdf', color=None
   # color：b:blue、g:green、r:red、c:cyan、m:magenta、y:yellow、k:black、w:white、、、
   # 线型：-  --   -.  :    ,
   # marker：.  ,   o   v    <    *    +    1
-  plt.figure(figsize=(7, 3))
+  plt.figure(figsize=(6, 3))
   plt.grid(linestyle="-.")  # 设置背景网格线为虚线
   # linestyle = "-"
   x = np.arange(len(x_name))
@@ -242,7 +243,7 @@ def plot_stack_bar(x_name, y_name, datas, labels, filename='bar.pdf', color=None
   y_ticks = [f'{x:.0%}' for x in np.linspace(start=0, stop=1, num=6)]
   plt.yticks(np.linspace(start=0, stop=1, num=6), labels=y_ticks, fontsize=12)
 
-  num1, num2 = 0.08, 1.
+  num1, num2 = 1, 1.2
   plt.legend(labels=labels, ncol=4, prop={'size': 11}, bbox_to_anchor=(num1, num2))
   # plt.legend(labels=labels, ncol=2, prop={'size': 11}, loc='best')
 
@@ -254,7 +255,7 @@ def plot_stack_bar(x_name, y_name, datas, labels, filename='bar.pdf', color=None
 
 
 def plot_line(X, Y, labels, savefile=None, color=None, x_label=None, y_label=None, show=False, x_ticks=None, 
-              x_name=None, loc=None, y_ticks=None, y_names=None, high_mark='.', ylim=None, draw_small=False,
+              x_name=None, loc=None, y_ticks=None, y_name=None, high_mark='.', ylim=None, draw_small=False,
               xscale=None):
   assert(len(X) == len(Y) == len(labels))
   # label在图示(legend)中显示。若为数学公式,则最好在字符串前后添加"$"符号
@@ -290,41 +291,29 @@ def plot_line(X, Y, labels, savefile=None, color=None, x_label=None, y_label=Non
     # ax.plot(X[i][pos], Y[i][pos], marker='x', markersize=markersize, color='red', alpha=1, linewidth=linewidth)
     # ax.plot(X[i][pos], Y[i][pos], marker=high_mark, markersize=markersize-2, alpha=1, linewidth=linewidth)
 
-  if x_ticks is not None:
+  if x_ticks is not None and x_name is not None:
     # print(x_ticks)
-    x_name = [f'{x*100:.0f}' for x in x_ticks]
-    ax.set_xticks(x_ticks, x_name, fontsize=fontsize)  # 默认字体大小为10
+    ax.set_xticks(x_ticks, x_name, fontsize=fontsize - 2)  # 默认字体大小为10
     ax.set_xlim(np.min(x_ticks), np.max(x_ticks))
   else:
     max_xticks = max(max(x) if len(x) > 0 else 0 for x in X)
-    x_ticks = np.linspace(0, max_xticks, 5).tolist()
+    x_ticks = np.linspace(0, max_xticks, 6).tolist()
     ax.set_xlim(np.min(x_ticks), np.max(x_ticks))
     x_name = [f'{x:.2f}' for x in x_ticks]
-    ax.set_xticks(x_ticks, x_name, fontsize=fontsize)  # 默认字体大小为10
+    ax.set_xticks(x_ticks, x_name, fontsize=fontsize - 2)  # 默认字体大小为10
 
-  # ax.xlim(0, max_ticks + 0.1)  # 设置x轴的范围
-  max_yticks = max(max(x) if len(x) > 0 else 0 for x in Y)
-  max_yticks = 1
-  min_yticks = 0
-  if ylim is not None:
-    min_yticks = ylim
 
-  y_ticks = np.linspace(min_yticks, max_yticks, 6).tolist()
-  # y_ticks = np.arange(min_yticks, max_yticks, 0.2).tolist()
-  if len(y_ticks) < 5:
-    y_ticks = np.arange(min_yticks, max_yticks, 0.1).tolist()
-  # print(y_ticks)
-  y_name = [f'{x * 100:.0f}' for x in y_ticks]
-  
-  ax.set_ylim(min_yticks, max_yticks)
-  ax.set_yticks(y_ticks, y_name, fontsize=fontsize)  # 默认字体大小为10
+  if y_ticks is not None and y_name is not None:
+    # print(y_ticks)
+    ax.set_yticks(y_ticks, y_name, fontsize=fontsize - 2)  # 默认字体大小为10
+    ax.set_ylim(np.min(y_ticks), np.max(y_ticks))
+  else:
+    max_xticks = max(max(x) if len(x) > 0 else 0 for x in Y)
+    y_ticks = np.linspace(0, max_xticks, 6).tolist()
+    ax.set_ylim(np.min(y_ticks), np.max(y_ticks))
+    y_name = [f'{x:.2f}' for x in y_ticks]
+    ax.set_yticks(y_ticks, y_name, fontsize=fontsize - 2)  # 默认字体大小为10
 
-  
-  # if not y_ticks:
-  #   y_ticks = [0.1, 0.3, 0.5, 0.7, 0.9]
-  #   # ax.ylim(0, 1)
-  # if not y_names:
-  #   y_names = ['10%', '30%', '50%', '70%', '90%']
   ax.set_ylabel(y_label, fontsize=fontsize)
   ax.set_xlabel(x_label, fontsize=fontsize)
   # ax.xlim(0, np.max(X) + 1)  # 设置x轴的范围

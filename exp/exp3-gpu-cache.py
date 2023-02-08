@@ -251,6 +251,18 @@ def print_explicit_time(datasets):
   return ret  
 
 
+def print_x_time(type, datasets):
+  # datasets = ['ogbn-arxiv', 'reddit', 'ogbn-products', 'enwiki-links', 'livejournal', 'lj-large', 'lj-links']
+  ret = {}
+  for optim in ['gcn_sample_time', 'gcn_gather_time', 'gcn_trans_time', 'gcn_train_time']:
+    time_list = []
+    for ds in datasets:
+      log_file = f'./log/gpu-cache/{type}/{ds}.log'
+      time_list += utils.parse_num(log_file, optim)
+    ret[optim] = time_list
+  return ret  
+
+
 def print_compare_cache_policy(mode, datasets):
   # datasets = ['ogbn-arxiv', 'reddit', 'ogbn-products', 'enwiki-links', 'livejournal', 'lj-large', 'lj-links']
   # datasets = ['livejournal', 'lj-large', 'lj-links']
@@ -297,7 +309,12 @@ def draw_diff_optim(datasets):
     ret[k] = ret['base'] / ret[k]
   ret['base'] = np.ones_like(ret['base'])
 
-  x_name = ['arxiv', 'products', 'reddit', 'livejournal', 'lj-links', 'lj-large', 'enwiki']
+  for k in ['zerocopy', 'zerocopy+P', 'zerocopy+PC']:
+    print(f'{k}: averge {np.average(ret[k]):.2f} {ret[k]}')
+  assert False
+
+  # x_name = ['arxiv', 'products', 'reddit', 'livejournal', 'lj-links', 'lj-large', 'enwiki']
+  x_name = ['reddit', 'enwiki', 'lj-large', 'lj-links', 'livejournal']
   y_name = 'Normalized Speedup'
   # labels = ['base', 'zerocopy', 'pipeline', 'pipeline+cache']
   labels = list(ret.keys())
@@ -307,13 +324,21 @@ def draw_diff_optim(datasets):
 def draw_explicit_time(datasets):
 # datasets = ['ogbn-arxiv', 'ogbn-products', 'reddit', 'livejournal', 'lj-links', 'lj-large', 'enwiki-links']
   ret = print_explicit_time(datasets)
+  # ret = print_x_time('pipeline1', datasets)
+  # ret = print_x_time('zerocopy', datasets)
   # normalized
   diff_stage_time = np.array(list(ret.values()))
   epoch_time = diff_stage_time.sum(axis=0)
   diff_stage_time /= epoch_time
 
+  # print(diff_stage_time)
+  avg_percent = [f'{x:.2%}' for x in np.average(diff_stage_time, axis=1)]
+  print('sample, gather, transfer, train, avg%:', avg_percent)
+  assert False
 
-  x_name = ['arxiv', 'products', 'reddit', 'livejournal', 'lj-links', 'lj-large', 'enwiki']
+  
+  # x_name = ['arxiv', 'products', 'reddit', 'livejournal', 'lj-links', 'lj-large', 'enwiki']
+  x_name = ['reddit', 'enwiki', 'lj-large', 'lj-links', 'livejournal']
   y_name = None
   labels = ['sample', 'gather', 'transfer', 'train']
   # labels = list(ret.keys())
@@ -352,7 +377,7 @@ def draw_diff_cache_ratio(datasets):
                   'lj-links': np.linspace(0, 0.8, 41), 'enwiki-links': np.linspace(0, 0.26, 14)}
   ret = print_diff_cache_ratio(') cache_hit_rate', datasets, radio_dict)
   x_ticks_dict = {'reddit': np.linspace(0, 1, 6), 'hollywood-2011': np.linspace(0, 1, 6),
-                  'lj-links': np.linspace(0, 0.6, 6), 'enwiki-links': np.arange(0, 0.26, 0.05)}
+                  'lj-links': np.linspace(0, 0.6, 5), 'enwiki-links': np.arange(0, 0.26, 0.05)}
   # for k,v in ret.items():
     # print(k, v, sep=' ')
   # x_ticks = np.linspace(0, 0.4, 9)
@@ -371,7 +396,12 @@ def draw_diff_cache_ratio(datasets):
     print(len(X[0]), len(Y[0]),len(Y[1]),len(Y[2]), min(len(Y[0]),len(Y[1]),len(Y[2])))
     tmp = X[:,:min(len(Y[0]),len(Y[1]),len(Y[2]))]
   
-    utils.plot_line(tmp, Y, ['random', 'degree', 'sample'], savefile=f'{os.getcwd()}/overleaf-gnn-eval/exp3-gpu-cache/vary_cache_ratio_{ds}.pdf', x_ticks=x_ticks_dict[ds], x_label='Cache Ratio (%)', y_label='Cache Hit Ratio (%)')
+
+    x_ticks = x_ticks_dict[ds]
+    x_name = [f'{x*100:.0f}' for x in x_ticks]
+    y_ticks = np.linspace(0, 1, 6)
+    y_name = [f'{x*100:.0f}' for x in y_ticks]
+    utils.plot_line(tmp, Y, ['random', 'degree', 'sample'], savefile=f'{os.getcwd()}/overleaf-gnn-eval/exp3-gpu-cache/vary_cache_ratio_{ds}.pdf', x_ticks=x_ticks, x_name=x_name, y_ticks=y_ticks, y_name=y_name, x_label='Cache Ratio (%)', y_label='Cache Hit Ratio (%)')
 
 
 if __name__ == '__main__':
@@ -395,9 +425,13 @@ if __name__ == '__main__':
   datasets = ['hollywood-2011', 'reddit']
 
   # different_optim()
-  # draw_diff_optim(datasets)
+  # ret = print_different_optim('one_epoch_time', datasets)
+  datasets = ['reddit', 'enwiki-links', 'lj-large', 'lj-links', 'livejournal']
+  draw_diff_optim(datasets)
   # degree_different_optim()
 
+  # datasets = ['reddit', 'enwiki-links', 'lj-large', 'lj-links', 'livejournal', 'ogbn-arxiv', 'ogbn-products']
+  # datasets = ['reddit', 'enwiki-links', 'lj-large', 'lj-links', 'livejournal']
   # draw_explicit_time(datasets)
   # print_compare_cache_policy(') cache_hit_rate', datasets)
   # print_compare_cache_policy(') cache_hit_rate')
