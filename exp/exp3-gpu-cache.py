@@ -184,6 +184,19 @@ def different_optim():
     run(ds, cmd, './log/gpu-cache/pipeline3-degree')
 
 
+def explicit_rate(datasets):
+  for ds in datasets:
+    for rate in np.linspace(0, 0.5, 6):
+      cmd = new_command(ds, cache_type='rate', cache_policy='degree', cache_rate=f'{rate:.2f}', batch_type='shuffle', fanout='10,25', TIME_SKIP=0, epochs=3, PIPELINES=1, MODE='zerocopy', THRESHOLD_TRANS=0.5)
+      run(ds, cmd, './log/gpu-cache/explicit-trans-degree', suffix=f'-{rate:.2f}')
+    
+      # cmd = new_command(ds, cache_type='rate', cache_policy='sample', cache_rate=f'{rate:.2f}', batch_type='shuffle', fanout='10,25', TIME_SKIP=0, epochs=3, PIPELINES=1, MODE='zerocopy')
+      # run(ds, cmd, './log/gpu-cache/vary-rate-sample', suffix=f'-{rate:.2f}')
+
+      # cmd = new_command(ds, cache_type='rate', cache_policy='random', cache_rate=f'{rate:.2f}', batch_type='shuffle', fanout='10,25', TIME_SKIP=0, epochs=3, PIPELINES=1, MODE='zerocopy')
+      # run(ds, cmd, './log/gpu-cache/vary-rate-random', suffix=f'-{rate:.2f}')
+
+
 def compare_cache_policy(datasets):
   # datasets = ['ogbn-arxiv', 'reddit', 'ogbn-products', 'enwiki-links', 'livejournal', 'lj-large', 'lj-links']
   # datasets = ['livejournal', 'lj-large', 'lj-links']
@@ -392,6 +405,10 @@ if __name__ == '__main__':
   # compare_cache_policy(datasets)
   datasets = ['reddit', 'hollywood-2011', 'lj-links', 'enwiki-links']
   draw_diff_cache_ratio(datasets)
+
+  # compare_cache_policy(datasets)
+  # datasets = ['ogbn-arxiv', 'ogbn-products', 'reddit', 'hollywood-2011', 'lj-links', 'enwiki-links']
+  # explicit_rate(datasets)
   
   # datasets = ['enwiki-links']
   # datasets = ['itwiki-2013', 'enwiki-2016', 'hollywood-2011', 'reddit', 'lj-links', 'enwiki-links']

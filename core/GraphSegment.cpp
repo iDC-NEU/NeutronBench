@@ -358,9 +358,10 @@ void InputInfo::readFromCfgFile(std::string config_file) {
       this->mode = cfg_v.c_str();
     } else if (0 == cfg_k.compare("BEST_PARAMETER")) {
       this->best_parameter = std::atoi(cfg_v.c_str());
-    }
-
-    else {
+    } else if (0 == cfg_k.compare("THRESHOLD_TRANS")) {
+      this->threshold_trans = std::atof(cfg_v.c_str());
+      assert(threshold_trans >= 0 && threshold_trans <= 1);
+    } else {
       printf("not supported configure\n");
     }
   }
@@ -429,6 +430,7 @@ void InputInfo::print() {
   std::cout << "threads\t:\t" << threads << std::endl;
   std::cout << "mode\t:\t" << mode << std::endl;
   std::cout << "best_parameter\t:\t" << best_parameter << std::endl;
+  std::cout << "threshold_trans\t:\t" << threshold_trans << std::endl;
 
   std::cout << "------------------input info--------------" << std::endl;
 }

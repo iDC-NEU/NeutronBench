@@ -169,6 +169,7 @@ class InputInfo {
   float sample_rate = -1;
   double run_time = -1;
   int best_parameter = 0;
+  float threshold_trans = 0;
   // int dynamic_sample = -1;
 
   float batch_switch_time = -1;

@@ -70,6 +70,7 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
   int epoch_cache_hit = 0;
   int epoch_all_node = 0;
   double debug_time = 0;
+  vector<float> explicit_rate;
 
   int threads;
   float* dev_cache_feature;
@@ -966,15 +967,15 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
         epoch_transfer_feat_time += get_time();
         // trans freature which is not cache in gpu
         // } else if (graph->config->cache_type == "gpu_memory" && graph->rtminfo->epoch >= 5){
+        if (graph->config->threshold_trans > 0) explicit_rate.push_back(cnt_suit_explicit_block(ssg));
       } else if (graph->config->cache_type == "gpu_memory" ||
                  graph->config->cache_type == "rate") {  // trans freature which is not cache in gpu
-        // trans_feature_cost -= get_time();
+                                                         // trans_feature_cost -= get_time();
         // auto [trans_feature_tmp, gather_gpu_cache_tmp] = sampler->load_feature_gpu_cache(
-        //     X[0], gnndatum->dev_local_feature, dev_cache_feature, local_idx, local_idx_cache,
-        cache_node_hashmap,
-            //     dev_local_idx, dev_local_idx_cache, dev_cache_node_hashmap);
+        //     X[0], gnndatum->dev_local_feature, dev_cache_feature, local_idx, local_idx_cache, cache_node_hashmap,
+        //     dev_local_idx, dev_local_idx_cache, dev_cache_node_hashmap);
 
-            epoch_transfer_feat_time -= get_time();
+        epoch_transfer_feat_time -= get_time();
         auto [trans_feature_tmp, gather_gpu_cache_tmp] = sampler->load_feature_gpu_cache(
             &cuda_stream_list[0], ssg, X[0], gnndatum->dev_local_feature, dev_cache_feature, local_idx, local_idx_cache,
             cache_node_hashmap, dev_local_idx, dev_local_idx_cache, dev_cache_node_hashmap);
@@ -986,7 +987,8 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
             epoch_cache_hit++;
           }
         }
-
+        if (graph->config->threshold_trans > 0)
+          explicit_rate.push_back(cnt_suit_explicit_block(ssg, cache_node_hashmap));
       } else {
         std::cout << "cache_type: " << graph->config->cache_type << " is not support!" << std::endl;
         assert(false);
@@ -1028,6 +1030,72 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     }
     assert(sampler->work_offset == sampler->work_range[1]);
     sampler->restart();
+    if (graph->config->threshold_trans > 0) {
+      LOG_DEBUG("epoch suit explicit trans block rate %.3f(%.3f)", get_mean(explicit_rate), get_var(explicit_rate));
+    }
+  }
+
+  // std::pair<int,int>
+  float cnt_suit_explicit_block(SampledSubgraph* ssg, VertexId* cache_node_hashmap = nullptr) {
+    int node_num_block = 256 * 1024 / 4 / graph->gnnctx->layer_size[0];
+    int threshold_node_num_block = node_num_block * graph->config->threshold_trans;
+    auto csc_layer = ssg->sampled_sgs[0];
+    std::vector<int> need_transfer(graph->vertices, 0);
+    for (auto& v : csc_layer->src()) {
+      need_transfer[v] = 1;
+    }
+    std::unordered_map<int, int> freq;
+    for (int i = 0; i < graph->vertices; i += node_num_block) {
+      int cnt = 0;
+      for (int j = i; j < std::min(i + node_num_block, (int)graph->vertices); ++j) {
+        if (!cache_node_hashmap) {
+          if (need_transfer[j] == 1) cnt++;
+        } else {
+          if (need_transfer[j] == 1 && cache_node_hashmap[j] == -1) cnt++;
+        }
+      }
+      if (freq.find(cnt) == freq.end()) freq[cnt] = 0;
+      freq[cnt]++;
+    }
+
+    // check freq record all the src nodes
+    int all_cnt = 0, block_cnt = 0;
+    for (auto& v : freq) {
+      all_cnt += v.first * v.second;
+      block_cnt += v.second;
+    }
+    assert(block_cnt == (graph->vertices + node_num_block - 1) / node_num_block);
+    if (!cache_node_hashmap)
+      assert(all_cnt == csc_layer->src().size());
+    else {
+      int tmp = 0;
+      for (int j = 0; j < (int)graph->vertices; ++j) {
+        if (need_transfer[j] == 1 && cache_node_hashmap[j] == -1) tmp++;
+      }
+      assert(tmp == all_cnt);
+    }
+
+    std::vector<std::pair<int, int>> all(freq.begin(), freq.end());
+    sort(all.begin(), all.end(), [&](auto& x, auto& y) { return x.first > y.first; });
+    // // check sort is correct
+    // for (int i = 1; i < all.size(); ++i) {
+    //   assert(all[i - 1].first > all[i].first);
+    // }
+
+    int rate_cnt = 0;
+    int rate_all = 0;
+    for (auto& v : all) {
+      if (v.first > threshold_node_num_block) {
+        // std::cout << v.first << " " << v.second << std::endl;
+        rate_cnt += v.second;
+      }
+      if (v.first > 0) rate_all += v.second;
+    }
+    float rate_trans = rate_cnt > 0 ? rate_cnt * 1.0 / rate_all : 0;
+    LOG_DEBUG("block %d threshold %d, rate %.2f (%d/%d)", node_num_block, threshold_node_num_block, rate_trans,
+              rate_cnt, rate_all);
+    // return {rate_cnt, rate_all};
+    return rate_trans;
   }
 
   // std::tuple<float, double>
@@ -1231,6 +1299,9 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
               gcn_run_time - gcn_sample_time - gcn_gather_time - gcn_train_time - gcn_trans_time);
     gcn_run_time = gcn_sample_time + gcn_gather_time + gcn_train_time + gcn_trans_time;
     get_gpu_mem(used_gpu_mem, total_gpu_mem);
+    if (graph->config->threshold_trans > 0) {
+      LOG_DEBUG("avg suit explicit trans block rate %.3f(%.3f)", get_mean(explicit_rate), get_var(explicit_rate));
+    }
 
     LOG_DEBUG(
         "dataset %s cache_rate %.3f batch_size %d used_memmory %.3fM gcn_run_time %.3f gcn_sample_time %.3f (%.3f)  "
