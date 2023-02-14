@@ -32,7 +32,7 @@
 using cstr = const char *;
 
 static constexpr cstr PastLastSlash(cstr a, cstr b) {
-  return *a == '\0' ? b : *b == '/' ? PastLastSlash(a + 1, a + 1) : PastLastSlash(a + 1, b);
+  return *a == '\0' ? b : *a == '/' ? PastLastSlash(a + 1, a + 1) : PastLastSlash(a + 1, b);
 }
 
 static constexpr cstr PastLastSlash(cstr a) { return PastLastSlash(a, a); }

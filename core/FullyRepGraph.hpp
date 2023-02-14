@@ -179,9 +179,11 @@ class SampledSubgraph {
           vertex_sample) {
     // random_gen_seed();
     // threads=30;
-    // omp_set_num_threads(threads);
+    // omp_set_num_threads(threads);f
     // LOG_DEBUG("thrads %d", threads);
     // LOG_DEBUG("processing %d %d layer %d, fanout %d", 0, curr_dst_size, curr_layer, fanout[curr_layer]);
+// #pragma omp parallel for num_threads(threads)
+omp_set_num_threads(threads);
 #pragma omp parallel for num_threads(threads)
     for (VertexId begin_v_i = 0; begin_v_i < curr_dst_size; begin_v_i += 1) {
       // for every vertex, apply the sparse_slot at the partition
@@ -216,6 +218,8 @@ class SampledSubgraph {
     //                 VertexId* column_offset, VertexId* row_indices)>sparse_slot,VertexId layer){
 
     // omp_set_num_threads(threads);
+// #pragma omp parallel for num_threads(threads)
+omp_set_num_threads(threads);
 #pragma omp parallel for num_threads(threads)
     for (VertexId begin_v_i = 0; begin_v_i < sampled_sgs[layer]->v_size; begin_v_i += 1) {
       sparse_slot(begin_v_i, sampled_sgs[layer]->c_o().data(), sampled_sgs[layer]->r_i().data());
@@ -229,6 +233,8 @@ class SampledSubgraph {
     //                     VertexId* column_offset, VertexId* row_indices)>sparse_slot,VertexId layer){
     // LOG_DEBUG("start backward");
     // omp_set_num_threads(threads);
+// #pragma omp parallel for num_threads(threads)
+omp_set_num_threads(threads);
 #pragma omp parallel for num_threads(threads)
     for (VertexId begin_v_i = 0; begin_v_i < sampled_sgs[layer]->src_size; begin_v_i += 1) {
       sparse_slot(begin_v_i, sampled_sgs[layer]->r_o().data(), sampled_sgs[layer]->c_i().data());
@@ -307,7 +313,9 @@ class FullyRepGraph {
       int edges = column_offset_bak[dst + 1] - column_offset_bak[dst];
       column_offset[i + 1] = column_offset[i] + edges;
 // omp_set_num_threads(threads);
-#pragma omp parallel for num_threads(threads)
+// omp_set_num_threads(threads);
+//     #pragma omp parallel for num_threads(threads)
+
       for (int j = column_offset[i]; j < column_offset[i + 1]; ++j) {
         row_indices[j] = row_indices_bak[column_offset_bak[dst] + j - column_offset[i]];
       }
