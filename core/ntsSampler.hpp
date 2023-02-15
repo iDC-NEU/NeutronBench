@@ -524,20 +524,6 @@ class Sampler {
     }
   }
 
-  NtsVar get_label(VertexId* dst, VertexId dst_size, NtsVar& whole, Graph<Empty>* graph) {
-    NtsVar f_output;
-    if (graph->config->classes > 1) {
-      f_output = graph->Nts->NewLeafKLongTensor({dst_size, graph->config->classes});
-    } else {
-      f_output = graph->Nts->NewLeafKLongTensor({dst_size});
-    }
-
-#pragma omp parallel for num_threads(threads)
-    for (int i = 0; i < dst_size; i++) {
-      f_output[i] = whole[dst[i] - graph->partition_offset[graph->partition_id]];
-    }
-    return f_output;
-  }
 
   ~Sampler() { clear_queue(); }
   bool has_rest_safe() {

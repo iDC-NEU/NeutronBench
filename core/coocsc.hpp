@@ -129,8 +129,8 @@ class sampCSC {
     edge_weight_forward.resize(e_size);
     assert(e_size == column_offset.back());
     assert(v_size + 1 == column_offset.size());
-// omp_set_num_threads(threads);
-#pragma omp parallel for num_threads(threads)
+    omp_set_num_threads(threads);
+#pragma omp parallel for
     for (VertexId i = 0; i < v_size; ++i) {
       for (VertexId j = column_offset[i]; j < column_offset[i + 1]; ++j) {
         VertexId src_id = source[row_indices[j]];
@@ -143,8 +143,8 @@ class sampCSC {
   void compute_weight_backward(Graph<Empty>* graph) {
     edge_weight_backward.resize(e_size);
     assert(src_size + 1 == row_offset.size());
-// omp_set_num_threads(threads);
-#pragma omp parallel for num_threads(threads)
+    omp_set_num_threads(threads);
+#pragma omp parallel for
     for (VertexId i = 0; i < src_size; ++i) {
       for (VertexId j = row_offset[i]; j < row_offset[i + 1]; ++j) {
         VertexId src_id = source[i];
@@ -175,22 +175,26 @@ class sampCSC {
     //   }
     // }
     int dst_size = v_size;
-    #pragma omp parallel for num_threads(threads)
+    omp_set_num_threads(threads);
+#pragma omp parallel for
     for (int i = 0; i < dst_size; ++i) {
       ins[destination[i]] = 0;
     }
-    
-    #pragma omp parallel for num_threads(threads)
+
+    omp_set_num_threads(threads);
+#pragma omp parallel for
     for (int i = 0; i < dst_size; ++i) {
       ins[destination[i]] += column_offset[i + 1] - column_offset[i];
     }
-    
-    #pragma omp parallel for num_threads(threads)
+
+    omp_set_num_threads(threads);
+#pragma omp parallel for
     for (int i = 0; i < src_size; ++i) {
       outs[source[i]] = 0;
     }
 
-    #pragma omp parallel for num_threads(threads)
+    omp_set_num_threads(threads);
+#pragma omp parallel for
     for (int i = 0; i < src_size; ++i) {
       outs[source[i]] += row_offset[i + 1] - row_offset[i];
     }
@@ -406,8 +410,8 @@ class sampCSC {
 //   }
 // method2-= get_time();
 // for (size_t i = 0; i < row_indices.size(); ++i) {
-// omp_set_num_threads(threads);
-#pragma omp parallel for num_threads(threads)
+    omp_set_num_threads(threads);
+#pragma omp parallel for
     for (VertexId i = 0; i < e_size; ++i) {
       int src = row_indices[i];
       // assert(node_idx[src] != -1);
@@ -458,8 +462,9 @@ class sampCSC {
   }
 
   void init_dst(VertexId* dst) {
-// omp_set_num_threads(threads);
-#pragma omp parallel for num_threads(threads)
+    // #pragma omp parallel for num_threads(threads)
+    omp_set_num_threads(threads);
+#pragma omp parallel for
     for (int i = 0; i < v_size; ++i) {
       destination[i] = dst[i];
     }
@@ -468,8 +473,8 @@ class sampCSC {
   }
 
   void init_dst(std::vector<VertexId>& dst) {
-// omp_set_num_threads(threads);
-#pragma omp parallel for num_threads(threads)
+    omp_set_num_threads(threads);
+#pragma omp parallel for
     for (int i = 0; i < v_size; ++i) {
       destination[i] = dst[i];
     }

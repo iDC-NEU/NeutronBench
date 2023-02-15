@@ -41,6 +41,8 @@ NtsVar get_label(VertexId *dst, VertexId dst_size, NtsVar &whole, Graph<Empty> *
     f_output = graph->Nts->NewLeafKLongTensor({dst_size});
   }
 
+  int threads = std::max(1, numa_num_configured_cpus() / 2 - 1);
+  omp_set_num_threads(threads);
 #pragma omp parallel for
   for (int i = 0; i < dst_size; i++) {
     // printf("offset %d %d, dst %d local %d\n", graph->partition_offset[graph->partition_id],
@@ -59,6 +61,9 @@ NtsVar get_label_from_global(VertexId *dst, VertexId dst_size, NtsVar &whole, Gr
   } else {
     f_output = graph->Nts->NewLeafKLongTensor({dst_size});
   }
+  // #pragma omp parallel for
+  int threads = std::max(1, numa_num_configured_cpus() / 2 - 1);
+  omp_set_num_threads(threads);
 #pragma omp parallel for
   for (int i = 0; i < dst_size; i++) {
     // printf("offset %d %d, dst %d local %d\n", graph->partition_offset[graph->partition_id],
@@ -76,7 +81,8 @@ NtsVar get_feature(VertexId *src, VertexId src_size, NtsVar &whole, Graph<Empty>
   ValueType *f_input_buffer = graph->Nts->getWritableBuffer(whole, torch::DeviceType::CPU);
   ValueType *f_output_buffer = graph->Nts->getWritableBuffer(f_output, torch::DeviceType::CPU);
   int threads = std::max(1, numa_num_configured_cpus() / 2 - 1);
-#pragma omp parallel for num_threads(threads)
+  omp_set_num_threads(threads);
+#pragma omp parallel for
   for (int i = 0; i < src_size; i++) {
     memcpy(f_output_buffer + i * feature_size, f_input_buffer + src[i] * feature_size,
            feature_size * sizeof(ValueType));

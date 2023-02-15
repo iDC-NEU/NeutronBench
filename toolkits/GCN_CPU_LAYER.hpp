@@ -131,6 +131,7 @@ class GCN_CPU_LAYER_impl {
       std::vector<std::vector<ValueType>> result_vector;
       result_vector.resize(vertexs.size());
 
+// omp_set_num_threads(threads);
 #pragma omp parallel for
       for (int i = 0; i < vertexs.size(); i++) {
         result_vector[i].resize(feature_size);

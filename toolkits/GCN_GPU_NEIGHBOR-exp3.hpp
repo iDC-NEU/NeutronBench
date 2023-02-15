@@ -152,7 +152,7 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     gcn_train_time = 0;
     gcn_cache_hit_rate = 0;
     gcn_trans_memory = 0;
-    threads = std::max(1, numa_num_configured_cpus() - 1);
+    threads = std::max(1, numa_num_configured_cpus() / 2 - 1);
 
     // batch_size_mp["ppi"] = {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 2048, 4096, 9716};
     // batch_size_mp["ppi-large"] = {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 44906};
@@ -194,6 +194,7 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
 // std::cout << "###" << graph->vertices * feat_dim << "l_v_num " << graph->gnnctx->l_v_num << " " << graph->vertices <<
 // std::endl;
 // #pragma omp parallel for
+// omp_set_num_threads(threads);
 #pragma omp parallel for num_threads(threads)
     for (int i = 0; i < cache_node_num; ++i) {
       int node_id = cache_node_idx_seq[i];
@@ -643,6 +644,7 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
         result_vector.resize(vertexs.size());
 
 // #pragma omp parallel for
+// omp_set_num_threads(threads);
 #pragma omp parallel for num_threads(threads)
         for (int i = 0; i < vertexs.size(); i++) {
           result_vector[i].resize(feature_size);
@@ -872,13 +874,15 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
 
       ///////////start gather and trans feature (explicit version) /////////////
       epoch_gather_feat_time -= get_time();
-      if (hosts > 1) {
-        X[0] = nts::op::get_feature_from_global(*rpc, ssg->sampled_sgs[0]->src().data(), ssg->sampled_sgs[0]->src_size,
-                                                F, graph);
-        // if (type == 0 && graph->rtminfo->epoch >= graph->config->time_skip) rpc_comm_time += tmp_time;
-      } else {
-        X[0] = nts::op::get_feature(ssg->sampled_sgs[0]->src().data(), ssg->sampled_sgs[0]->src_size, F, graph);
-      }
+      // if (hosts > 1) {
+      //   X[0] = nts::op::get_feature_from_global(*rpc, ssg->sampled_sgs[0]->src().data(),
+      //   ssg->sampled_sgs[0]->src_size,
+      //                                           F, graph);
+      //   // if (type == 0 && graph->rtminfo->epoch >= graph->config->time_skip) rpc_comm_time += tmp_time;
+      // } else {
+      X[0] = nts::op::get_feature(ssg->sampled_sgs[0]->src().data(), ssg->sampled_sgs[0]->src_size, F, graph);
+      // X[0] = nts::op::get_feature(ssg->sampled_sgs[0]->src(), F, graph);
+      // }
       epoch_gather_feat_time += get_time();
 
       epoch_transfer_feat_time -= get_time();
@@ -887,14 +891,16 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
 
       ////////start trans target_lab (explicit)//////////
       epoch_gather_label_time -= get_time();
-      if (hosts > 1) {
-        target_lab = nts::op::get_label_from_global(ssg->sampled_sgs.back()->dst().data(),
-                                                    ssg->sampled_sgs.back()->v_size, L_GT_C, graph);
-        // if (type == 0 && graph->rtminfo->epoch >= graph->config->time_skip) rpc_comm_time += tmp_time;
-      } else {
-        target_lab =
-            nts::op::get_label(ssg->sampled_sgs.back()->dst().data(), ssg->sampled_sgs.back()->v_size, L_GT_C, graph);
-      }
+      // if (hosts > 1) {
+      //   target_lab = nts::op::get_label_from_global(ssg->sampled_sgs.back()->dst().data(),
+      //                                               ssg->sampled_sgs.back()->v_size, L_GT_C, graph);
+      //   // if (type == 0 && graph->rtminfo->epoch >= graph->config->time_skip) rpc_comm_time += tmp_time;
+      // } else {
+      target_lab =
+          nts::op::get_label(ssg->sampled_sgs.back()->dst().data(), ssg->sampled_sgs.back()->v_size, L_GT_C, graph);
+
+      // target_lab = nts::op::get_label(ssg->sampled_sgs.back()->dst(), L_GT_C, graph);
+      // }
       epoch_gather_label_time += get_time();
 
       // double trans_label_gpu_cost = -get_time();
