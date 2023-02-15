@@ -427,8 +427,8 @@ void InputInfo::print() {
   std::cout << "cache_type\t:\t" << cache_type << std::endl;
   std::cout << "batch_switch_acc:\t" << batch_switch_acc << std::endl;
   std::cout << "pipelines\t:\t" << pipelines << std::endl;
-  std::cout << "threads\t:\t" << threads << std::endl;
-  std::cout << "mode\t:\t" << mode << std::endl;
+  std::cout << "threads\t\t:\t" << threads << std::endl;
+  std::cout << "mode\t\t:\t" << mode << std::endl;
   std::cout << "best_parameter\t:\t" << best_parameter << std::endl;
   std::cout << "threshold_trans\t:\t" << threshold_trans << std::endl;
 
