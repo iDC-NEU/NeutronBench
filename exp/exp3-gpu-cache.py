@@ -132,56 +132,76 @@ def exp3(datasets, fanout):
     run(ds, cmd, './log/gpu-cache/pipeline1-degree')
 
 
-def different_optim():
-  datasets = ['lj-links',]
-  datasets = ['livejournal', 'lj-large', 'lj-links', 'enwiki-links']
-  datasets = ['europe_osm', 'ogbn-arxiv', 'reddit', 'ogbn-products', 'enwiki-links', 'livejournal', 'lj-large', 'lj-links']
 
-  
+def different_optim_aix(datasets):
   for ds in datasets:
-    # explicit
+    # # explicit
+    cmd = new_command(ds, cache_type='none', cache_policy='none', batch_size=10240, batch_type='shuffle', fanout='4,4', TIME_SKIP=1, epochs=3, PIPELINES=1, MODE='explicit')
+    run(ds, cmd, './log/gpu-cache/aix/explicit')
+
+    # zero_copy (gather)
+    cmd = new_command(ds, cache_type='none', cache_policy='none', batch_size=10240, batch_type='shuffle', fanout='4,4', TIME_SKIP=1, epochs=3, PIPELINES=1, MODE='zerocopy')
+    run(ds, cmd, './log/gpu-cache/aix/zerocopy')
+    
+    # zero_copy (gather) pipeline3
+    cmd = new_command(ds, cache_type='rate', cache_rate=0.2, cache_policy='sample', batch_size=10240, batch_type='shuffle', fanout='4,4', TIME_SKIP=1, epochs=3, PIPELINES=1, MODE='zerocopy')
+    run(ds, cmd, './log/gpu-cache/aix/pipeline3')
+
+
+
+def different_optim(datasets):
+  # datasets = ['lj-links',]
+  # datasets = ['livejournal', 'lj-large', 'lj-links', 'enwiki-links']
+  # datasets = ['europe_osm', 'ogbn-arxiv', 'reddit', 'ogbn-products', 'enwiki-links', 'livejournal', 'lj-large', 'lj-links']
+  # datasets = ['ogbn-arxiv', 'reddit', 'ogbn-products', 'enwiki-links', 'livejournal', 'lj-large', 'lj-links']
+
+  for ds in datasets:
+    # # explicit
+    # cmd = new_command(ds, cache_type='none', cache_policy='none', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=1, MODE='explicit')
+    # run(ds, cmd, './log/gpu-cache/explicit-shuffle')
+
     # cmd = new_command(ds, cache_type='none', cache_policy='none', batch_type='sequence', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=1, MODE='explicit')
-    # run(ds, cmd, './log/gpu-cache/explicit')
+    # run(ds, cmd, './log/gpu-cache/explicit-sequence')
 
     # # zero_copy (gather)
-    # cmd = new_command(ds, cache_type='none', cache_policy='none', batch_type='sequence', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=1, MODE='zerocopy')
+    # cmd = new_command(ds, cache_type='none', cache_policy='none', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=1, MODE='zerocopy')
     # run(ds, cmd, './log/gpu-cache/zerocopy')
     
-    # zero_copy (gather) pipeline1
-    cmd = new_command(ds, cache_type='none', cache_policy='none', batch_type='sequence', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=1, MODE='pipeline')
-    run(ds, cmd, './log/gpu-cache/pipeline1')
+    # # zero_copy (gather) pipeline1
+    # cmd = new_command(ds, cache_type='none', cache_policy='none', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=1, MODE='pipeline')
+    # run(ds, cmd, './log/gpu-cache/pipeline1')
   
-    # zero_copy (gather) pipeline2
-    cmd = new_command(ds, cache_type='none', cache_policy='none', batch_type='sequence', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=2, MODE='pipeline')
-    run(ds, cmd, './log/gpu-cache/pipeline2')
+    # # zero_copy (gather) pipeline2
+    # cmd = new_command(ds, cache_type='none', cache_policy='none', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=2, MODE='pipeline')
+    # run(ds, cmd, './log/gpu-cache/pipeline2')
 
-    # zero_copy (gather) pipeline3
-    cmd = new_command(ds, cache_type='none', cache_policy='none', batch_type='sequence', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=3, MODE='pipeline')
-    run(ds, cmd, './log/gpu-cache/pipeline3')
+    # # zero_copy (gather) pipeline3
+    # cmd = new_command(ds, cache_type='none', cache_policy='none', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=3, MODE='pipeline')
+    # run(ds, cmd, './log/gpu-cache/pipeline3')
 
-    # zero_copy (gather) pipeline1 + sample
-    cmd = new_command(ds, cache_type='gpu_memory', cache_policy='sample', batch_type='sequence', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=1, MODE='pipeline')
-    run(ds, cmd, './log/gpu-cache/pipeline1-sample')
+    # # zero_copy (gather) pipeline1 + sample
+    # cmd = new_command(ds, cache_type='gpu_memory', cache_policy='sample', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=1, MODE='pipeline')
+    # run(ds, cmd, './log/gpu-cache/pipeline1-sample')
     
-    # zero_copy (gather) pipeline1 + degree
-    cmd = new_command(ds, cache_type='gpu_memory', cache_policy='degree', batch_type='sequence', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=1, MODE='pipeline')
-    run(ds, cmd, './log/gpu-cache/pipeline1-degree')
+    # # zero_copy (gather) pipeline1 + degree
+    # cmd = new_command(ds, cache_type='gpu_memory', cache_policy='degree', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=1, MODE='pipeline')
+    # run(ds, cmd, './log/gpu-cache/pipeline1-degree')
 
-    # zero_copy (gather) pipeline2 + sample
-    cmd = new_command(ds, cache_type='gpu_memory', cache_policy='sample', batch_type='sequence', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=2, MODE='pipeline')
-    run(ds, cmd, './log/gpu-cache/pipeline2-sample')
+    # # zero_copy (gather) pipeline2 + sample
+    # cmd = new_command(ds, cache_type='gpu_memory', cache_policy='sample', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=2, MODE='pipeline')
+    # run(ds, cmd, './log/gpu-cache/pipeline2-sample')
     
-    # zero_copy (gather) pipeline2 + degree
-    cmd = new_command(ds, cache_type='gpu_memory', cache_policy='degree', batch_type='sequence', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=2, MODE='pipeline')
-    run(ds, cmd, './log/gpu-cache/pipeline2-degree')
+    # # zero_copy (gather) pipeline2 + degree
+    # cmd = new_command(ds, cache_type='gpu_memory', cache_policy='degree', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=2, MODE='pipeline')
+    # run(ds, cmd, './log/gpu-cache/pipeline2-degree')
 
-    # zero_copy (gather) pipeline3 + sample
-    cmd = new_command(ds, cache_type='gpu_memory', cache_policy='sample', batch_type='sequence', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=3, MODE='pipeline')
-    run(ds, cmd, './log/gpu-cache/pipeline3-sample')
+    # # zero_copy (gather) pipeline3 + sample
+    # cmd = new_command(ds, cache_type='gpu_memory', cache_policy='sample', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=3, MODE='pipeline')
+    # run(ds, cmd, './log/gpu-cache/pipeline3-sample')
     
-    # zero_copy (gather) pipeline3 + degree
-    cmd = new_command(ds, cache_type='gpu_memory', cache_policy='degree', batch_type='sequence', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=3, MODE='pipeline')
-    run(ds, cmd, './log/gpu-cache/pipeline3-degree')
+    # # zero_copy (gather) pipeline3 + degree
+    # cmd = new_command(ds, cache_type='gpu_memory', cache_policy='degree', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=3, MODE='pipeline')
+    # run(ds, cmd, './log/gpu-cache/pipeline3-degree')
 
 
 def explicit_rate(datasets):
@@ -230,7 +250,7 @@ def print_different_optim(mode, datasets):
   #   cmd = new_command(ds, cache_type='none', cache_policy='none', batch_type='sequence', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=1)
   #   run(ds, cmd, './log/gpu-cache/explicit')
   ret = {}
-  for optim in ['explicit', 'pipeline1', 'pipeline3', 'pipeline3-degree']:
+  for optim in ['explicit', 'zerocopy', 'pipeline1', 'pipeline3', 'pipeline3-degree', 'pipeline3-sample']:
     time_list = []
     for ds in datasets:
       log_file = f'./log/gpu-cache/{optim}/{ds}.log'
@@ -239,13 +259,13 @@ def print_different_optim(mode, datasets):
   return ret
 
 
-def print_explicit_time(datasets):
+def print_explicit_time(datasets, dirname='explicit'):
   # datasets = ['ogbn-arxiv', 'reddit', 'ogbn-products', 'enwiki-links', 'livejournal', 'lj-large', 'lj-links']
   ret = {}
   for optim in ['gcn_sample_time', 'gcn_gather_time', 'gcn_trans_time', 'gcn_train_time']:
     time_list = []
     for ds in datasets:
-      log_file = f'./log/gpu-cache/explicit/{ds}.log'
+      log_file = f'./log/gpu-cache/{dirname}/{ds}.log'
       time_list += utils.parse_num(log_file, optim)
     ret[optim] = time_list
   return ret  
@@ -301,17 +321,21 @@ def draw_diff_optim(datasets):
     ret[k] = np.array(v)
 
   # rename key
-  for x, y in zip(['base', 'zerocopy', 'zerocopy+P', 'zerocopy+PC'], ['explicit', 'pipeline1', 'pipeline3', 'pipeline3-degree']):
-    ret[x] = ret.pop(y)
+  # for x, y in zip(['base', 'zerocopy', 'zerocopy+P', 'zerocopy+PC'], ['explicit', 'pipeline1', 'pipeline3', 'pipeline3-degree']):
+  tmp_ret = {}
+  # for x, y in zip(['base', 'zerocopy', 'zerocopy+P', 'zerocopy+PC'], ['explicit', 'zerocopy', 'pipeline3', 'pipeline3-degree']):
+  for x, y in zip(['base', 'zero', 'zero+P', 'zero+PC'], ['explicit', 'zerocopy', 'pipeline3', 'pipeline3-sample']):
+    # ret[x] = ret.pop(y)
+    tmp_ret[x] = ret[y]
+  ret = tmp_ret
 
   # normalized
-  for k in ['zerocopy', 'zerocopy+P', 'zerocopy+PC']:
+  for k in ['zero', 'zero+P', 'zero+PC']:
     ret[k] = ret['base'] / ret[k]
   ret['base'] = np.ones_like(ret['base'])
 
-  for k in ['zerocopy', 'zerocopy+P', 'zerocopy+PC']:
+  for k in ['zero', 'zero+P', 'zero+PC']:
     print(f'{k}: averge {np.average(ret[k]):.2f} {ret[k]}')
-  assert False
 
   # x_name = ['arxiv', 'products', 'reddit', 'livejournal', 'lj-links', 'lj-large', 'enwiki']
   x_name = ['reddit', 'enwiki', 'lj-large', 'lj-links', 'livejournal']
@@ -321,9 +345,12 @@ def draw_diff_optim(datasets):
   utils.plot_bar(x_name, y_name, list(ret.values()), labels, filename=f'{os.getcwd()}/overleaf-gnn-eval/exp3-gpu-cache/diff-optim.pdf')
 
 
-def draw_explicit_time(datasets):
+def draw_explicit_time(datasets, suffix=''):
 # datasets = ['ogbn-arxiv', 'ogbn-products', 'reddit', 'livejournal', 'lj-links', 'lj-large', 'enwiki-links']
   ret = print_explicit_time(datasets)
+  # ret = print_explicit_time(datasets, 'explicit-shuffle')
+  # suffix = '-sequence'
+  # ret = print_explicit_time(datasets, 'explicit-sequence')
   # ret = print_x_time('pipeline1', datasets)
   # ret = print_x_time('zerocopy', datasets)
   # normalized
@@ -334,15 +361,13 @@ def draw_explicit_time(datasets):
   # print(diff_stage_time)
   avg_percent = [f'{x:.2%}' for x in np.average(diff_stage_time, axis=1)]
   print('sample, gather, transfer, train, avg%:', avg_percent)
-  assert False
-
   
   # x_name = ['arxiv', 'products', 'reddit', 'livejournal', 'lj-links', 'lj-large', 'enwiki']
   x_name = ['reddit', 'enwiki', 'lj-large', 'lj-links', 'livejournal']
   y_name = None
   labels = ['sample', 'gather', 'transfer', 'train']
   # labels = list(ret.keys())
-  utils.plot_stack_bar(x_name, y_name, diff_stage_time, labels, filename=f'{os.getcwd()}/overleaf-gnn-eval/exp3-gpu-cache/explicit_breakdown.pdf')
+  utils.plot_stack_bar(x_name, y_name, diff_stage_time, labels, filename=f'{os.getcwd()}/overleaf-gnn-eval/exp3-gpu-cache/explicit_breakdown{suffix}.pdf')
 
 
 def print_diff_cache_ratio(mode, datasets, ratios):
@@ -424,24 +449,36 @@ if __name__ == '__main__':
   datasets = ['enwiki-2016']
   datasets = ['hollywood-2011', 'reddit']
 
-  # different_optim()
-  # ret = print_different_optim('one_epoch_time', datasets)
-  datasets = ['reddit', 'enwiki-links', 'lj-large', 'lj-links', 'livejournal']
-  draw_diff_optim(datasets)
-  # degree_different_optim()
+  # aix exp
+  # datasets = ['reddit']
+  # different_optim_aix(datasets)
+  # draw_diff_optim_aix(datasets)
 
+
+  # expliict exp
+  # datasets = ['ogbn-arxiv', 'ogbn-products', 'reddit', 'livejournal', 'lj-links', 'lj-large', 'enwiki-links']
+  # datasets = ['reddit', 'livejournal', 'lj-links', 'lj-large', 'enwiki-links']
+  # different_optim(datasets)
+  # draw_explicit_time(datasets)
+
+
+  # different_optim exp
   # datasets = ['reddit', 'enwiki-links', 'lj-large', 'lj-links', 'livejournal', 'ogbn-arxiv', 'ogbn-products']
   # datasets = ['reddit', 'enwiki-links', 'lj-large', 'lj-links', 'livejournal']
-  # draw_explicit_time(datasets)
+  # different_optim(datasets)
+  # draw_diff_optim(datasets)
+
+
   # print_compare_cache_policy(') cache_hit_rate', datasets)
   # print_compare_cache_policy(') cache_hit_rate')
-
-  # compare_cache_policy(datasets)
-  datasets = ['reddit', 'hollywood-2011', 'lj-links', 'enwiki-links']
-  draw_diff_cache_ratio(datasets)
-
-  # compare_cache_policy(datasets)
+  # vary cache ratio exp
   # datasets = ['ogbn-arxiv', 'ogbn-products', 'reddit', 'hollywood-2011', 'lj-links', 'enwiki-links']
+  # datasets = ['reddit', 'hollywood-2011', 'lj-links', 'enwiki-links']
+  # compare_cache_policy(datasets)
+  # draw_diff_cache_ratio(datasets)
+
+
+  # suit explicit transfer rate exp
   # explicit_rate(datasets)
   
   # datasets = ['enwiki-links']

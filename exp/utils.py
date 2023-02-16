@@ -167,7 +167,7 @@ def plot_bar(x_name, y_name, datas, labels, filename='bar.pdf', color=None):
   low = 0
   up = np.max(datas)
   up = np.max(datas) + 1
-  plt.ylim(low, up + 1)
+  plt.ylim(low, up)
   # plt.xlabel("Amount of Data", fontsize=15)
   # plt.ylabel(f"Time (s)", fontsize=20)
   plt.ylabel(y_name, fontsize=fontsize)
@@ -186,7 +186,9 @@ def plot_bar(x_name, y_name, datas, labels, filename='bar.pdf', color=None):
 
   # num1, num2 = 1, 1.1
   # plt.legend(labels=labels, ncol=4, prop={'size': 11}, bbox_to_anchor=(num1, num2))
-  plt.legend(labels=labels, ncol=2, prop={'size': fontsize}, loc='best')
+  plt.legend(labels=labels, ncol=4, prop={'size': fontsize}, loc='best')
+  # num1, num2 = 0.9, 1.2
+  # plt.legend(labels=labels, ncol=4, prop={'size': 11}, bbox_to_anchor=(num1, num2))
 
   plt.tight_layout()
   print(f"save to {filename}")
