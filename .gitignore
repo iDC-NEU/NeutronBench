@@ -39,3 +39,6 @@ exp/
 node_modules/
 saved_modules/
 package-lock.json
+
+# dataset directory
+data/

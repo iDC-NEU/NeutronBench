@@ -324,13 +324,16 @@ class GCN_GPU_NEIGHBOR_impl {
 
       epoch_trans_graph_time -= get_time();
       ssg->trans_graph_to_gpu(graph->config->mini_pull > 0);  // wheather trans csr data to gpu
+      // ssg->trans_graph_to_gpu_async(cuda_stream->stream, graph->config->mini_pull > 0);  // trans subgraph to gpu
       epoch_trans_graph_time += get_time();
 
       epoch_trans_feature_time -= get_time();
+      // sampler->load_feature_gpu(cuda_stream, ssg, X[0], gnndatum->dev_local_feature);
       sampler->load_feature_gpu(X[0], gnndatum->dev_local_feature);
       epoch_trans_feature_time += get_time();
 
       epoch_trans_label_time -= get_time();
+      // sampler->load_label_gpu(cuda_stream, ssg, target_lab, gnndatum->dev_local_label);
       sampler->load_label_gpu(target_lab, gnndatum->dev_local_label);
       epoch_trans_label_time += get_time();
 
@@ -510,6 +513,21 @@ class GCN_GPU_NEIGHBOR_impl {
     }
   }
 
+void count_sample_hop_nodes(Sampler* sampler) {
+    long tmp = 0;
+    while (sampler->work_offset < sampler->work_range[1]) {
+      auto ssg = sampler->subgraph;
+      sampler->sample_one(ssg, graph->config->batch_type, ctx->is_train());
+      sampler->reverse_sgs();
+      for (auto sg : ssg->sampled_sgs) {
+        tmp += sg->e_size;
+      }
+    }
+    printf("all batch edges %ld", tmp);
+    assert(sampler->work_offset == sampler->work_range[1]);
+    sampler->restart();
+  }
+
   float run() {
     double pre_time = -get_time();
     if (graph->partition_id == 0) {
@@ -550,6 +568,9 @@ class GCN_GPU_NEIGHBOR_impl {
     eval_sampler->update_fanout(graph->gnnctx->val_fanout);  // val not sample
     // eval_sampler->show_fanout("val sampler");
     test_sampler = new Sampler(fully_rep_graph, test_nids, true);  // true mean full batch
+
+    // count_sample_hop_nodes(train_sampler);
+    // assert(false);
 
     if (batch_type == METIS) {
       int partition_num = (train_nids.size() + graph->config->batch_size - 1) / graph->config->batch_size;
@@ -611,9 +632,9 @@ class GCN_GPU_NEIGHBOR_impl {
       float val_loss = loss_epoch;
 
       if (graph->partition_id == 0) {
-        printf(
+        LOG_INFO(
             "Epoch %03d train_loss %.3f train_acc %.3f val_loss %.3f val_acc %.3f (train_time %.3f val_time %.3f, "
-            "gcn_run_time %.3f)\n",
+            "gcn_run_time %.3f)",
             i_i, train_loss, train_acc, val_loss, val_acc, epoch_train_time, val_train_cost, gcn_run_time);
       }
 

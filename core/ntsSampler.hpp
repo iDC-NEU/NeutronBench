@@ -200,6 +200,7 @@ class Sampler {
     update_batch_size(whole_graph->graph_->config->batch_size);
 
     layers = whole_graph->graph_->gnnctx->layer_size.size() - 1;
+    assert(layers == fanout.size());
     // }
     work_queue.clear();
     subgraph = new SampledSubgraph(layers, fanout);

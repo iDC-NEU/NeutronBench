@@ -123,6 +123,22 @@ float get_mean(std::vector<T> &arr) {
 }
 
 template <typename T>
+std::vector<float> get_mean(std::vector<std::vector<T>> &arr) {
+  assert(arr.size());
+  int len = arr[0].size();
+  std::vector<float> ret;
+  for (int i = 0; i < len; ++i) {
+    float mean = 0;
+    for (auto& vec : arr) {
+      mean += vec[i];
+    }
+    mean /= arr.size();
+    ret.push_back(mean);
+  }
+  return ret;
+}
+
+template <typename T>
 float get_var(std::vector<T> &arr) {
   float mean = get_mean(arr);
   float var = 0;

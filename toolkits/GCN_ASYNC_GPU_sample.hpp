@@ -5,7 +5,7 @@
 #include "utils/torch_func.hpp"
 #include "utils/utils.hpp"
 
-class GCN_GPU_NEIGHBOR_EXP3_impl {
+class GCN_ASYNC_GPU_impl {
  public:
   int iterations;
   ValueType learn_rate;
@@ -112,9 +112,9 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
   double used_gpu_mem, total_gpu_mem;
   // std::unordered_map<std::string, std::vector<int>> batch_size_mp;
   // std::vector<int> batch_size_vec;
-  ~GCN_GPU_NEIGHBOR_EXP3_impl() { delete active; }
+  ~GCN_ASYNC_GPU_impl() { delete active; }
 
-  GCN_GPU_NEIGHBOR_EXP3_impl(Graph<Empty>* graph_, int iterations_, bool process_local = false,
+  GCN_ASYNC_GPU_impl(Graph<Empty>* graph_, int iterations_, bool process_local = false,
                              bool process_overlap = false) {
     graph = graph_;
     iterations = iterations_;
@@ -1041,29 +1041,6 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     }
   }
 
-  void count_sample_hop_nodes(Sampler* sampler) {
-    std::vector<std::vector<int>> all_batch_hop_nodes;
-    while (sampler->work_offset < sampler->work_range[1]) {
-      auto ssg = sampler->subgraph;
-      sampler->sample_one(ssg, graph->config->batch_type, ctx->is_train());
-      sampler->reverse_sgs();
-      std::vector<int> tmp_hop_nodes;
-      for (auto sg : ssg->sampled_sgs) {
-        tmp_hop_nodes.push_back(sg->src_size);
-      }
-      tmp_hop_nodes.push_back(ssg->sampled_sgs.back()->v_size);
-      all_batch_hop_nodes.push_back(tmp_hop_nodes);
-    }
-    std::vector<float> ret = get_mean(all_batch_hop_nodes);
-    printf("dataset_name %s", graph->config->dataset_name.c_str());
-    for (auto x : ret) {
-      printf(" %.3f", x);
-    } printf("\n");
-    assert(sampler->work_offset == sampler->work_range[1]);
-    sampler->restart();
-  }
-
-
   // std::pair<int,int>
   float cnt_suit_explicit_block(SampledSubgraph* ssg, VertexId* cache_node_hashmap = nullptr) {
     int node_num_block = 256 * 1024 / 4 / graph->gnnctx->layer_size[0];
@@ -1253,17 +1230,6 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     eval_sampler = new Sampler(fully_rep_graph, val_nids, true);  // true mean full batch
     test_sampler = new Sampler(fully_rep_graph, test_nids, true);  // true mean full batch
     // eval_sampler->update_fanout(-1);                            // val not sample
-
-    // aix exp
-    // std::vector<vector<int>> test_vector_mean{{1, 2, 3}, {1, 2, 10}};
-    // std::vector<float> ret = get_mean(test_vector_mean);
-    // std::cout << "test get_mean vector ";
-    // for (auto x : ret) {
-    //   std::cout << x << " ";
-    // } std::cout << std::endl;
-    // count_sample_hop_nodes(train_sampler);
-    // assert(false);
-
 
     double run_time = -get_time();
     float config_run_time = graph->config->run_time;
