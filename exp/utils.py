@@ -279,7 +279,7 @@ def plot_line(X, Y, labels, savefile=None, color=None, x_label=None, y_label=Non
   if color is None:
     # color = ['blue', 'green', 'tomato', 'orange', 'purple', 'deepskyblue', 'red', 'cyan', 'magenta', 'yellow', 'black']
     # color = ['blue', 'green', 'orange', 'purple', 'red', 'black', 'yellow', 'cyan', 'magenta', 'pink',  'deepskyblue', 'tomato']
-    color = ['orange', 'blue', 'green', 'tomato', 'purple', 'deepskyblue']
+    color = ['orange', 'blue', 'green', 'tomato', 'purple', 'deepskyblue', 'red']
   
   for i in range(len(X)):
     if len(X[i]) == 0:

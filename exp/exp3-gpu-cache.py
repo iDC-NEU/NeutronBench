@@ -475,11 +475,8 @@ if __name__ == '__main__':
   # datasets = ['ogbn-arxiv', 'ogbn-products', 'reddit', 'hollywood-2011', 'lj-links', 'enwiki-links']
   # datasets = ['reddit', 'hollywood-2011', 'lj-links', 'enwiki-links']
   # compare_cache_policy(datasets)
+  # datasets = ['reddit', 'hollywood-2011', 'lj-links', 'enwiki-links']
   # draw_diff_cache_ratio(datasets)
-
-
-  # suit explicit transfer rate exp
-  # explicit_rate(datasets)
   
   # datasets = ['enwiki-links']
   # datasets = ['itwiki-2013', 'enwiki-2016', 'hollywood-2011', 'reddit', 'lj-links', 'enwiki-links']
