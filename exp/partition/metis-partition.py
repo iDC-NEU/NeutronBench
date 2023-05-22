@@ -279,47 +279,143 @@ def remask(node_num, mask_rate=None):
     return train_mask, val_mask, test_mask
 
 
-def generate_nts_dataset(args, edge_list, features, labels, train_mask, val_mask, test_mask):
-    dataset = args.dataset
-    pre_path = os.getcwd() + '/' + dataset
+def generate_nts_dataset(partition_nodes, partition_edges, node_num, feature_dim):
+    print('node_num:', node_num, 'feature_dim:', feature_dim)
+    reorder_id = {}
+    curr_id = 0
+    for nodes in partition_nodes:
+        for u in nodes.tolist():
+            reorder_id[u] = curr_id
+            curr_id += 1
+    assert len(reorder_id) == curr_id == sum([len(nodes) for nodes in partition_nodes])
+    
+    reorder_partition_edges = [[(reorder_id[u], reorder_id[v]) for (u,v) in edges] for edges in partition_edges]
+    
+    assert len(reorder_partition_edges) == len(partition_edges)
+    for (edges, reorder_edges) in zip(partition_edges, reorder_partition_edges):
+        assert len(edges) == len(reorder_edges)
+        for e1, e2 in zip(edges, reorder_edges):
+            assert reorder_id[e1[0]] == e2[0] and reorder_id[e1[1]] == e2[1]
+        
+    # (dst,src) to (src,dst)
+    # whole dataset file
+    all_edges = get_all_edges(reorder_partition_edges)
+    swap_edges = torch.tensor(all_edges)[:,[1,0]].contiguous()
+    edge2bin(f'./{args.dataset}/reorder.edge.self' , swap_edges)
 
-    # edgelist
-    # write_to_file(pre_path + '.edgelist', edge_list, "%d")
+    # split dataset file
+    for partid, edges in enumerate(reorder_partition_edges):
+        swap_edges = torch.tensor(edges)[:,[1,0]].contiguous()
+        edge2bin(f'./{args.dataset}/split_edge/{partid}.edge.self' , swap_edges)
 
-    # edge_list binary format (gemini)
-    edge2bin(pre_path + '.edge', edge_list)
+    # partition info
+    with open(f'./{args.dataset}/split_edge/partition.info', 'w') as f:
+        for partid, nodes in enumerate(partition_nodes):
+            f.writelines(f'{partid} {nodes.size()[0]}\n')
 
-    # fetures
-    write_to_file(pre_path + '.feat', features, "%.4f", index=True)
+    # write mask
+    reorder_train_mask = torch.zeros_like(train_mask, dtype=torch.long)
+    reorder_val_mask = torch.zeros_like(val_mask, dtype=torch.long)
+    reorder_test_mask = torch.zeros_like(test_mask, dtype=torch.long)
+    for nodeId in range(node_num):
+        reorder_train_mask[reorder_id[nodeId]] = train_mask[nodeId]
+        reorder_val_mask[reorder_id[nodeId]] = val_mask[nodeId]
+        reorder_test_mask[reorder_id[nodeId]] = test_mask[nodeId]
+    assert reorder_train_mask.sum() == train_mask.sum()
+    assert reorder_val_mask.sum() == val_mask.sum()
+    assert reorder_test_mask.sum() == test_mask.sum()
+    write_to_mask(f'./{args.dataset}/reorder.mask', reorder_train_mask, reorder_val_mask, reorder_test_mask)
 
-    # label
-    if dataset in ['yelp', 'ppi', 'ppi-large', 'amazon']:
-        write_multi_class_to_file(pre_path + '.label', labels, "%d", index=True)
-    else:
-        write_to_file(pre_path + '.label', labels, "%d", index=True)
-
-    # mask
-    mask_list = []
-    for i in range(len(labels)):
-        if train_mask[i] == True:
-            mask_list.append('train')
-        elif val_mask[i] == True:
-            mask_list.append('val')
-        elif test_mask[i] == True:
-            mask_list.append('test')
-        else:
-            mask_list.append('unknown')
-    write_to_mask(pre_path + '.mask', mask_list)
+    # write faeture
+    out_features = torch.ones((node_num, feature_dim))
+    write_to_file(f'./{args.dataset}/reorder.featuretable', out_features, '%.2f', index=True)
+    
+    # write label
+    out_features = torch.ones(node_num)
+    write_to_file(f'./{args.dataset}/reorder.labeltable', out_features, '%.0f', index=True)
 
 
-# def show_time(func):
-#     def with_time(*args, **kwargs):
-#         time_cost = time.time()
-#         func(*args, **kwargs)
-#         time_cost = time.time() - time_cost
-#         name = args[0]
-#         print("write to {} is done, cost: {:.2f}s Throughput:{:.2f}MB/s".format(name, time_cost, os.path.getsize(name)/1024/1024/time_cost))
-#     return with_time
+def read_edgelist_from_file(filename):
+    assert os.path.exists(filename)
+    edgelist = []
+    with open(filename) as f:
+        # for line in f.readlines():
+            # print(line.strip('\n').split(' '), type(line.strip('\n')))
+            # for u in line.split(' '):
+            #     print(u, u)
+
+        # edgelist = [(int(u), int(v)) for line in f.readlines() for u,v in line.strip('\n').split(' ')]
+        edgelist = [tuple(int(x) for x in line.strip('\n').split(' '))  for line in f.readlines()]
+    return edgelist
+
+
+def partition_bug(partition_L, partition_nodes, partition_train_nodes, rowptr, col):
+    rowptr = rowptr.tolist()
+    col = col.tolist()
+    reorder_id, old_id = {}, {}
+    curr_id = 0
+    for nodes in partition_nodes:
+        for u in nodes.tolist():
+            reorder_id[u] = curr_id
+            old_id[curr_id] = u
+            if (curr_id == 32416):
+                print('32416!')
+            curr_id += 1
+    assert len(old_id) == len(reorder_id) == curr_id == sum([len(nodes) for nodes in partition_nodes])
+
+
+    # layer0
+    layer0_train_nodes = partition_train_nodes[0].tolist()
+    part0_layer0_neighbor = "/home/yuanh/NtsMinibatch_fzb/reordergraph/test/partition0_layer_0_full_neighbor.txt"
+    part0_layer0_edges = read_edgelist_from_file(part0_layer0_neighbor)
+    print('part0_layer0_edges:', len(part0_layer0_edges))
+    part0_layer0_edges = [(old_id[u], old_id[v]) for u,v in part0_layer0_edges]
+    
+
+    dgl_part0_layer0_edges = partition_L[0][0]
+    print('dgl_part0_layer0_edges:', len(dgl_part0_layer0_edges))
+    
+
+    # check layer0 dst nodes
+    dst_nodes = set([u for u,_ in part0_layer0_edges])
+    src_nodes = set([v for _,v in part0_layer0_edges])
+    
+    dgl_dst_nodes = set([u for u,_ in dgl_part0_layer0_edges])
+    dgl_src_nodes = set([v for _,v in dgl_part0_layer0_edges])
+    # print('layer0_train_nodes:', len(set(layer0_train_nodes)))
+    # print('layer0 dst:', len(dst_nodes), len(dgl_dst_nodes))
+    # print('dgl dst not in train nodes', len(dgl_dst_nodes - set(layer0_train_nodes)))
+    assert set(layer0_train_nodes) == dgl_dst_nodes == dst_nodes
+    # print('dst_nodes', dst_nodes)
+    print('layer0 src:', len(src_nodes), len(dgl_src_nodes))
+    assert src_nodes == dgl_src_nodes
+    print('layer0 dst node:', len(dst_nodes), len(dgl_dst_nodes))
+    print('layer0 src node:', len(src_nodes), len(dgl_src_nodes))
+
+    # layer1
+    part0_layer1_neighbor = "/home/yuanh/NtsMinibatch_fzb/reordergraph/test/partition0_layer_1_full_neighbor.txt"
+    part0_layer1_edges = read_edgelist_from_file(part0_layer1_neighbor)
+    part0_layer1_edges = [(old_id[u], old_id[v]) for u,v in part0_layer1_edges]
+    print('part0_layer1_edges:', len(part0_layer1_edges))
+
+    dgl_part0_layer1_edges = partition_L[0][1]
+    print('dgl_part0_layer1_edges:', len(dgl_part0_layer1_edges))
+
+    # check layer1 dst nodes
+    laye1_dst_nodes = set([u for u,_ in part0_layer1_edges])
+    laye1_src_nodes = set([v for _,v in part0_layer1_edges])
+    
+    laye1_dgl_dst_nodes = set([u for u,_ in dgl_part0_layer1_edges])
+    laye1_dgl_src_nodes = set([v for _,v in dgl_part0_layer1_edges])
+
+    print('layer1 dst node:', len(laye1_dst_nodes), len(laye1_dgl_dst_nodes))
+    print('layer1 src node:', len(laye1_src_nodes), len(laye1_dgl_src_nodes))
+    miss_nodes = [reorder_id[x] for x in src_nodes - laye1_dst_nodes]
+    # print(miss_nodes)
+    assert laye1_dst_nodes == laye1_dgl_dst_nodes
+    assert laye1_src_nodes == laye1_dgl_src_nodes
+
+
 
 def show_time(func):
     @wraps(func)
@@ -335,6 +431,7 @@ def show_time(func):
 
 @show_time
 def edge2bin(name, edges):
+    create_dir(os.path.dirname(name))
     edges = edges.flatten()
     with open(name, 'wb') as f:
         buf = [int(edge).to_bytes(4, byteorder=sys.byteorder) for edge in edges]
@@ -342,10 +439,22 @@ def edge2bin(name, edges):
 
 
 @show_time
-def write_to_mask(name, data):
+def write_to_mask(name, train_mask, val_mask, test_mask):
+    train_mask = train_mask.tolist()
+    val_mask = val_mask.tolist()
+    test_mask = test_mask.tolist()
+    create_dir(os.path.dirname(name))
     with open(name, 'w') as f:
-        for i, node_type in enumerate(data):
-            f.write(str(i) + ' ' + node_type + '\n')
+        for nodeId in range(len(train_mask)):
+            # if train_mask[i]:
+            node_type = 'unknown'
+            if train_mask[nodeId] == 1:
+                node_type = 'train'
+            elif val_mask[nodeId] == 1:
+                node_type = 'val'
+            elif test_mask[nodeId] == 1:
+                node_type = 'test'
+            f.write(str(nodeId) + ' ' + node_type + '\n')
 
 
 @show_time
