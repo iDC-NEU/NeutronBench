@@ -1,25 +1,27 @@
-from ogb.nodeproppred import DglNodePropPredDataset
-from dgl.data import AmazonCoBuyComputerDataset, AmazonCoBuyPhotoDataset
-from dgl.data import CoraFullDataset, CoauthorCSDataset, CoauthorPhysicsDataset
-from dgl.data import register_data_args, load_data
-from dgl import DGLGraph
-import dgl
-import scipy.sparse as sp
-import json
-import torch.nn.functional as F
-import torch
-import time
-import networkx as nx
-import numpy as np
-import argparse
-import sys
-from functools import wraps
-import dgl.sparse as dglsp
-import torch_metis as metis
 import os
 os.environ["METIS_DLL"] = "/home/yuanh/METIS-GKlib/build/lib/libmetis.so"
 os.environ["METIS_IDXTYPEWIDTH"] = "64"
 os.environ["METIS_REALTYPEWIDTH"] = "64"
+from functools import wraps
+import sys
+import argparse
+import numpy as np
+import networkx as nx
+import time
+import torch
+import torch.nn.functional as F
+import json
+import scipy.sparse as sp
+import dgl
+import dgl.sparse as dglsp
+from dgl import DGLGraph
+from dgl.data import register_data_args, load_data
+from dgl.data import CoraFullDataset, CoauthorCSDataset, CoauthorPhysicsDataset
+from dgl.data import AmazonCoBuyComputerDataset, AmazonCoBuyPhotoDataset
+from ogb.nodeproppred import DglNodePropPredDataset
+
+import torch_metis as metis
+
 
 
 def extract_dataset(args):
@@ -581,7 +583,7 @@ def get_partition_label_nodes(partition_nodes, label_mask):
 
 
 @show_time
-def get_partition_edges(partition_nodes, rowptr, col, edge_nums):
+def get_partition_edges(partition_nodes, rowptr, col, edge_nums=None):
     # (dst, src)
     rowptr = rowptr.tolist()
     col = col.tolist()
@@ -681,7 +683,7 @@ def dgl_sample_L_hop_edges(graph, nodes, batch_size, fanout):
 def get_dgl_L_hop_edges(graph, partition_nodes, fanout):
     partition_L_hop_edges = []
     for nodes in partition_nodes:
-        batch_size = nodes.size()[0]
+        batch_size = nodes.shape[0]
         dgl_L_hop_edges = dgl_sample_L_hop_edges(
             graph, nodes, batch_size, fanout)[0]
         partition_L_hop_edges.append(dgl_L_hop_edges)
@@ -702,7 +704,7 @@ def get_all_edges(partition_edges):
 
 
 @show_time
-def get_metis_cross_partition_edges(partition_nodes, partition_edges):
+def get_partition_cross_edges(partition_nodes, partition_edges):
     assert len(partition_nodes) == len(partition_edges)
     partition_num = len(partition_nodes)
     cross_partition_edges = []
@@ -717,7 +719,7 @@ def get_metis_cross_partition_edges(partition_nodes, partition_edges):
 
 
 @show_time
-def get_cross_partition_edges(partition_nodes, L_hop_edges):
+def get_L_hop_cross_edges(partition_nodes, L_hop_edges):
     # return [[local edges, remote edges], ...]
     assert len(partition_nodes) == len(L_hop_edges)
     partition_num = len(partition_nodes)
@@ -743,6 +745,170 @@ def check_two_L_hop(partition_X, partition_Y):
             assert set(layerx) == set(layery)
 
 
+# metis partition
+# TODO(sanzo): 1d,2d,3d,4d
+def metis_partition_graph(num_parts, rowptr, col, train_mask, val_mask, test_mask):
+    nodew_dim = 4
+    edge_weights = torch.ones_like(
+        col, dtype=torch.long, memory_format=torch.legacy_contiguous_format).share_memory_()
+    node_weights = get_4d_node_weights(train_mask, val_mask, test_mask, rowptr)
+
+    # node_weights = get_1d_node_weights(train_mask)
+    # nodew_dim=1
+    parts = metis_partition(rowptr, col, node_weights, edge_weights,
+                            nodew_dim=nodew_dim, num_parts=num_parts)
+
+    # 每个分区node, train_nodes, val_nodes, test_nodes
+    partition_nodes = get_partition_nodes(parts)
+    partition_train_nodes = get_partition_label_nodes(
+        partition_nodes, train_mask)
+    partition_val_nodes = get_partition_label_nodes(partition_nodes, val_mask)
+    partition_test_nodes = get_partition_label_nodes(
+        partition_nodes, test_mask)
+
+    # 每个分区包含的边[[], []]
+    partition_edges = get_partition_edges(partition_nodes, rowptr, col)
+    partition_edge_nums = [len(_) for _ in partition_edges]
+    # print('partition_edge_nums:', partition_edge_nums,
+    #       'all_partition_edge_nums:', sum(partition_edge_nums))
+
+    # label distribution
+    show_label_distributed(parts, train_mask, val_mask, test_mask)
+
+    return (partition_nodes, partition_edges, partition_train_nodes, partition_val_nodes, partition_test_nodes)
+
+
+# TODO(sanzo): use scipy scs_adj to instead (rowptr, col)
+# def in_neighbors(csc_adj, nid):
+#   return csc_adj.indices[csc_adj.indptr[nid]: csc_adj.indptr[nid+1]]
+
+def in_neighbors(rowptr, col, nid):
+    return col[rowptr[nid]: rowptr[nid + 1]].tolist()
+
+
+def in_neighbors_hop(rowptr, col, nid, hops):
+    if hops == 1:
+        return in_neighbors(rowptr, col, nid)
+    else:
+        nids = []
+        for depth in range(hops):
+            neighs = nids[-1] if len(nids) != 0 else [nid]
+            # print('neighs', neighs)
+            in_neighs = []
+            for n in neighs:
+                in_neighs += in_neighbors(rowptr, col, n)
+            nids.append(in_neighs)
+            # print('nids', nids)
+        return np.unique(np.hstack(nids))
+
+
+
+def pagraph_partition_score(rowptr, col, neighbors, belongs, p_vnum, r_vnum, pnum, train_nums):
+    """
+    Params:
+      neighbor: in-neighbor vertex set
+      belongs: np array, each vertex belongings to which partition
+      p_vnum: np array, each partition total vertex w/o. redundancy
+      r_vnum: np array, each partition total vertex w/. redundancy
+      pnum: partition number
+    """
+    com_neighbor = np.ones(pnum, dtype=np.int64)
+    score = np.zeros(pnum, dtype=np.float32)
+    # count belonged vertex
+    neighbor_belong = belongs[neighbors]
+    belonged = neighbor_belong[np.where(neighbor_belong != -1)]
+    pid, freq = np.unique(belonged, return_counts=True)
+    com_neighbor[pid] += freq
+    avg_num = train_nums / pnum  # need modify to match the train vertex num
+    score = com_neighbor * (-p_vnum + avg_num) / (r_vnum + 1)
+    return score
+
+
+def partition_partition_max_score(score, p_vnum):
+    ids = np.argsort(score)[-2:]
+    if score[ids[0]] != score[ids[1]]:
+        return ids[1]
+    else:
+        return ids[0] if p_vnum[ids[0]] < p_vnum[ids[1]] else ids[1]
+
+
+def pagraph_partition(num_parts, hops, rowptr, col, train_mask):
+    print("######## pargraph partition function #########")
+    train_nids = torch.where(train_mask == 1)[0]
+    assert train_nids.shape[0] == train_mask.sum()
+    vnum = rowptr.shape[0] - 1
+    vtrain_num = train_nids.shape[0]
+    print('total vertices: {} | train vertices: {}'.format(vnum, vtrain_num))
+
+    belongs = -np.ones(vnum, dtype=np.int8)
+    r_belongs = [-np.ones(vnum, dtype=np.int8) for _ in range(num_parts)]
+    p_vnum = np.zeros(num_parts, dtype=np.int64)
+    r_vnum = np.zeros(num_parts, dtype=np.int64)
+
+    progress = 0
+    for step, nid in enumerate(train_nids):
+        # neighbors = in_neighbors(csc_adj, nid)
+        neighbors = in_neighbors_hop(rowptr, col, nid, hops)
+        # print('\n############################')
+        # print('nid', nid)
+        # print('neighbor', neighbors, type(neighbors))
+        # print('belongs', belongs)
+        # print('p_vnum', p_vnum)
+        # print('r_vnum', r_vnum)
+        score = pagraph_partition_score(
+            rowptr, col, neighbors, belongs, p_vnum, r_vnum, num_parts, train_nids.shape[0])
+        # print(score)
+        ind = partition_partition_max_score(score, p_vnum)
+        # print('score', score)
+        # print('ind', ind)
+        # print('############################')
+        if belongs[nid] == -1:
+            belongs[nid] = ind
+            p_vnum[ind] += 1
+            neighbors = np.append(neighbors, nid)
+            for neigh_nid in neighbors:
+                if r_belongs[ind][neigh_nid] == -1:
+                    r_belongs[ind][neigh_nid] = 1
+                    r_vnum[ind] += 1
+
+        # progress
+        if int(vtrain_num * progress / 100) <= step:
+            #   sys.stdout.write('=>{}%\r'.format(progress))
+            sys.stdout.write('{}>{}%\r'.format('=' * progress, progress))
+            sys.stdout.flush()
+            progress += 1
+
+    assert np.where(belongs != -1)[0].shape[0] == train_nids.shape[0]
+
+    sub_v = []
+    sub_trainv = []
+    for pid in range(num_parts):
+        p_trainids = np.where(belongs == pid)[0]
+        sub_trainv.append(p_trainids)
+        p_v = np.where(r_belongs[pid] != -1)[0]
+        sub_v.append(p_v)
+        assert p_v.shape[0] == r_vnum[pid]
+        print('partition', pid, 'vertex# with self-reliance: ',
+              r_vnum[pid], 'w/o  self-reliance: ', p_vnum[pid])
+        # print('orginal vertex: ', np.where(belongs == pid)[0])
+        # print('redundancy vertex: ', np.where(r_belongs[pid] != -1)[0])
+    return sub_v, sub_trainv
+
+
+
+def pagraph_partition_graph(num_parts, num_hops, graph, rowptr, col, train_mask, val_mask, test_mask):
+    partition_nodes, partition_train_nodes = pagraph_partition(
+        num_parts, num_hops, rowptr, col, train_mask)
+    print('pargraph: partition_train_nodes', [_.shape[0] for _ in partition_train_nodes])
+    print('pargraph: partition_nodes', [_.shape[0] for _ in partition_nodes])
+    partition_edges = get_partition_edges(partition_nodes, rowptr, col)
+    # train_L_hop_edges = get_dgl_L_hop_edges(graph, partition_train_nodes, [-1, -1])
+    # print('train_L_hop_edges', len(train_L_hop_edges), len(train_L_hop_edges[0]))
+    print('pargraph: partition_edges', [len(edges) for edges in partition_edges])
+    return (partition_nodes, partition_edges, partition_train_nodes)
+
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Generate Dataset')
     parser.add_argument("--dataset", type=str, default="cora",
@@ -751,6 +917,8 @@ if __name__ == '__main__':
                         help="insert self-loop (default=True)")
     parser.add_argument(
         "--num_parts", help="Number of partitions to generate", type=int, required=True)
+    parser.add_argument(
+        "--num_hops", help="Number of layer in GNN for PaGraph partition", type=int, default=2)
 
     args = parser.parse_args()
 
@@ -771,72 +939,41 @@ if __name__ == '__main__':
     indices = torch.tensor([src_nodes, dst_nodes])
     rowptr, col, value = dglsp.spmatrix(indices).csc()
 
-    # metis partition
-    edge_weights = torch.ones_like(
-        col, dtype=torch.long, memory_format=torch.legacy_contiguous_format).share_memory_()
-    node_weights = get_4d_node_weights(train_mask, val_mask, test_mask, rowptr)
-    nodew_dim = 4
+    # metis partition result
+    # partition_nodes, partition_edges, partition_train_nodes, partition_val_nodes, partition_test_nodes = metis_partition_graph(
+    #     args.num_parts, rowptr, col, train_mask, val_mask, test_mask)
 
-    # node_weights = get_1d_node_weights(train_mask)
-    # nodew_dim=1
-    parts = metis_partition(rowptr, col, node_weights, edge_weights,
-                            nodew_dim=nodew_dim, num_parts=args.num_parts)
+    partition_nodes, partition_edges, partition_train_nodes = pagraph_partition_graph(
+        args.num_parts, args.num_hops, graph, rowptr, col, train_mask, val_mask, test_mask)
+    
 
-    # label distribution
-    show_label_distributed(parts, train_mask, val_mask, test_mask)
-
-    # 每个分区node, train_nodes, val_nodes, test_nodes
-    partition_nodes = get_partition_nodes(parts)
-    partition_train_nodes = get_partition_label_nodes(
-        partition_nodes, train_mask)
-    partition_val_nodes = get_partition_label_nodes(partition_nodes, val_mask)
-    partition_test_nodes = get_partition_label_nodes(
-        partition_nodes, test_mask)
-
-    # 每个分区包含的边[[], []]
-    partition_edges = get_partition_edges(
-        partition_nodes, rowptr, col, edge_nums)
-    partition_edge_nums = [len(_) for _ in partition_edges]
-    print('partition_edge_nums:', partition_edge_nums,
-          'all_partition_edge_nums:', sum(partition_edge_nums))
-
-    metis_cross_partition_edges = get_metis_cross_partition_edges(
-        partition_nodes, partition_edges)
+    metis_cross_partition_edges = get_partition_cross_edges(partition_nodes, partition_edges)
     metis_cross_prtitiion_edge_ratio = [round(
         remote_edges / local_edges, 2) for (local_edges, remote_edges) in metis_cross_partition_edges]
-    print('metis_cross_partition_edge_ratio:',
-          metis_cross_prtitiion_edge_ratio)
+    print('cross_partition_edge_ratio:', metis_cross_prtitiion_edge_ratio)
 
     # generate_nts_dataset(partition_nodes, partition_edges, node_nums, features.size()[1])
-    # assert False
 
     # get L-hop full neighbor (csc)
     partition_L_hop_edges = get_L_hop_edges(partition_train_nodes, rowptr, col)
-    partition_L_hop_train_edge_nums = []
-    for L_hop in partition_L_hop_edges:
-        nums = 0
-        for layer in L_hop:
-            nums += len(layer)
-        partition_L_hop_train_edge_nums.append(nums)
-    print('partition_L_hop_train_edge_nums:', partition_L_hop_train_edge_nums,
-          'all L_hop_train_edge nums:', sum(partition_L_hop_train_edge_nums))
     for i, L_hop in enumerate(partition_L_hop_edges):
         layer_edge_num = [len(layer) for layer in L_hop]
         print('(csc) partition', i, 'layer edge num', layer_edge_num)
+    print('partition_L_hopp', [sum([len(hop_edges) for hop_edges in part]) for part in partition_L_hop_edges])
+    
 
     # get L-hop full neighbor (dgl)
     partition_dgl_sample_L_hop_edges = get_dgl_L_hop_edges(
         graph, partition_train_nodes, [-1, -1])
-    partition_dgl_L_hop_train_edge_nums = []
     for i, L_hop in enumerate(partition_dgl_sample_L_hop_edges):
         layer_edge_num = [len(layer) for layer in L_hop]
         print('(dgl) partition', i, 'layer edge num', layer_edge_num)
-        partition_dgl_L_hop_train_edge_nums.append(sum(layer_edge_num))
-    print('partition_dgl_L_hop_train_edge_nums:', partition_dgl_L_hop_train_edge_nums,
-          'all L_hop_train_edge nums:', sum(partition_dgl_L_hop_train_edge_nums))
+    print('partition_L_hopp', [sum([len(hop_edges) for hop_edges in part]) for part in partition_dgl_sample_L_hop_edges])
 
     # check dlg full neighbor sample
     check_two_L_hop(partition_dgl_sample_L_hop_edges, partition_L_hop_edges)
+
+    assert False
 
     # partition_bug(partition_dgl_sample_L_hop_edges, partition_nodes, partition_train_nodes)
     # partition_bug(partition_L_hop_edges, partition_nodes, partition_train_nodes, rowptr, col)
@@ -846,9 +983,9 @@ if __name__ == '__main__':
     # 远程点：全部点
     all_edges = get_all_edges(partition_edges)
     print('all_edges', len(all_edges))
-    # cross_partition_edges = get_cross_partition_edges(partition_nodes, partition_L_hop_edges)
+    # cross_partition_edges = get_L_hop_cross_edges(partition_nodes, partition_L_hop_edges)
     # corss_prtitiion_edge_ratio = [round(remote_edges / local_edges, 2) for (local_edges, remote_edges) in cross_partition_edges]
-    cross_partition_edges = get_cross_partition_edges(
+    cross_partition_edges = get_L_hop_cross_edges(
         partition_nodes, partition_dgl_sample_L_hop_edges)
     corss_prtitiion_edge_ratio = [round(remote_edges / local_edges, 2)
                                   for (local_edges, remote_edges) in cross_partition_edges]
