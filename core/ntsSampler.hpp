@@ -733,7 +733,7 @@ class Sampler {
             auto whole_offset = whole_graph->column_offset;
             auto whole_indices = whole_graph->row_indices;
             VertexId edge_nums = whole_offset[dst + 1] - whole_offset[dst];
-            fanout_i = column_offset[id + 1] - column_offset[id];
+            // fanout_i = column_offset[id + 1] - column_offset[id];
 
             if (whole_graph->graph_->config->sample_rate > 0) {
               VertexId tmp_fanout = std::max(whole_graph->graph_->config->lower_fanout,
@@ -745,7 +745,7 @@ class Sampler {
             VertexId actl_fanout = min(fanout_i, edge_nums);
             assert(column_offset[id + 1] - column_offset[id] == actl_fanout);
 
-            std::vector<size_t> sorted_idxs;
+            // std::vector<size_t> sorted_idxs;
             // double random_time = -get_time();
             // sorted_idxs.reserve(fanout_i);
             // RandomSample(edge_nums, fanout_i, sorted_idxs);
@@ -775,12 +775,12 @@ class Sampler {
 
             ///////////// no sorted_idxs copy //////////////////
             int pos = column_offset[id];
-            if (edge_nums < fanout_i) {
+            if (fanout_i < edge_nums) {
               std::unordered_set<size_t> sampled_idxs;
-              while (sampled_idxs.size() < edge_nums) {
+              while (sampled_idxs.size() < fanout_i) {
                 // sampled_idxs.insert(rand_int(fanout_i));
                 // sampled_idxs.insert(rand_int_seed(fanout_i));
-                sampled_idxs.insert(random_uniform_int(0, fanout_i - 1));
+                sampled_idxs.insert(random_uniform_int(0, edge_nums - 1));
               }
 
               for (auto& idx : sampled_idxs) {
@@ -790,7 +790,7 @@ class Sampler {
 
               // sorted_idxs.insert(sorted_idxs.end(), sampled_idxs.begin(), sampled_idxs.end());
             } else {
-              for (size_t i = 0; i < fanout_i; ++i) {
+              for (size_t i = 0; i < edge_nums; ++i) {
                 // sorted_idxs.push_back(i);
 
                 row_indices[pos++] = whole_indices[whole_offset[dst] + i];
