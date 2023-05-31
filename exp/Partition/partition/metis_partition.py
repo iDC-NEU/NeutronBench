@@ -1,5 +1,5 @@
 import os
-os.environ["METIS_DLL"] = "/home/yuanh/METIS-GKlib/build/lib/libmetis.so"
+os.environ["METIS_DLL"] = "../pkgs/lib/libmetis.so"
 os.environ["METIS_IDXTYPEWIDTH"] = "64"
 os.environ["METIS_REALTYPEWIDTH"] = "64"
 os.environ["OMP_NUM_THREADS"] = "1"
