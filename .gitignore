@@ -33,7 +33,7 @@ tmp/
 
 # ignore exp
 exp/
-
+!exp/partition/
 
 # config files
 node_modules/
