@@ -81,20 +81,5 @@ def metis_partition_graph(num_parts, rowptr, col, train_mask, val_mask, test_mas
 
     parts = metis_partition(rowptr, col, node_weights, edge_weights,
                             nodew_dim=node_weight_dim, num_parts=num_parts)
-    print()
-
-    # 每个分区node, train_nodes, val_nodes, test_nodes
-    partition_nodes = get_partition_nodes(parts, num_parts)
-    partition_train_nodes = get_partition_label_nodes(partition_nodes, train_mask)
-    partition_val_nodes = get_partition_label_nodes(partition_nodes, val_mask)
-    partition_test_nodes = get_partition_label_nodes(partition_nodes, test_mask)
-
-    # 每个分区包含的边[[], []]
-    partition_edges = get_partition_edges(partition_nodes, rowptr, col)
-    print('metis partition nodes:', [len(_) for _ in partition_nodes])
-    print('metis partition edges:', [len(_) for _ in partition_edges])
-    show_label_distributed(parts, train_mask, val_mask, test_mask)
-
-    return (partition_nodes, partition_edges, partition_train_nodes, partition_val_nodes, partition_test_nodes)
-
-
+    
+    return parts

@@ -5,6 +5,7 @@ import torch
 import dgl
 import dgl.sparse as dglsp
 import scipy.sparse as spsp
+import os
 
 import sys
 sys.path.append('..')
@@ -14,6 +15,10 @@ from partition.utils import extract_dataset
 from partition.utils import setup_seed
 from partition.utils import generate_nts_dataset
 from partition.utils import get_all_edges
+from partition.utils import get_partition_result
+from partition.utils import show_label_distributed
+
+
 
 from partition.metis_partition import metis_partition_graph
 
@@ -504,8 +509,20 @@ if __name__ == '__main__':
     # exit(1)
 
     # metis partition result
-    partition_nodes, partition_edges, partition_train_nodes, partition_val_nodes, partition_test_nodes = metis_partition_graph(
-        args.num_parts, rowptr, col, train_mask, val_mask, test_mask, node_weight_dim=4)
+
+    save_metis_partition_result = f'/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/metis-{args.dataset}-dim{4}.pt'
+    if os.path.exists(save_metis_partition_result):
+        print(f'read from partition result {save_metis_partition_result}.')
+        parts = torch.load(save_metis_partition_result)
+    else:
+        parts = metis_partition_graph(args.num_parts, rowptr, col, train_mask, val_mask, test_mask, node_weight_dim=4)
+        torch.save(parts, save_metis_partition_result)
+        print(f'save partition result to {save_metis_partition_result}.')
+
+    
+
+    
+    partition_nodes, partition_edges, partition_train_nodes, partition_val_nodes, partition_test_nodes = get_partition_result(parts, rowptr, col, args.num_parts, train_mask, val_mask, test_mask)
 
     # partition_nodes, partition_edges, partition_train_nodes = pagraph_partition_graph(
     #     args.num_parts, args.num_hops, graph, rowptr, col, train_mask, val_mask, test_mask)
