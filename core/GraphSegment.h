@@ -189,6 +189,7 @@ class InputInfo {
 
   // algorithm related:
   VertexId batch_size;
+  VertexId val_batch_size;
   ValueType learn_rate;
   ValueType weight_decay;
   ValueType decay_rate;
