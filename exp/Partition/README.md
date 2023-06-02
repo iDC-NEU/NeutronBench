@@ -38,6 +38,6 @@ cd ..
 
 ```bash
 cd partition
-python python main.py --dataset ogbn-arxiv --num_parts 4 --fanout 10 25 --batch_size 6000
+python main.py --dataset ogbn-arxiv --num_parts 4 --fanout 10 25 --batch_size 6000
 
 ```
