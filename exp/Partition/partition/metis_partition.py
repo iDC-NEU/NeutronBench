@@ -16,6 +16,7 @@ from partition.utils import get_partition_label_nodes
 from partition.utils import show_label_distributed
 from partition.utils import get_partition_nodes
 from partition.utils import get_partition_edges
+from partition.utils import get_partition_result
 
 
 def get_1d_node_weights(train_mask):
@@ -65,21 +66,24 @@ def metis_partition(rowptr, col, node_weights, edge_weights, nodew_dim=1, num_pa
 # metis partition
 # TODO(sanzo): 1d,2d,3d,4d
 @show_time
-def metis_partition_graph(num_parts, rowptr, col, train_mask, val_mask, test_mask, node_weight_dim=1):
+def metis_partition_graph(dataset, num_parts, rowptr, col, train_mask, val_mask, test_mask, node_weight_dim=1):
     print("\n######## metis_partition_graph #########")
-    edge_weights = torch.ones_like(
-        col, dtype=torch.long, memory_format=torch.legacy_contiguous_format).share_memory_()
-    
-    if node_weight_dim == 4:
-        node_weights = get_4d_node_weights(train_mask, val_mask, test_mask, rowptr)
-    elif node_weight_dim == 2:
-        node_weights = get_2d_node_weights(train_mask, rowptr)
-    elif node_weight_dim == 1:
-        node_weights = get_1d_node_weights(train_mask)
-    else:
-        assert False
 
-    parts = metis_partition(rowptr, col, node_weights, edge_weights,
-                            nodew_dim=node_weight_dim, num_parts=num_parts)
-    
+    save_metis_partition_result = f'/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/metis-{dataset}-dim{node_weight_dim}.pt'
+    if os.path.exists(save_metis_partition_result):
+        print(f'read from partition result {save_metis_partition_result}.')
+        parts = torch.load(save_metis_partition_result)
+    else:
+        edge_weights = torch.ones_like(col, dtype=torch.long, memory_format=torch.legacy_contiguous_format).share_memory_()
+        if node_weight_dim == 4:
+            node_weights = get_4d_node_weights(train_mask, val_mask, test_mask, rowptr)
+        elif node_weight_dim == 2:
+            node_weights = get_2d_node_weights(train_mask, rowptr)
+        elif node_weight_dim == 1:
+            node_weights = get_1d_node_weights(train_mask)
+        else:
+            assert False
+        parts = metis_partition(rowptr, col, node_weights, edge_weights, nodew_dim=node_weight_dim, num_parts=num_parts)
+        torch.save(parts, save_metis_partition_result)
+        print(f'save partition result to {save_metis_partition_result}.')
     return parts

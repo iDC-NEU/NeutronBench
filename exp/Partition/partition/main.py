@@ -278,30 +278,32 @@ def statistic_info(graph, partition_nodes, partition_edges, partition_train_node
 
 
 @show_time
-def exp01_metis_pagraph_l_hop_cross_edges(graph, num_parts, batch_size, fanout, rowptr, col, train_mask, val_mask, test_mask):
+def exp01_metis_pagraph_l_hop_cross_edges(dataset, graph, num_parts, batch_size, fanout, rowptr, col, train_mask, val_mask, test_mask):
 
-    # # metis return:  partition_nodes, partition_edges, partition_train_nodes, partition_val_nodes, partition_test_nodes
-    # print("\n############ metis node_dim1 (train) ############")
-    # node_dim1_result = metis_partition_graph(
-    #     num_parts, rowptr, col, train_mask, val_mask, test_mask, node_weight_dim=1)
-    # statistic_info(graph, node_dim1_result[0], node_dim1_result[1], node_dim1_result[2], rowptr, col, batch_size, fanout)
+    # metis return:  partition_nodes, partition_edges, partition_train_nodes, partition_val_nodes, partition_test_nodes
+    print("\n############ metis node_dim1 (train) ############")
+    
+    parts = metis_partition_graph(dataset, num_parts, rowptr, col, train_mask, val_mask, test_mask, node_weight_dim=1)
+    node_dim1_result = get_partition_result(parts, rowptr, col, num_parts, train_mask, val_mask, test_mask)    
+    statistic_info(graph, node_dim1_result[0], node_dim1_result[1], node_dim1_result[2], rowptr, col, batch_size, fanout)
 
+    print("\n############ metis node_dim2 (train degree) ############")
+    
+    parts = metis_partition_graph(dataset, num_parts, rowptr, col, train_mask, val_mask, test_mask, node_weight_dim=2)
+    node_dim2_result = get_partition_result(parts, rowptr, col, num_parts, train_mask, val_mask, test_mask)    
+    statistic_info(graph, node_dim2_result[0], node_dim2_result[1], node_dim2_result[2], rowptr, col, batch_size, fanout)    
 
-    # print("\n############ metis node_dim2 (train degree) ############")
-    # node_dim2_result = metis_partition_graph(
-    #     num_parts, rowptr, col, train_mask, val_mask, test_mask, node_weight_dim=2)
-    # statistic_info(graph, node_dim2_result[0], node_dim2_result[1], node_dim2_result[2], rowptr, col, batch_size, fanout)    
-
-    # print("\n############ metis node_dim4 (train val test degrees) ############")
-    # node_dim4_result = metis_partition_graph(
-    #     num_parts, rowptr, col, train_mask, val_mask, test_mask, node_weight_dim=4)
-    # statistic_info(graph, node_dim4_result[0], node_dim4_result[1], node_dim4_result[2], rowptr, col, batch_size, fanout)
+    print("\n############ metis node_dim4 (train val test degrees) ############")
+    
+    parts = metis_partition_graph(dataset, num_parts, rowptr, col, train_mask, val_mask, test_mask, node_weight_dim=4)
+    node_dim4_result = get_partition_result(parts, rowptr, col, num_parts, train_mask, val_mask, test_mask)    
+    statistic_info(graph, node_dim4_result[0], node_dim4_result[1], node_dim4_result[2], rowptr, col, batch_size, fanout)
 
     # pargraph return: partition_nodes, partition_edges, partition_train_nodes
-    print("\n############ pagraph ############")
-    pargraph_result = pagraph_partition_graph(
-        num_parts, args.num_hops, graph, rowptr, col, train_mask, val_mask, test_mask)
-    statistic_info(graph, pargraph_result[0], pargraph_result[1], pargraph_result[2], rowptr, col, batch_size, fanout)
+    # print("\n############ pagraph ############")
+    # pargraph_result = pagraph_partition_graph(
+    #     num_parts, args.num_hops, graph, rowptr, col, train_mask, val_mask, test_mask)
+    # statistic_info(graph, pargraph_result[0], pargraph_result[1], pargraph_result[2], rowptr, col, batch_size, fanout)
 
 
 def dep_cache_stastistic_info(partition_nodes, partition_dgl_L_hop_edges, hops):
@@ -492,9 +494,10 @@ if __name__ == '__main__':
     setup_seed(2000)
     # graph dataset
     edges_list, features, labels, train_mask, val_mask, test_mask, graph = extract_dataset(args)
-    train_mask = torch.tensor(train_mask, dtype=torch.long)
-    val_mask = torch.tensor(val_mask, dtype=torch.long)
-    test_mask = torch.tensor(test_mask, dtype=torch.long)
+    train_mask = train_mask.to(torch.long)
+    val_mask = val_mask.to(torch.long)
+    test_mask = test_mask.to(torch.long)
+
     node_nums = graph.number_of_nodes()
     edge_nums = graph.number_of_edges()
     src_nodes = edges_list[:, 0].tolist()
@@ -505,23 +508,12 @@ if __name__ == '__main__':
     rowptr, col, value = dglsp.spmatrix(indices).csc()
 
 
-    # exp01_metis_pagraph_l_hop_cross_edges(graph, args.num_parts, args.batch_size, args.fanout, rowptr, col, train_mask, val_mask, test_mask)
+    # exp01_metis_pagraph_l_hop_cross_edges(args.dataset, graph, args.num_parts, args.batch_size, args.fanout, rowptr, col, train_mask, val_mask, test_mask)
     # exit(1)
 
     # metis partition result
 
-    save_metis_partition_result = f'/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/metis-{args.dataset}-dim{4}.pt'
-    if os.path.exists(save_metis_partition_result):
-        print(f'read from partition result {save_metis_partition_result}.')
-        parts = torch.load(save_metis_partition_result)
-    else:
-        parts = metis_partition_graph(args.num_parts, rowptr, col, train_mask, val_mask, test_mask, node_weight_dim=4)
-        torch.save(parts, save_metis_partition_result)
-        print(f'save partition result to {save_metis_partition_result}.')
-
-    
-
-    
+    parts = metis_partition_graph(args.dataset, args.num_parts, rowptr, col, train_mask, val_mask, test_mask, node_weight_dim=4)
     partition_nodes, partition_edges, partition_train_nodes, partition_val_nodes, partition_test_nodes = get_partition_result(parts, rowptr, col, args.num_parts, train_mask, val_mask, test_mask)
 
     # partition_nodes, partition_edges, partition_train_nodes = pagraph_partition_graph(

@@ -230,11 +230,12 @@ def extract_dataset(args):
         split_idx = data.get_idx_split()
         train_nid, val_nid, test_nid = split_idx['train'], split_idx['valid'], split_idx['test']
         # print(len(train_nid) + len(val_nid) + len(test_nid))
-        train_mask = np.zeros(graph.number_of_nodes(), dtype=bool)
+        
+        train_mask = torch.zeros(graph.number_of_nodes(), dtype=bool)
         train_mask[train_nid] = True
-        val_mask = np.zeros(graph.number_of_nodes(), dtype=bool)
+        val_mask = torch.zeros(graph.number_of_nodes(), dtype=bool)
         val_mask[val_nid] = True
-        test_mask = np.zeros(graph.number_of_nodes(), dtype=bool)
+        test_mask = torch.zeros(graph.number_of_nodes(), dtype=bool)
         test_mask[test_nid] = True
 
         if args.self_loop:
