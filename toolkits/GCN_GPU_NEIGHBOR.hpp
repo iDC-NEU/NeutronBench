@@ -503,13 +503,13 @@ class GCN_GPU_NEIGHBOR_impl {
 
   void saveW() {
     for (int i = 0; i < layers; ++i) {
-      P[i]->save_W("/home/hdd/sanzo/neutron-sanzo/saved_modules", graph->config->dataset_name, i);
+      P[i]->save_W("/home/yuanh/neutron-sanzo/saved_modules", graph->config->dataset_name, i);
     }
   }
 
   void loadW() {
     for (int i = 0; i < layers; ++i) {
-      P[i]->load_W("/home/hdd/sanzo/neutron-sanzo/saved_modules", graph->config->dataset_name, i);
+      P[i]->load_W("/home/yuanh/neutron-sanzo/saved_modules", graph->config->dataset_name, i);
     }
   }
 
@@ -563,7 +563,10 @@ void count_sample_hop_nodes(Sampler* sampler) {
     }
     train_sampler = new Sampler(fully_rep_graph, train_nids);
     // train_sampler->show_fanout("train sampler");
-    eval_sampler = new Sampler(fully_rep_graph, val_nids, true);  // true mean full batch
+    // eval_sampler = new Sampler(fully_rep_graph, val_nids, true);  // true mean full batch
+    eval_sampler = new Sampler(fully_rep_graph, val_nids);  // true mean full batch
+    if (graph->config->val_batch_size == 0) graph->config->val_batch_size = graph->config->batch_size;
+    eval_sampler->update_batch_size(graph->config->val_batch_size);  // true mean full batch
     // eval_sampler->update_fanout(-1);        ÷            // val not sample
     eval_sampler->update_fanout(graph->gnnctx->val_fanout);  // val not sample
     // eval_sampler->show_fanout("val sampler");
@@ -612,6 +615,8 @@ void count_sample_hop_nodes(Sampler* sampler) {
       // update batch size should before Forward()
       if (graph->config->batch_switch_time > 0) {
         bool ret = train_sampler->update_batch_size_from_time(gcn_run_time);
+        if (ret) eval_sampler->update_batch_size(train_sampler->batch_size);
+
 
         // load best parameter
         if (ret && graph->config->best_parameter > 0) {
@@ -634,8 +639,8 @@ void count_sample_hop_nodes(Sampler* sampler) {
       if (graph->partition_id == 0) {
         LOG_INFO(
             "Epoch %03d train_loss %.3f train_acc %.3f val_loss %.3f val_acc %.3f (train_time %.3f val_time %.3f, "
-            "gcn_run_time %.3f)",
-            i_i, train_loss, train_acc, val_loss, val_acc, epoch_train_time, val_train_cost, gcn_run_time);
+            "gcn_run_time %.3f) batch_size (%d, %d)",
+            i_i, train_loss, train_acc, val_loss, val_acc, epoch_train_time, val_train_cost, gcn_run_time, train_sampler->batch_size, eval_sampler->batch_size);
       }
 
       if (val_acc > best_val_acc) {
@@ -649,10 +654,12 @@ void count_sample_hop_nodes(Sampler* sampler) {
       }
 
       if (graph->config->sample_switch_time > 0) {
-        train_sampler->update_sample_rate_from_time(gcn_run_time);
+        bool ret = train_sampler->update_sample_rate_from_time(gcn_run_time);
+        if (ret) eval_sampler->update_batch_size(train_sampler->batch_size);
       }
       if (graph->config->batch_switch_acc > 0) {
-        train_sampler->update_batch_size_from_acc(i_i, val_acc, gcn_run_time);
+        bool ret = train_sampler->update_batch_size_from_acc(i_i, val_acc, gcn_run_time);
+        if (ret) eval_sampler->update_batch_size(train_sampler->batch_size);
       }
     }
 

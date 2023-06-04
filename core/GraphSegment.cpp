@@ -254,6 +254,8 @@ void InputInfo::readFromCfgFile(std::string config_file) {
       this->drop_rate = std::atof(cfg_v.c_str());
     } else if (0 == cfg_k.compare("BATCH_SIZE")) {
       this->batch_size = std::atoi(cfg_v.c_str());
+    } else if (0 == cfg_k.compare("VALBATCH_SIZE")) {
+      this->val_batch_size = std::atoi(cfg_v.c_str());
     } else if (0 == cfg_k.compare("OPTIM_KERNEL")) {
       this->optim_kernel_enable = true;
       if (1 == std::atoi(cfg_v.c_str())) this->optim_kernel_enable = true;
@@ -376,6 +378,7 @@ void InputInfo::print() {
   std::cout << "fanout\t\t:\t" << fanout_string << std::endl;
   std::cout << "val_fanout\t:\t" << val_fanout_string << std::endl;
   std::cout << "batch_size\t:\t" << batch_size << std::endl;
+  std::cout << "val_batch_size\t:\t" << val_batch_size << std::endl;
   // std::cout << "batch_type\t\t:\t" << batch_type << std::endl;
   std::cout << "batch_type\t:\t";
   if (batch_type == SHUFFLE) {
