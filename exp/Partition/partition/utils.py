@@ -72,9 +72,9 @@ def show_label_distributed(parts, train_mask, val_mask, test_mask):
     train_idx = torch.nonzero(train_mask).view(-1)
     val_idx = torch.nonzero(val_mask).view(-1)
     test_idx = torch.nonzero(test_mask).view(-1)
-    print('train distributed:', torch.bincount(parts[train_idx]))
-    print('val distributed:', torch.bincount(parts[val_idx]))
-    print('test distributed:', torch.bincount(parts[test_idx]))
+    print('train distributed:', torch.bincount(parts[train_idx]).tolist())
+    print('val distributed:', torch.bincount(parts[val_idx]).tolist())
+    print('test distributed:', torch.bincount(parts[test_idx]).tolist())
 
 
 
@@ -178,14 +178,14 @@ def extract_dataset(args):
                       train_mask.sum(), val_mask.sum(), test_mask.sum()))
         return edges_list, features, labels, train_mask, val_mask, test_mask, graph
 
-    elif dataset in ['CoraFull', 'Coauthor_cs', 'Coauthor_physics', 'AmazonCoBuy_computers', 'AmazonCoBuy_photo']:
+    elif dataset in ['CoraFull', 'Coauthor_cs', 'Coauthor_physics', 'AmazonCoBuy_computers', 'AmazonCoBuy_photo', 'computer']:
         if dataset == 'CoraFull':
             data = CoraFullDataset()
         elif dataset == 'Coauthor_cs':
             data = CoauthorCSDataset('cs')
         elif dataset == 'Coauthor_physics':
             data = CoauthorPhysicsDataset('physics')
-        elif dataset == 'AmazonCoBuy_computers':
+        elif dataset == 'AmazonCoBuy_computers' or dataset == 'computer':
             data = AmazonCoBuyComputerDataset('computers')
         elif dataset == 'AmazonCoBuy_photo':
             data = AmazonCoBuyPhotoDataset('photo')

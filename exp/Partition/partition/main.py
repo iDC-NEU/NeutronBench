@@ -456,17 +456,17 @@ def dep_comm_stastistic_info(partition_nodes, partition_dgl_L_hop_edges, hops):
     # print('receive_sample_count', epoch_recv_sample_count)
 
     print('#### averge')
-    print('local_edges', np.average(epoch_local_edges, axis=0).tolist())
-    print('cross_edges', np.average(epoch_cross_edges, axis=0).tolist())
-    print('all_sample_count', np.average(epoch_all_sample_count, axis=0).tolist())
-    print('receive_sample_count', np.average(epoch_recv_sample_count, axis=0).tolist())
+    print('avg_local_edges', np.average(epoch_local_edges, axis=0).tolist())
+    print('avg_cross_edges', np.average(epoch_cross_edges, axis=0).tolist())
+    print('avg_all_sample_count', np.average(epoch_all_sample_count, axis=0).tolist())
+    print('avg_receive_sample_count', np.average(epoch_recv_sample_count, axis=0).tolist())
 
 
     print('#### sum')
-    print('local_edges', np.sum(epoch_local_edges, axis=0).tolist())
-    print('cross_edges', np.sum(epoch_cross_edges, axis=0).tolist())
-    print('all_sample_count', np.sum(epoch_all_sample_count, axis=0).tolist())
-    print('receive_sample_count', np.sum(epoch_recv_sample_count, axis=0).tolist())
+    print('sum_local_edges', np.sum(epoch_local_edges, axis=0).tolist())
+    print('sum_cross_edges', np.sum(epoch_cross_edges, axis=0).tolist())
+    print('sum_all_sample_count', np.sum(epoch_all_sample_count, axis=0).tolist())
+    print('sum_receive_sample_count', np.sum(epoch_recv_sample_count, axis=0).tolist())
 
     
 
@@ -485,6 +485,8 @@ if __name__ == '__main__':
     parser.add_argument("--fanout",
                         help="Training fanouts",
                         type=int, default=[10, 25], nargs="*", required=False)
+
+    parser.add_argument("--dim", help="metis dims", type=int, required=True)
 
     args = parser.parse_args()
     print(args)
@@ -513,7 +515,7 @@ if __name__ == '__main__':
 
     # metis partition result
 
-    parts = metis_partition_graph(args.dataset, args.num_parts, rowptr, col, train_mask, val_mask, test_mask, node_weight_dim=4)
+    parts = metis_partition_graph(args.dataset, args.num_parts, rowptr, col, train_mask, val_mask, test_mask, node_weight_dim=args.dim)
     partition_nodes, partition_edges, partition_train_nodes, partition_val_nodes, partition_test_nodes = get_partition_result(parts, rowptr, col, args.num_parts, train_mask, val_mask, test_mask)
 
     # partition_nodes, partition_edges, partition_train_nodes = pagraph_partition_graph(
