@@ -150,12 +150,12 @@ def different_optim_aix(datasets):
 
 
 def different_optim(datasets):
+  pass
   # datasets = ['lj-links',]
   # datasets = ['livejournal', 'lj-large', 'lj-links', 'enwiki-links']
   # datasets = ['europe_osm', 'ogbn-arxiv', 'reddit', 'ogbn-products', 'enwiki-links', 'livejournal', 'lj-large', 'lj-links']
   # datasets = ['ogbn-arxiv', 'reddit', 'ogbn-products', 'enwiki-links', 'livejournal', 'lj-large', 'lj-links']
-
-  for ds in datasets:
+  # for ds in datasets:
     # # explicit
     # cmd = new_command(ds, cache_type='none', cache_policy='none', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=1, MODE='explicit')
     # run(ds, cmd, './log/gpu-cache/explicit-shuffle')
@@ -458,7 +458,6 @@ if __name__ == '__main__':
   # expliict exp
   # datasets = ['ogbn-arxiv', 'ogbn-products', 'reddit', 'livejournal', 'lj-links', 'lj-large', 'enwiki-links']
   # datasets = ['reddit', 'livejournal', 'lj-links', 'lj-large', 'enwiki-links']
-  # different_optim(datasets)
   # draw_explicit_time(datasets)
 
 
