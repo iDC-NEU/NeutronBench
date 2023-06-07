@@ -4,6 +4,7 @@ os.environ["METIS_IDXTYPEWIDTH"] = "64"
 os.environ["METIS_REALTYPEWIDTH"] = "64"
 os.environ["OMP_NUM_THREADS"] = "1"
 import torch_metis as metis
+import numpy as np
 import torch
 import time
 # import sys, importlib
@@ -77,6 +78,14 @@ def metis_partition_graph(dataset, num_parts, rowptr, col, train_mask, val_mask,
         edge_weights = torch.ones_like(col, dtype=torch.long, memory_format=torch.legacy_contiguous_format).share_memory_()
         if node_weight_dim == 4:
             node_weights = get_4d_node_weights(train_mask, val_mask, test_mask, rowptr)
+            # tmp = node_weights.numpy().reshape((-1, 4))
+            # np.savetxt('arxiv-dim4.txt', tmp, fmt='%d')
+            # with  open('arxiv-dim4.txt', 'w') as f:
+            #     for i in range(tmp.shape[0]):
+            #         out = [str(x) for x in tmp[i].tolist()]
+            #         out = ' '.join(out)
+            #         f.write(f'id[{i}]weight: {out} \n', )
+            # exit (0)
         elif node_weight_dim == 2:
             node_weights = get_2d_node_weights(train_mask, rowptr)
         elif node_weight_dim == 1:

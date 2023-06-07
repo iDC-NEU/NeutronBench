@@ -398,7 +398,7 @@ def remask(node_num, mask_rate=None):
 
 
 def generate_nts_dataset(dataset_name, partition_nodes, partition_edges, node_num, feature_dim, train_mask, val_mask, test_mask):
-    print('node_num:', node_num, 'feature_dim:', feature_dim)
+    print('\ngenerate nts for', dataset_name, 'node_num:', node_num, 'feature_dim:', feature_dim)
     reorder_id = {}
     curr_id = 0
     for nodes in partition_nodes:
