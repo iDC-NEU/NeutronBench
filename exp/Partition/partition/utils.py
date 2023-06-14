@@ -14,6 +14,7 @@ from dgl.data import CoraFullDataset, CoauthorCSDataset, CoauthorPhysicsDataset
 from dgl.data import AmazonCoBuyComputerDataset, AmazonCoBuyPhotoDataset
 from ogb.nodeproppred import DglNodePropPredDataset
 import random
+import psutil
 
 def setup_seed(seed):
      print('setup_seed', seed)
@@ -75,6 +76,27 @@ def show_label_distributed(parts, train_mask, val_mask, test_mask):
     print('train distributed:', torch.bincount(parts[train_idx]).tolist())
     print('val distributed:', torch.bincount(parts[val_idx]).tolist())
     print('test distributed:', torch.bincount(parts[test_idx]).tolist())
+
+
+
+@show_time
+def get_partition_edges_inner_nodes(partition_nodes, rowptr, col, edge_nums=None): # 仅构造在partition nodes里面的边
+    # (dst, src)
+    rowptr = rowptr.tolist()
+    col = col.tolist()
+    partition_edges = []
+    for nodes in partition_nodes:
+        st_nodes = set(nodes.tolist())
+        edge_list = []
+        for u in nodes.tolist():
+            assert u in st_nodes
+            for v in col[rowptr[u]: rowptr[u + 1]]:
+                if v in st_nodes:
+                    edge_list.append((u, v))
+                # else:
+                #     print(u, v)
+        partition_edges.append(edge_list)
+    return partition_edges
 
 
 
@@ -535,7 +557,8 @@ def write_multi_class_to_file(name, data, format, index=False):
 
 
 
-def get_partition_result(parts, rowptr, col, num_parts, train_mask, val_mask, test_mask):
+def get_partition_result(parts, rowptr, col, num_parts, train_mask, val_mask, test_mask, algo='metis'):
+    print('\n####get_partition_result of', algo)
     # 每个分区node, train_nodes, val_nodes, test_nodes
     partition_nodes = get_partition_nodes(parts, num_parts)
     partition_train_nodes = get_partition_label_nodes(partition_nodes, train_mask)
@@ -544,8 +567,42 @@ def get_partition_result(parts, rowptr, col, num_parts, train_mask, val_mask, te
 
     # 每个分区包含的边[[], []]
     partition_edges = get_partition_edges(partition_nodes, rowptr, col)
-    print('metis partition nodes:', [len(_) for _ in partition_nodes])
-    print('metis partition edges:', [len(_) for _ in partition_edges])
+    print(f'{algo} partition nodes:', [len(_) for _ in partition_nodes])
+    print(f'{algo} partition edges:', [len(_) for _ in partition_edges])
     show_label_distributed(parts, train_mask, val_mask, test_mask)
-
     return (partition_nodes, partition_edges, partition_train_nodes, partition_val_nodes, partition_test_nodes)
+
+
+def get_pagraph_partition_result(partition_nodes, rowptr, col, num_parts):
+    print('\n####get_partition_result of pagraph')
+    # 每个分区node, train_nodes, val_nodes, test_nodes
+    # 每个分区包含的边[[], []]
+    # partition_edges = get_partition_edges(partition_nodes, rowptr, col)
+    partition_edges = get_partition_edges_inner_nodes(partition_nodes, rowptr, col)
+    print('pagraph partition edges:', [len(_) for _ in partition_edges])
+    return partition_edges
+
+
+def get_ram_usage(): 
+    # Getting % usage of virtual_memory ( 3rd field)
+    print('RAM memory used {:.1f}%, {:.2f} (GB)'.format(psutil.virtual_memory()[2], psutil.virtual_memory()[3]/1000000000))
+
+    # # Getting all memory using os.popen()
+    # total_memory, used_memory, free_memory = map(int, os.popen('free -t -m').readlines()[-1].split()[1:])
+    # # Memory usage
+    # print("RAM memory {:.1f}% used".format(round((used_memory/total_memory) * 100, 2)))
+
+
+def get_cpu_usage(interval=1):
+    print('The CPU usage is: {:.1f}%'.format(psutil.cpu_percent(interval)))
+    # # Getting loadover15 minutes
+    # load1, load5, load15 = psutil.getloadavg()
+    # cpu_usage15 = (load15 / os.cpu_count()) * 100
+    # cpu_usage5 = (load5 / os.cpu_count()) * 100
+    # cpu_usage1 = (load1 / os.cpu_count()) * 100
+    # print("The CPU usage is : {:.1f}% {:.1f}% {:.1f}% (avg 1, 5, 15 min)".format(cpu_usage1, cpu_usage5, cpu_usage15))
+
+
+if __name__ == '__main__':
+    get_cpu_usage(interval=1)
+    get_ram_usage()

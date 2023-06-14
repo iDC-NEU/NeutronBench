@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import os
 import sys
 sys.path.append('..')
 from partition.utils import show_time
@@ -17,6 +18,13 @@ def in_neighbors_hop(rowptr, col, nid, hops):
         for depth in range(hops):
             neighs = nids[-1] if len(nids) != 0 else [nid]
             # print('neighs', neighs)
+            
+            # TODO(Sanzo): less duplicated nodes, efficient?
+            # in_neighs = set()
+            # for n in neighs:
+            #     in_neighs.append(in_neighbors(rowptr, col, n))
+            # nids.append(list(in_neighs))
+
             in_neighs = []
             for n in neighs:
                 in_neighs += in_neighbors(rowptr, col, n)
@@ -109,31 +117,30 @@ def pagraph_partition(num_parts, hops, rowptr, col, train_mask):
         p_v = np.where(r_belongs[pid] != -1)[0]
         sub_v.append(p_v)
         assert p_v.shape[0] == r_vnum[pid]
-        print('partition', pid, 'vertex# with self-reliance: ',
-              r_vnum[pid], 'w/o  self-reliance: ', p_vnum[pid])
+        print('partition', pid, 'vertex# with self-reliance: ', r_vnum[pid], 'w/o  self-reliance: ', p_vnum[pid])
         # print('orginal vertex: ', np.where(belongs == pid)[0])
         # print('redundancy vertex: ', np.where(r_belongs[pid] != -1)[0])
     return sub_v, sub_trainv
 
 
 @show_time
-def pagraph_partition_graph(num_parts, num_hops, graph, rowptr, col, train_mask, val_mask, test_mask):
+def pagraph_partition_graph(dataset, num_parts, num_hops, graph, rowptr, col, train_mask, val_mask, test_mask):
     print("\n######## pagraph_partition_graph #########")
-    partition_nodes, partition_train_nodes = pagraph_partition(num_parts, num_hops, rowptr, col, train_mask)
-    # partition_edges = get_partition_edges(partition_nodes, rowptr, col)
-    train_L_hop_edges = get_dgl_L_hop_edges(graph, partition_train_nodes, -1, [-1] * num_hops)
-    partition_edges = [list(set([edge for layer in L_hop for edge in layer ])) for L_hop in train_L_hop_edges]
-    # partition_edges = []
-    # for L_hop in train_L_hop_edges:
-    #     tmp = []
-    #     for layer in L_hop:
-    #         tmp += layer
-    #     partition_edges.append(list(set(tmp)))
-    
-    # assert partition_edges == partition_edges1
+    print("num_parts {} num_hops {} ".format(num_parts, num_hops))
 
-    print('pagraph partition nodes:', [len(_) for _ in partition_nodes])
-    print('pagraph partition edges:', [len(_) for _ in partition_edges])
-    print('pargraph: partition_train_nodes', [len(_) for _ in partition_train_nodes])
-    return (partition_nodes, partition_edges, partition_train_nodes)
+    save_partition_nodes = f'/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/pargraph-{dataset}-parts.pt'
+    save_partition_train_nodes = f'/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/pargraph-{dataset}-train.pt'
+    if os.path.exists(save_partition_nodes) and os.path.exists(save_partition_train_nodes):
+        print(f'read from partition result {save_partition_nodes} and {save_partition_train_nodes}.')
+        partition_nodes = torch.load(save_partition_nodes)
+        partition_train_nodes = torch.load(save_partition_train_nodes)
+    else:
+        partition_nodes, partition_train_nodes = pagraph_partition(num_parts, num_hops, rowptr, col, train_mask)
+        partition_nodes = [torch.from_numpy(_) for _ in partition_nodes]
+        partition_train_nodes = [torch.from_numpy(_) for _ in partition_train_nodes]
+        torch.save(partition_nodes, save_partition_nodes)
+        torch.save(partition_train_nodes, save_partition_train_nodes)
+        print(f'save partition result to {save_partition_nodes} and {save_partition_train_nodes}.')
+
+    return partition_nodes, partition_train_nodes
 

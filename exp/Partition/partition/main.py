@@ -16,11 +16,14 @@ from partition.utils import setup_seed
 from partition.utils import generate_nts_dataset
 from partition.utils import get_all_edges
 from partition.utils import get_partition_result
+from partition.utils import get_pagraph_partition_result
 from partition.utils import show_label_distributed
 
 
 
 from partition.metis_partition import metis_partition_graph
+from partition.pagraph_partition import pagraph_partition_graph
+from partition.hash_partition import hash_partition_graph
 
 
 def partition_bug(partition_L, partition_nodes, partition_train_nodes, rowptr, col):
@@ -187,7 +190,10 @@ def get_dgl_L_hop_edges(graph, partition_nodes, batch_size, fanout):
         # print('partition', i, 'batch num:', round(nodes.shape[0] / batch_size))
         dgl_L_hop_edges = dgl_sample_L_hop_edges(graph, nodes, batch_size, fanout)
         if len(dgl_L_hop_edges) == 1: # full batch
-            partition_L_hop_edges.append(dgl_L_hop_edges[0])
+            # print(len(dgl_L_hop_edges), dgl_L_hop_edges[0][0])
+            # partition_L_hop_edges.append(dgl_L_hop_edges[0])
+            # partition_L_hop_edges.append(dgl_L_hop_edges[0])
+            partition_L_hop_edges.append(dgl_L_hop_edges)
         else:
             partition_L_hop_edges.append(dgl_L_hop_edges)
     return partition_L_hop_edges
@@ -246,19 +252,28 @@ def statistic_info(graph, partition_nodes, partition_edges, partition_train_node
 
     # get L-hop full neighbor (dgl)
     partition_dgl_L_hop_edges = get_dgl_L_hop_edges(graph, partition_train_nodes, -1, [-1, -1])
-    # for i, L_hop in enumerate(partition_dgl_L_hop_edges):
-    #     layer_edge_num = [len(layer) for layer in L_hop]
-    #     print('(dgl) partition', i, 'layer edge num', layer_edge_num)
-    print('partition_L_hop', [sum([len(hop_edges) for hop_edges in part]) for part in partition_dgl_L_hop_edges])
+    # partition_dgl_1_hop_edges = get_dgl_L_hop_edges(graph, partition_train_nodes, -1, [-1])
+    # print(len(partition_dgl_1_hop_edges), len(partition_dgl_1_hop_edges[0]))
+    print('1-hop edges', [len(part[0][0]) for part in partition_dgl_L_hop_edges])
 
-    # check dlg full neighbor sample
-    # get L-hop full neighbor (csc)
-    partition_L_hop_edges = get_L_hop_edges(partition_train_nodes, rowptr, col)
-    # for i, L_hop in enumerate(partition_L_hop_edges):
-    #     layer_edge_num = [len(layer) for layer in L_hop]
-    #     print('(csc) partition', i, 'layer edge num', layer_edge_num)
-    # print('partition_L_hop', [sum([len(hop_edges) for hop_edges in part]) for part in partition_L_hop_edges])
-    check_two_L_hop(partition_dgl_L_hop_edges, partition_L_hop_edges)
+    # for i, part_edges in enumerate(partition_dgl_L_hop_edges):
+    #     st_nodes = set(partition_nodes[i].tolist())
+    #     print(len(st_nodes), type(st_nodes))
+    #     part_edges = part_edges[0]
+    #     for h in range(len(fanout)):
+    #         for edge in part_edges[h]:
+    #             if edge[0] not in st_nodes or edge[1] not in st_nodes:
+    #                 print(edge)
+    #             assert edge[0] in st_nodes and edge[1] in st_nodes
+
+    # for _ in partition_dgl_L_hop_edges:
+    #     assert len(_) == 1
+    # partition_dgl_L_hop_edges = [_[0] for _ in partition_dgl_L_hop_edges]
+    # print('partition_L_hop', [sum([len(hop_edges) for hop_edges in part]) for part in partition_dgl_L_hop_edges])
+    # # check dlg full neighbor sample
+    # # get L-hop full neighbor (csc)
+    # partition_L_hop_edges = get_L_hop_edges(partition_train_nodes, rowptr, col)
+    # check_two_L_hop(partition_dgl_L_hop_edges, partition_L_hop_edges)
 
     # partition_bug(partition_dgl_L_hop_edges, partition_nodes, partition_train_nodes)
     # partition_bug(partition_L_hop_edges, partition_nodes, partition_train_nodes, rowptr, col)
@@ -273,8 +288,8 @@ def statistic_info(graph, partition_nodes, partition_edges, partition_train_node
 
 
     partition_dgl_L_hop_edges = get_dgl_L_hop_edges(graph, partition_train_nodes, batch_size, fanout)
-    dep_cache_stastistic_info(partition_nodes, partition_dgl_L_hop_edges, len(args.fanout))
-    dep_comm_stastistic_info(partition_nodes, partition_dgl_L_hop_edges, len(args.fanout))
+    dep_cache_statistics_info(partition_nodes, partition_dgl_L_hop_edges, len(args.fanout))
+    # dep_comm_statistics_info(partition_nodes, partition_dgl_L_hop_edges, len(args.fanout))
 
 
 @show_time
@@ -306,65 +321,215 @@ def exp01_metis_pagraph_l_hop_cross_edges(dataset, graph, num_parts, batch_size,
     # statistic_info(graph, pargraph_result[0], pargraph_result[1], pargraph_result[2], rowptr, col, batch_size, fanout)
 
 
-def dep_cache_stastistic_info(partition_nodes, partition_dgl_L_hop_edges, hops):
-    print('\n############# dep_cache_stastistic_info ##############')
-    # should move to outside
+# def dep_cache_statistics_info(partition_nodes, partition_dgl_L_hop_edges, hops):
+#     print('\n############# dep_cache_statistic_info ##############')
+#     partition_nodes = [set(nodes.tolist()) for nodes in partition_nodes]
+#     num_parts = len(partition_nodes)
+#     local_sample_count = [0] * num_parts
+#     receive_sample_count = [0] * num_parts
+#     train_count = [0] * num_parts
+#     recv_comm_feature_count = [0] * num_parts
+#     recv_comm_sample_count = [0] * num_parts
+#     for partid, part_L_hop in enumerate(partition_dgl_L_hop_edges):
+#         for batchid, batch_graph in enumerate(part_L_hop):
+#             train_count[partid] += (sum([len(layer) for layer in batch_graph]))
+#             assert len(batch_graph) == hops
+#             for h in range(hops):
+#                 edge_dst_nodes = [u for u, _ in batch_graph[h]]
+#                 edge_src_nodes = [v for _, v in batch_graph[h]]
+#                 dst_nodes = set(edge_dst_nodes)
+#                 src_nodes = set(edge_src_nodes)
+
+#                 if h == hops - 1: # last hop nodes
+#                     recv_comm_feature_count[partid] += len(src_nodes - partition_nodes[partid])
+
+#                 # print('edges {} src_nodes {} dst_nodes {} {} {}'.format(len(edge_src_nodes), len(src_nodes), len(dst_nodes), max(src_nodes), max(dst_nodes)))
+
+#                 # to csc
+#                 data = np.ones(len(edge_src_nodes))
+#                 csc_adj = spsp.csc_matrix((data, (edge_src_nodes, edge_dst_nodes)))
+#                 indptr =  csc_adj.indptr
+#                 indices =  csc_adj.indices
+#                 ##### check #####
+#                 # edges_c = [(dst, src) for dst in dst_nodes for src in indices[indptr[dst]:indptr[dst+1]]]
+#                 # assert set(edges_c) == set(batch_graph[h]) and len(set(edges_c) - set(batch_graph[h])) == 0 and len(set(batch_graph[h]) - set(edges_c)) == 0
+#                 ################
+
+#                 # print('part {} batch {} hop {} edges {} dst_nodes {} src_nodes {}'.format(partid, batchid, h, len(batch_graph[h]), len(dst_nodes), len(src_nodes)))
+                
+#                 # sample load (local and receive)
+#                 for pid, nodes in enumerate(partition_nodes):
+#                     common_nodes = dst_nodes & nodes
+#                     if pid == partid:
+#                         local_sample_count[pid] += sum([indptr[u + 1] - indptr[u] for u in common_nodes])
+#                     else:
+#                         receive_sample_count[pid] += sum([indptr[u + 1] - indptr[u] for u in common_nodes])
+#                         recv_comm_sample_count[partid] += sum([indptr[u + 1] - indptr[u] for u in common_nodes])
+
+
+#     print('train_count', train_count)
+#     print('local_sample_count', local_sample_count)
+#     print('receive_sample_count', receive_sample_count)
+#     print('recv_comm_sample_count', recv_comm_sample_count)
+#     print('recv_comm_feature_count', recv_comm_feature_count)
     
-    # partition_dgl_L_hop_edges = get_dgl_L_hop_edges(graph, partition_train_nodes, batch_size, fanout)
-    
+
+
+
+def dep_cache_statistics_info(partition_nodes, partition_dgl_L_hop_edges, hops):
+    print('\n############# dep_cache_statistic_info ##############')
     partition_nodes = [set(nodes.tolist()) for nodes in partition_nodes]
     num_parts = len(partition_nodes)
-    local_sample_count = [0] * num_parts
-    receive_sample_count = [0] * num_parts
-    train_count = [0] * num_parts
-    recv_comm_feature_count = [0] * num_parts
-    recv_comm_sample_count = [0] * num_parts
-    for partid, part_L_hop in enumerate(partition_dgl_L_hop_edges):
-        for batchid, batch_graph in enumerate(part_L_hop):
-            train_count[partid] += (sum([len(layer) for layer in batch_graph]))
-            assert len(batch_graph) == hops
-            for h in range(hops):
+    # comm_graph
+    # comm_feature
+    # local_sample_edges
+    # recv_sample_edges
+    # local_sample_nodes
+    # recv_sample_nodes
+    # duplicate_sample_node
+
+
+    batch_num = max([len(part) for part in partition_dgl_L_hop_edges])
+    print([len(part) for part in partition_dgl_L_hop_edges])
+    print('max_batch_num', batch_num)
+
+    epoch_local_sample_edges = []
+    epoch_recv_sample_edges = []
+    epoch_send_edges = []
+    epoch_send_features = []
+    epoch_sen_edges_bytes = []
+    epoch_sen_features_bytes = []
+
+    for batchid in range(batch_num):# 统计相同batchid，模拟真实训练
+        sample_edge_num = [{} for _ in range(hops)]
+        local_sample_nodes = [[[] for _ in range(hops)] for _ in range(num_parts) ]
+        receive_sample_nodes = [[[] for _ in range(hops)] for _ in range(num_parts) ]
+
+        for partid, part_L_hop in enumerate(partition_dgl_L_hop_edges):
+            if len(part_L_hop) <= batchid:
+                continue
+            batch_graph = part_L_hop[batchid] # 获取每个分区上第batchid个子图，模拟真实训练
+            for h in range(hops): # 训练子图上的每一跳
                 edge_dst_nodes = [u for u, _ in batch_graph[h]]
                 edge_src_nodes = [v for _, v in batch_graph[h]]
                 dst_nodes = set(edge_dst_nodes)
                 src_nodes = set(edge_src_nodes)
 
-                if h == hops - 1: # last hop nodes
-                    recv_comm_feature_count[partid] += len(src_nodes - partition_nodes[partid])
-
-                # print('edges {} src_nodes {} dst_nodes {} {} {}'.format(len(edge_src_nodes), len(src_nodes), len(dst_nodes), max(src_nodes), max(dst_nodes)))
-
-                # to csc
                 data = np.ones(len(edge_src_nodes))
                 csc_adj = spsp.csc_matrix((data, (edge_src_nodes, edge_dst_nodes)))
                 indptr =  csc_adj.indptr
                 indices =  csc_adj.indices
-                ##### check #####
-                # edges_c = [(dst, src) for dst in dst_nodes for src in indices[indptr[dst]:indptr[dst+1]]]
-                # assert set(edges_c) == set(batch_graph[h]) and len(set(edges_c) - set(batch_graph[h])) == 0 and len(set(batch_graph[h]) - set(edges_c)) == 0
-                ################
 
-                # print('part {} batch {} hop {} edges {} dst_nodes {} src_nodes {}'.format(partid, batchid, h, len(batch_graph[h]), len(dst_nodes), len(src_nodes)))
-                
-                # sample load (local and receive)
-                for pid, nodes in enumerate(partition_nodes):
-                    common_nodes = dst_nodes & nodes
-                    if pid == partid:
-                        local_sample_count[pid] += sum([indptr[u + 1] - indptr[u] for u in common_nodes])
-                    else:
-                        receive_sample_count[pid] += sum([indptr[u + 1] - indptr[u] for u in common_nodes])
-                        recv_comm_sample_count[partid] += sum([indptr[u + 1] - indptr[u] for u in common_nodes])
+                # count sample edges num of every node in diff hop
+                for dst in dst_nodes: # 统计每个几点在不同层的采样节点数量
+                    if dst not in sample_edge_num[h]:
+                        sample_edge_num[h][dst] = indptr[dst + 1] - indptr[dst]
+                        sample_edge_num[h][dst] = indptr[dst + 1] - indptr[dst]
+
+                # sample nodes of every hop (local and receive)
+                local_nodes = partition_nodes[partid]
+                common_nodes = dst_nodes & local_nodes
+                local_sample_nodes[partid][h] += list(common_nodes)
+
+                if len(common_nodes) == len(dst_nodes):
+                    print('pagraph cache all l-hop neighbors')
+                else:
+                    for pid, nodes in enumerate(partition_nodes):
+                        if pid == partid:
+                            continue
+                        common_nodes = dst_nodes & nodes
+                        receive_sample_nodes[pid][h] += list(common_nodes)
+        # comm_graph
+        # comm_feature
+        # local_sample_edges
+        # recv_sample_edges
+        # local_sample_nodes
+        # recv_sample_nodes
+        # duplicate_sample_node
+
+        # count numbers
+        batch_local_sample_nodes = []
+        batch_recv_sample_nodes = []
+        batch_local_sample_edges = []
+        batch_recv_sample_edges = []
+        unique_sample_nodes = [] #TODO(Sanzo): not correct, shouble count for every hop
+        batch_send_edges_num = [0] * num_parts
+        batch_send_features_num = [0] * num_parts
+
+        for partid in range(num_parts):
+            assert len(local_sample_nodes[partid]) == hops
+            assert len(receive_sample_nodes[partid]) == hops
+            batch_local_sample_nodes.append(sum([len(x) for x in local_sample_nodes[partid]]))
+            batch_recv_sample_nodes.append(sum([len(x) for x in receive_sample_nodes[partid]]))
+
+            st = set()
+            for h in range(hops):
+                st.update(local_sample_nodes[partid][h])
+                st.update(receive_sample_nodes[partid][h])
+            unique_sample_nodes.append(len(st))
+
+            count = 0
+            for h, nids in enumerate(local_sample_nodes[partid]):
+                count += sum([sample_edge_num[h][dst] for dst in nids])
+            batch_local_sample_edges.append(count)
+
+            count = 0
+            for h, nids in enumerate(receive_sample_nodes[partid]):
+                count += sum([sample_edge_num[h][dst] for dst in nids])
+            batch_recv_sample_edges.append(count)
+
+        for partid in range(num_parts):
+            for h in range(hops):
+                for dst in receive_sample_nodes[partid][h]:
+                    batch_send_edges_num[partid] += sample_edge_num[h][dst]
+                    if h == hops - 1: # last hop
+                        batch_send_features_num[partid] += sample_edge_num[h][dst]
 
 
-    print('train_count', train_count)
-    print('local_sample_count', local_sample_count)
-    print('receive_sample_count', receive_sample_count)
-    print('recv_comm_sample_count', recv_comm_sample_count)
-    print('recv_comm_feature_count', recv_comm_feature_count)
-    
 
-def dep_comm_stastistic_info(partition_nodes, partition_dgl_L_hop_edges, hops):
-    print('\n############# dep_comm_stastistic_info ##############')
+        print('batch', batchid)
+        print('local_sample_nodes', batch_local_sample_nodes)
+        print('recv_sample_nodes', batch_recv_sample_nodes)
+        print('local_sample_edges', batch_local_sample_edges)
+        print('recv_sample_edges', batch_recv_sample_edges)
+        print('unique_sample_nodes', unique_sample_nodes)
+        print('send_edges_num', batch_send_edges_num)
+        print('send_features_num', batch_send_features_num)
+
+        epoch_local_sample_edges.append(batch_local_sample_edges)
+        epoch_recv_sample_edges.append(batch_recv_sample_edges)
+        epoch_send_edges.append(batch_send_edges_num)
+        epoch_send_features.append(batch_send_features_num)
+        epoch_sen_edges_bytes.append([x * 2 * 4 for x in batch_send_edges_num])
+        epoch_sen_features_bytes.append([x * feature_dim * 4 for x in batch_send_features_num])
+        print(feature_dim)
+
+
+
+    print('#### averge')
+    print('avg_local_sample_edges', np.average(epoch_local_sample_edges, axis=0).tolist())
+    print('avg_recv_sample_edges', np.average(epoch_recv_sample_edges, axis=0).tolist())
+    print('avg_send_edges', np.average(epoch_send_edges, axis=0).tolist())
+    print('avg_send_features', np.average(epoch_send_features, axis=0).tolist())
+    print('avg_sen_edges_bytes', np.average(epoch_sen_edges_bytes, axis=0).tolist())
+    print('avg_sen_features_bytes', np.average(epoch_sen_features_bytes, axis=0).tolist())
+
+
+    print('#### sum')
+    print('sum_local_sample_edges', np.sum(epoch_local_sample_edges, axis=0).tolist())
+    print('sum_recv_sample_edges', np.sum(epoch_recv_sample_edges, axis=0).tolist())
+    print('sum_send_edges', np.sum(epoch_send_edges, axis=0).tolist())
+    print('sum_send_features', np.sum(epoch_send_features, axis=0).tolist())              
+    print('sum_sen_edges_bytes', np.sum(epoch_sen_edges_bytes, axis=0).tolist())
+    print('sum_sen_features_bytes', np.sum(epoch_sen_features_bytes, axis=0).tolist())                    
+
+
+
+# TODO(sanzo): optim: use big batch sample
+def dep_comm_statistics_info(partition_nodes, partition_dgl_L_hop_edges, hops):
+    print('\n############# dep_comm_statistic_info ##############')
+    # for one epoch
+
     # should move to outside
     partition_nodes = [set(nodes.tolist()) for nodes in partition_nodes]
     num_parts = len(partition_nodes)
@@ -386,7 +551,7 @@ def dep_comm_stastistic_info(partition_nodes, partition_dgl_L_hop_edges, hops):
         receive_sample_nodes = [[[] for _ in range(hops)] for _ in range(num_parts) ]
 
         for partid, part_L_hop in enumerate(partition_dgl_L_hop_edges):
-            if len(part_L_hop) < batchid:
+            if len(part_L_hop) <= batchid:
                 continue
             batch_graph = part_L_hop[batchid]
             for h in range(hops): 
@@ -400,12 +565,12 @@ def dep_comm_stastistic_info(partition_nodes, partition_dgl_L_hop_edges, hops):
                 indptr =  csc_adj.indptr
                 indices =  csc_adj.indices
 
-                # sample result
+                # unique sample result of every hop
                 for dst in dst_nodes:
                     if dst not in sample_edges[h]:
                         sample_edges[h][dst] = indices[indptr[dst] : indptr[dst + 1]]
 
-                # sample load (local and receive)
+                # sample nodes of every hop (local and receive)
                 for pid, nodes in enumerate(partition_nodes):
                     common_nodes = dst_nodes & nodes
                     if pid == partid:
@@ -441,8 +606,8 @@ def dep_comm_stastistic_info(partition_nodes, partition_dgl_L_hop_edges, hops):
         print('batch', batchid)
         print('local_edges', local_edges)
         print('cross_edges', cross_edges)
-        print('all_sample_count', all_sample_count)
-        print('receive_sample_count', recv_sample_count)
+        print('all_sample_edges', all_sample_count)
+        print('receive_sample_edges', recv_sample_count)
 
         epoch_cross_edges.append(cross_edges)
         epoch_local_edges.append(local_edges)
@@ -458,36 +623,28 @@ def dep_comm_stastistic_info(partition_nodes, partition_dgl_L_hop_edges, hops):
     print('#### averge')
     print('avg_local_edges', np.average(epoch_local_edges, axis=0).tolist())
     print('avg_cross_edges', np.average(epoch_cross_edges, axis=0).tolist())
-    print('avg_all_sample_count', np.average(epoch_all_sample_count, axis=0).tolist())
-    print('avg_receive_sample_count', np.average(epoch_recv_sample_count, axis=0).tolist())
+    print('avg_all_sample_edges', np.average(epoch_all_sample_count, axis=0).tolist())
+    print('avg_receive_sample_edges', np.average(epoch_recv_sample_count, axis=0).tolist())
 
 
     print('#### sum')
     print('sum_local_edges', np.sum(epoch_local_edges, axis=0).tolist())
     print('sum_cross_edges', np.sum(epoch_cross_edges, axis=0).tolist())
-    print('sum_all_sample_count', np.sum(epoch_all_sample_count, axis=0).tolist())
-    print('sum_receive_sample_count', np.sum(epoch_recv_sample_count, axis=0).tolist())
+    print('sum_all_sample_edges', np.sum(epoch_all_sample_count, axis=0).tolist())
+    print('sum_receive_sample_edges', np.sum(epoch_recv_sample_count, axis=0).tolist())
 
     
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Generate Dataset')
-    parser.add_argument("--dataset", type=str, default="cora",
-                        help="Dataset name (cora, citeseer, pubmed, reddit)")
-    parser.add_argument("--self-loop", type=bool, default=True,
-                        help="insert self-loop (default=True)")
-    parser.add_argument(
-        "--num_parts", help="Number of partitions to generate", type=int, required=True)
-    parser.add_argument(
-        "--num_hops", help="Number of layer in GNN for PaGraph partition", type=int, default=2)
-    parser.add_argument(
-        "--batch_size", help="batch size of gnn train", type=int, default=6000)
-    parser.add_argument("--fanout",
-                        help="Training fanouts",
-                        type=int, default=[10, 25], nargs="*", required=False)
-
+    parser.add_argument("--dataset", type=str, default="cora", help="Dataset name (cora, citeseer, pubmed, reddit)")
+    parser.add_argument("--self-loop", type=bool, default=True, help="insert self-loop (default=True)")
+    parser.add_argument("--num_parts", help="Number of partitions to generate", type=int, required=True)
+    parser.add_argument("--num_hops", help="Number of layer in GNN for PaGraph partition", type=int, default=2)
+    parser.add_argument("--batch_size", help="batch size of gnn train", type=int, default=6000)
+    parser.add_argument("--fanout", help="Training fanouts", type=int, default=[10, 25], nargs="*", required=False)
     parser.add_argument("--dim", help="metis dims", type=int, required=True)
-
+    parser.add_argument("--algo", help="partition algorithm (metis, pagraph, hash)", type=str, required=True)
     args = parser.parse_args()
     print(args)
     # assert len(args.fanout) == args.num_hops
@@ -496,6 +653,7 @@ if __name__ == '__main__':
     setup_seed(2000)
     # graph dataset
     edges_list, features, labels, train_mask, val_mask, test_mask, graph = extract_dataset(args)
+    feature_dim = features.shape[1]
     train_mask = train_mask.to(torch.long)
     val_mask = val_mask.to(torch.long)
     test_mask = test_mask.to(torch.long)
@@ -509,23 +667,30 @@ if __name__ == '__main__':
     indices = torch.tensor([src_nodes, dst_nodes])
     rowptr, col, value = dglsp.spmatrix(indices).csc()
 
-
     # exp01_metis_pagraph_l_hop_cross_edges(args.dataset, graph, args.num_parts, args.batch_size, args.fanout, rowptr, col, train_mask, val_mask, test_mask)
     # exit(1)
-
     # metis partition result
-
-    parts = metis_partition_graph(args.dataset, args.num_parts, rowptr, col, train_mask, val_mask, test_mask, node_weight_dim=args.dim)
-    partition_nodes, partition_edges, partition_train_nodes, partition_val_nodes, partition_test_nodes = get_partition_result(parts, rowptr, col, args.num_parts, train_mask, val_mask, test_mask)
-
-    # partition_nodes, partition_edges, partition_train_nodes = pagraph_partition_graph(
-    #     args.num_parts, args.num_hops, graph, rowptr, col, train_mask, val_mask, test_mask)
+    if args.algo == 'metis':
+        parts = metis_partition_graph(args.dataset, args.num_parts, rowptr, col, train_mask, val_mask, test_mask, node_weight_dim=args.dim)
+        partition_nodes, partition_edges, partition_train_nodes, partition_val_nodes, partition_test_nodes = get_partition_result(parts, rowptr, col, args.num_parts, train_mask, val_mask, test_mask)
+        statistic_info(graph, partition_nodes, partition_edges, partition_train_nodes, rowptr, col, args.batch_size, args.fanout)
+    elif args.algo == 'pagraph':
+        partition_nodes, partition_train_nodes = pagraph_partition_graph(args.dataset, args.num_parts, args.num_hops, graph, rowptr, col, train_mask, val_mask, test_mask)
+        print('pagraph partition nodes:', [len(_) for _ in partition_nodes])
+        print('pagraph train distributed:', [len(_) for _ in partition_train_nodes])
+        partition_edges = get_pagraph_partition_result(partition_nodes, rowptr, col, args.num_parts)
+        statistic_info(graph, partition_nodes, partition_edges, partition_train_nodes, rowptr, col, args.batch_size, args.fanout)
+    elif args.algo == 'hash':
+        parts = hash_partition_graph(args.dataset, args.num_parts, node_nums)
+        partition_nodes, partition_edges, partition_train_nodes, partition_val_nodes, partition_test_nodes = get_partition_result(parts, rowptr, col, args.num_parts, train_mask, val_mask, test_mask, 'hash')
+        statistic_info(graph, partition_nodes, partition_edges, partition_train_nodes, rowptr, col, args.batch_size, args.fanout)
+    else:
+        raise NotImplementedError
     # generate_nts_dataset(args.dataset, partition_nodes, partition_edges, node_nums, features.size()[1], train_mask, val_mask, test_mask)
     
-    statistic_info(graph, partition_nodes, partition_edges, partition_train_nodes, rowptr, col, args.batch_size, args.fanout)
     
     
     # partition_dgl_L_hop_edges = get_dgl_L_hop_edges(graph, partition_train_nodes, args.batch_size, args.fanout)
-    # dep_cache_stastistic_info(partition_nodes, partition_dgl_L_hop_edges, len(args.fanout))
-    # dep_comm_stastistic_info(partition_nodes, partition_dgl_L_hop_edges, len(args.fanout))
+    # dep_cache_statistics_info(partition_nodes, partition_dgl_L_hop_edges, len(args.fanout))
+    # dep_comm_statistics_info(partition_nodes, partition_dgl_L_hop_edges, len(args.fanout))
     

@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib.pylab as pylab
 import numpy as np
 from PIL import Image
+import argparse
 
 import scipy.io
 import numpy as np
@@ -162,6 +163,11 @@ def parse_line_num(filename, mode):
         nums = re.findall(r"\d+\.?\d*", line[line.find(mode):])
         ret.append(nums)
   assert len(ret) == 1
+  # print(filename, mode, ret)
+  # if len(ret) != 1:
+  #   print("!!!Warning:", filename, mode, ret)
+  # else:
+  #   ret = ret[0]
   ret = [float(x) for x in ret[0]]
   return ret
 
@@ -179,12 +185,22 @@ def get_partition_result(dataset, log_file):
 def get_depcomm_result(dataset, mode, log_file):
   local_edges = parse_line_num(log_file, f'{mode}_local_edges')
   cross_edges = parse_line_num(log_file, f'{mode}_cross_edges')
-  all_sample_count = parse_line_num(log_file, f'{mode}_all_sample_count')
-  receive_sample_count = parse_line_num(log_file, f'{mode}_receive_sample_count')
-  assert np.equal(np.array(local_edges) + np.array(cross_edges), np.array(all_sample_count)).all()
-  return local_edges, cross_edges, all_sample_count, receive_sample_count
+  all_sample_edges = parse_line_num(log_file, f'{mode}_all_sample_edges')
+  receive_sample_edges = parse_line_num(log_file, f'{mode}_receive_sample_edges')
+  assert np.equal(np.array(local_edges) + np.array(cross_edges), np.array(all_sample_edges)).all()
+  return local_edges, cross_edges, all_sample_edges, receive_sample_edges
 
-import argparse
+
+def get_depcache_result(dataset, mode, log_file):
+  local_sample_edges = parse_line_num(log_file, f'{mode}_local_sample_edges')
+  recv_sample_edges = parse_line_num(log_file, f'{mode}_recv_sample_edges')
+  send_edges = parse_line_num(log_file, f'{mode}_send_edges')
+  send_features = parse_line_num(log_file, f'{mode}_send_features')
+  send_edges_bytes = parse_line_num(log_file, f'{mode}_sen_edges_bytes')
+  send_features_bytes = parse_line_num(log_file, f'{mode}_sen_features_bytes')
+
+  return local_sample_edges, recv_sample_edges, send_edges, send_features, send_edges_bytes, send_features_bytes 
+
 
 if __name__ == '__main__':
 
@@ -235,13 +251,19 @@ if __name__ == '__main__':
   labels = ['edge']
   plot_bar(params, [edge], labels, xlabel, ylabel, xticks, anchor=(0.5, 1.15), figpath=f'{args.figpath}/{args.dataset}-edge{args.suffix}.pdf')
 
-  
-  
 
   labels = ['local', 'cross']
-  xticks = [f'part {x}' for x in range(len(node))]
-  xlabel = ''
-  ylabel = ''
   # labels = list(ret.keys())
-  local_edges, cross_edges, all_sample_count, receive_sample_count = get_depcomm_result(args.dataset, 'sum', args.log)
+  local_edges, cross_edges, all_sample_edges, receive_sample_edges = get_depcomm_result(args.dataset, 'sum', args.log)
   plot_stack_bar(params, [local_edges, cross_edges], labels, xlabel, ylabel, xticks, anchor=(0.5, 1.15), figpath=f'{args.figpath}/{args.dataset}-depcomm{args.suffix}.pdf')
+
+  
+  labels = ['local sample edges', 'recv sample edges']
+  local_sample_edges, recv_sample_edges, send_edges, send_features, send_edges_bytes, send_features_bytes  = get_depcache_result(args.dataset, 'sum', args.log)
+  plot_stack_bar(params, [local_sample_edges, recv_sample_edges], labels, xlabel, ylabel, xticks, anchor=(0.5, 1.15), figpath=f'{args.figpath}/{args.dataset}-depcache-compute{args.suffix}.pdf')
+  
+  labels = ['comm edges', 'comm features']
+  ylabel = 'bytes'
+  # print('sum_send_edges_bytes', np.sum(epoch_send_edges_bytes, axis=0).tolist())
+  #   print('sum_send_features_bytes', np.sum(epoch_send_features_bytes, axis=0).tolist())                    
+  plot_stack_bar(params, [send_edges_bytes, send_features_bytes], labels, xlabel, ylabel, xticks, anchor=(0.5, 1.15), figpath=f'{args.figpath}/{args.dataset}-depcache-comm{args.suffix}.pdf')
