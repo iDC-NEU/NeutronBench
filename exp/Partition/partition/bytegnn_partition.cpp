@@ -74,7 +74,8 @@ void read_mask(std::string input_dir, std::string dataname, std::vector<int> &no
 
 
 void bfs(int start_node, std::vector<std::vector<int>>& inG, int hop, std::vector<std::pair<int, uint64_t>> &timestamp) {
-  timestamp.push_back({start_node, 0});
+  std::vector<std::pair<int, uint64_t>> tmp_timestamp;
+  tmp_timestamp.push_back({start_node, 0});
   std::vector<int> layer_nodes;
   layer_nodes.push_back(start_node);
   // std::unorder_set<int> visit;
@@ -84,15 +85,15 @@ void bfs(int start_node, std::vector<std::vector<int>>& inG, int hop, std::vecto
   
   // std::cout << "start time " << start_time << std::endl;
 
-  // int max_node_id = start_node;
+  int max_node_id = start_node;
   for (int i = 0; i < hop; ++i) {
     std::unordered_set<int> curr_layer;
     for (auto &u : layer_nodes) {
       curr_layer.insert(inG[u].begin(), inG[u].end());
       for (auto &v : inG[u]) {
-        // max_node_id = std::max(max_node_id, v);
+        max_node_id = std::max(max_node_id, v);
         // timestamp.push_back({v, time(nullptr) - start_time});
-        timestamp.push_back({v, get_time() - start_time});
+        tmp_timestamp.push_back({v, get_time() - start_time});
         // if (timestamp.back().second == 0) {
         //   std::cout << "zero" << std::endl;
         // }
@@ -103,10 +104,18 @@ void bfs(int start_node, std::vector<std::vector<int>>& inG, int hop, std::vecto
     layer_nodes.clear();
     std::copy(curr_layer.begin(), curr_layer.end(), std::back_inserter(layer_nodes));
   }
-  // std::vector<uint64_t> unique_timestamp(max_node_id, UINT_MAX);
-  // for (auto& p : timestamp) {
-  //   unique_timestamp[p->first] = std::min(unique_timestamp[p->first], p->second);
-  // }
+  // unique pair
+  std::vector<uint64_t> unique_time(max_node_id + 1, UINT64_MAX);
+  for (const auto &p : tmp_timestamp) {
+    unique_time[p.first] = std::min(unique_time[p.first], p.second);
+  }
+  for (int i = 0; i < max_node_id + 1; ++i) {
+    if (unique_time[i] != UINT64_MAX) {
+      timestamp.push_back({i, unique_time[i]});
+    }
+  }
+  unique_time.clear();
+  tmp_timestamp.clear();
   return;
 }
 
@@ -251,7 +260,7 @@ int main(int argc, char **argv) {
   // }
 
   // int num_thread = numa_num_configured_cpus();
-  int num_thread = std::thread::hardware_concurrency();
+  int num_thread = std::thread::hardware_concurrency() - 5;
 
   std::cout << "thread num " << num_thread << std::endl;
 
@@ -438,9 +447,19 @@ int main(int argc, char **argv) {
     exit(-1);
   }
 
+  // sort partition result
+  std::vector<std::vector<int>> partition_nodes_seq(num_parts);
   for (int i = 0; i < num_parts; ++i) {
-    outFile << i << " " << partition_nodes[i].size();
-    for (const auto& u : partition_nodes[i]) {
+    std::copy(partition_nodes[i].begin(), partition_nodes[i].end(), std::back_inserter(partition_nodes_seq[i]));
+    assert(partition_nodes_seq[i].size() == partition_nodes[i].size());
+    std::sort(partition_nodes_seq[i].begin(), partition_nodes_seq[i].end());
+    std::cout << "part " <<  i << " " << partition_nodes_seq[i].size() << std::endl;
+  }
+  
+
+  for (int i = 0; i < num_parts; ++i) {
+    outFile << i << " " << partition_nodes_seq[i].size();
+    for (const auto& u : partition_nodes_seq[i]) {
       outFile << " " << u;
     }
     outFile << std::endl;
