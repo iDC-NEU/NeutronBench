@@ -446,5 +446,7 @@ int main(int argc, char **argv) {
     outFile << std::endl;
   }
 
+  std::cout << "write to " << save_partition_result << " done!\n" << std::endl;
+
   return 0;
 }
