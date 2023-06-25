@@ -566,7 +566,8 @@ def get_partition_result(parts, rowptr, col, num_parts, train_mask, val_mask, te
     partition_test_nodes = get_partition_label_nodes(partition_nodes, test_mask)
 
     # 每个分区包含的边[[], []]
-    partition_edges = get_partition_edges(partition_nodes, rowptr, col)
+    partition_edges = get_partition_edges(partition_train_nodes, rowptr, col)
+    # partition_edges = get_partition_edges(partition_nodes, rowptr, col)
     print(f'{algo} partition nodes:', [len(_) for _ in partition_nodes])
     print(f'{algo} partition edges:', [len(_) for _ in partition_edges])
     show_label_distributed(parts, train_mask, val_mask, test_mask)
