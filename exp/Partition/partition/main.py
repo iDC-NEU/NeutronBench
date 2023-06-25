@@ -394,19 +394,21 @@ def dep_cache_statistics_info(partition_nodes, partition_dgl_L_hop_edges, hops):
     # duplicate_sample_node
 
 
-    batch_num = max([len(part) for part in partition_dgl_L_hop_edges])
+    max_batch_num = max([len(part) for part in partition_dgl_L_hop_edges])
+    min_batch_num = min([len(part) for part in partition_dgl_L_hop_edges])
     print([len(part) for part in partition_dgl_L_hop_edges])
-    print('max_batch_num', batch_num)
+    print('max_batch_num', max_batch_num)
+    print('max_batch_num', min_batch_num)
 
     epoch_local_sample_edges = []
     epoch_remote_sample_edges = []
     epoch_recv_sample_edges = []
     epoch_send_edges = []
     epoch_send_features = []
-    epoch_sen_edges_bytes = []
-    epoch_sen_features_bytes = []
+    epoch_send_edges_bytes = []
+    epoch_send_features_bytes = []
 
-    for batchid in range(batch_num):# 统计相同batchid，模拟真实训练
+    for batchid in range(max_batch_num):# 统计相同batchid，模拟真实训练
         sample_edge_num = [{} for _ in range(hops)]
         local_sample_nodes = [[[] for _ in range(hops)] for _ in range(num_parts) ]
         remote_sample_nodes = [[[] for _ in range(hops)] for _ in range(num_parts) ]
@@ -466,6 +468,7 @@ def dep_cache_statistics_info(partition_nodes, partition_dgl_L_hop_edges, hops):
         unique_sample_nodes = [] #TODO(Sanzo): not correct, shouble count for every hop
         batch_send_edges_num = [0] * num_parts
         batch_send_features_num = [0] * num_parts
+        batch_recv_features_num = [0] * num_parts
 
         for partid in range(num_parts):
             assert len(local_sample_nodes[partid]) == hops
@@ -501,8 +504,27 @@ def dep_cache_statistics_info(partition_nodes, partition_dgl_L_hop_edges, hops):
             for h in range(hops):
                 for dst in receive_sample_nodes[partid][h]:
                     batch_send_edges_num[partid] += sample_edge_num[h][dst]
-                    if h == hops - 1: # last hop
-                        batch_send_features_num[partid] += sample_edge_num[h][dst]
+                    
+        for partid, part_L_hop in enumerate(partition_dgl_L_hop_edges):
+            if len(part_L_hop) <= batchid:
+                continue
+            batch_graph = part_L_hop[batchid] # 获取每个分区上第batchid个子图，模拟真实训练
+            # batch_all_nodes = [x for layer in batch_graph for edge in layer for x in edge]
+            # batch_all_edges = [edge for layer in batch_graph for edge in layer ]
+            # # print(partid, len(batch_all_edges), batch_all_edges[:10])
+            # print(partid, len(batch_all_nodes), batch_all_nodes[:10])
+            batch_all_nodes = set([x for layer in batch_graph for edge in layer for x in edge])
+            batch_remote_nodes = set([x for layer in batch_graph for edge in layer for x in edge]) - partition_nodes[partid]
+            batch_recv_features_num[partid] += len(batch_remote_nodes)
+            
+            # test_intersect_num = 0
+            for ppid in range(num_parts):
+                if ppid == partid:
+                    continue
+                # test_intersect_num += len(batch_remote_nodes & partition_nodes[ppid])
+                batch_send_features_num[ppid] += len(batch_remote_nodes & partition_nodes[ppid])
+            # assert test_intersect_num == len(batch_remote_nodes)
+
 
 
 
@@ -522,8 +544,8 @@ def dep_cache_statistics_info(partition_nodes, partition_dgl_L_hop_edges, hops):
         epoch_recv_sample_edges.append(batch_recv_sample_edges)
         epoch_send_edges.append(batch_send_edges_num)
         epoch_send_features.append(batch_send_features_num)
-        epoch_sen_edges_bytes.append([x * 2 * 4 for x in batch_send_edges_num])
-        epoch_sen_features_bytes.append([x * feature_dim * 4 for x in batch_send_features_num])
+        epoch_send_edges_bytes.append([x * 2 * 4 for x in batch_send_edges_num])
+        epoch_send_features_bytes.append([x * feature_dim * 4 for x in batch_send_features_num])
         print('feature_dim', feature_dim)
 
 
@@ -534,8 +556,8 @@ def dep_cache_statistics_info(partition_nodes, partition_dgl_L_hop_edges, hops):
     print('avg_recv_sample_edges', np.average(epoch_recv_sample_edges, axis=0).tolist())
     print('avg_send_edges', np.average(epoch_send_edges, axis=0).tolist())
     print('avg_send_features', np.average(epoch_send_features, axis=0).tolist())
-    print('avg_sen_edges_bytes', np.average(epoch_sen_edges_bytes, axis=0).tolist())
-    print('avg_sen_features_bytes', np.average(epoch_sen_features_bytes, axis=0).tolist())
+    print('avg_sen_edges_bytes', np.average(epoch_send_edges_bytes, axis=0).tolist())
+    print('avg_sen_features_bytes', np.average(epoch_send_features_bytes, axis=0).tolist())
 
 
     print('#### sum')
@@ -544,8 +566,8 @@ def dep_cache_statistics_info(partition_nodes, partition_dgl_L_hop_edges, hops):
     print('sum_recv_sample_edges', np.sum(epoch_recv_sample_edges, axis=0).tolist())
     print('sum_send_edges', np.sum(epoch_send_edges, axis=0).tolist())
     print('sum_send_features', np.sum(epoch_send_features, axis=0).tolist())              
-    print('sum_sen_edges_bytes', np.sum(epoch_sen_edges_bytes, axis=0).tolist())
-    print('sum_sen_features_bytes', np.sum(epoch_sen_features_bytes, axis=0).tolist())                    
+    print('sum_sen_edges_bytes', np.sum(epoch_send_edges_bytes, axis=0).tolist())
+    print('sum_sen_features_bytes', np.sum(epoch_send_features_bytes, axis=0).tolist())                    
 
 
 
