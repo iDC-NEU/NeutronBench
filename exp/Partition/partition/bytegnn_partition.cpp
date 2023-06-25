@@ -183,81 +183,7 @@ double cross_edges(std::vector<std::vector<int>>& all_blocks, int block_id, int 
 }
 
 
-
-int main(int argc, char **argv) {
-
-  if (argc < 6) {
-    printf("Usage: ./bytegnn input_dir dataname num_parts num_hops out_dir\n");
-    exit(-1);
-  }
-  
-  std::vector<std::pair<int,int>> edges;
-  std::string dataname = argv[2];
-  int num_parts = std::stoi(argv[3]);
-  int num_hops = std::stoi(argv[4]);
-  std::string out_dir = argv[5];
-
-  std::cout << "#################################" << std::endl;
-  std::cout << "input directory: " << argv[1] << std::endl;
-  std::cout << "dataset name: " << dataname << std::endl;
-  std::cout << "num_parts: " << argv[3] << std::endl;
-  std::cout << "num_hops: " << argv[4] << std::endl;
-  std::cout << "output directory: " << out_dir << std::endl;
-  std::cout << "#################################" << std::endl;
-
-
-  int num_nodes = read_edgelist(argv[1], dataname, edges);
-
-
-  std::vector<int> node_mask(num_nodes);
-  read_mask(argv[1], argv[2], node_mask);
-
-
-  // store in edges
-  std::vector<std::vector<int>> inG(num_nodes);
-  for (auto& p : edges) {
-    inG[p.second].push_back(p.first);
-  }
-  edges.clear();
-  
-  std::vector<int> train_nids;
-  std::vector<int> val_nids;
-  std::vector<int> test_nids;
-  std::vector<int> all_nids;
-  for (int i = 0; i < num_nodes; ++i) {
-    if (node_mask[i] == 0) {
-      train_nids.push_back(i);
-    } else if(node_mask[i] == 1) {
-      val_nids.push_back(i);
-    } else if (node_mask[i] == 2) {
-      test_nids.push_back(i);
-    }
-  }
-  node_mask.clear();
-  std::copy(train_nids.begin(), train_nids.end(), std::back_inserter(all_nids));
-  std::copy(val_nids.begin(), val_nids.end(), std::back_inserter(all_nids));
-  std::copy(test_nids.begin(), test_nids.end(), std::back_inserter(all_nids));
-  int num_mask = all_nids.size();
-  int train_num = train_nids.size();  
-  int test_num = test_nids.size();  
-  int val_num = val_nids.size();  
-  std::cout << "train " << train_num << ", val " << val_num << ", test " << test_num << ", all " << all_nids.size() << std::endl;
-
-  std::unordered_set<int> train_st;
-  std::unordered_set<int> val_st;
-  std::unordered_set<int> test_st;
-  train_st.insert(train_nids.begin(), train_nids.end());
-  val_st.insert(val_nids.begin(), val_nids.end());
-  test_st.insert(test_nids.begin(), test_nids.end());
-
-  train_nids.clear();
-  val_nids.clear();
-  test_nids.clear();
-  
-  // std::vector<std::vector<std::pair<int, uint64_t>>> all_pair;
-  // for (auto &u : all_nids) {
-  //   all_pair.push_back(std::move(bfs(u, inG, 2)));
-  // }
+std::vector<int> mark_nodes(std::vector<int>& all_nids, int num_nodes, int num_mask, std::vector<std::vector<int>>& inG, int num_hops) {
 
   // int num_thread = numa_num_configured_cpus();
   int num_thread = std::thread::hardware_concurrency() - 5;
@@ -337,7 +263,95 @@ int main(int argc, char **argv) {
   }
 
   all_nids.clear();
+  return std::move(belongs);
+}
 
+
+int main(int argc, char **argv) {
+
+  if (argc < 6) {
+    printf("Usage: ./bytegnn input_dir dataname num_parts num_hops out_dir\n");
+    exit(-1);
+  }
+  
+  std::vector<std::pair<int,int>> edges;
+  std::string dataname = argv[2];
+  int num_parts = std::stoi(argv[3]);
+  int num_hops = std::stoi(argv[4]);
+  std::string out_dir = argv[5];
+
+  std::cout << "#################################" << std::endl;
+  std::cout << "input directory: " << argv[1] << std::endl;
+  std::cout << "dataset name: " << dataname << std::endl;
+  std::cout << "num_parts: " << argv[3] << std::endl;
+  std::cout << "num_hops: " << argv[4] << std::endl;
+  std::cout << "output directory: " << out_dir << std::endl;
+  std::cout << "#################################" << std::endl;
+
+
+  int num_nodes = read_edgelist(argv[1], dataname, edges);
+
+
+  std::vector<int> node_mask(num_nodes);
+  read_mask(argv[1], argv[2], node_mask);
+
+
+  // store in edges
+  std::vector<std::vector<int>> inG(num_nodes);
+  for (auto& p : edges) {
+    inG[p.second].push_back(p.first);
+  }
+  edges.clear();
+  
+  std::vector<int> train_nids;
+  std::vector<int> val_nids;
+  std::vector<int> test_nids;
+  std::vector<int> all_nids;
+  for (int i = 0; i < num_nodes; ++i) {
+    if (node_mask[i] == 0) {
+      train_nids.push_back(i);
+    } else if(node_mask[i] == 1) {
+      val_nids.push_back(i);
+    } else if (node_mask[i] == 2) {
+      test_nids.push_back(i);
+    }
+  }
+  node_mask.clear();
+  std::copy(train_nids.begin(), train_nids.end(), std::back_inserter(all_nids));
+  std::copy(val_nids.begin(), val_nids.end(), std::back_inserter(all_nids));
+  std::copy(test_nids.begin(), test_nids.end(), std::back_inserter(all_nids));
+  int num_mask = all_nids.size();
+  int train_num = train_nids.size();  
+  int test_num = test_nids.size();  
+  int val_num = val_nids.size();  
+  std::cout << "train " << train_num << ", val " << val_num << ", test " << test_num << ", all " << all_nids.size() << std::endl;
+
+  std::unordered_set<int> train_st;
+  std::unordered_set<int> val_st;
+  std::unordered_set<int> test_st;
+  train_st.insert(train_nids.begin(), train_nids.end());
+  val_st.insert(val_nids.begin(), val_nids.end());
+  test_st.insert(test_nids.begin(), test_nids.end());
+
+  train_nids.clear();
+  val_nids.clear();
+  test_nids.clear();
+  
+  // std::vector<std::vector<std::pair<int, uint64_t>>> all_pair;
+  // for (auto &u : all_nids) {
+  //   all_pair.push_back(std::move(bfs(u, inG, 2)));
+  // }
+
+  std::vector<int> belongs(num_nodes, -1);
+  
+  if (num_mask < num_nodes) {
+    belongs = mark_nodes(all_nids, num_nodes, num_mask, inG, num_hops);
+  } else {
+    std::cout << "num_mask == num_nodes " << num_mask << " " << num_nodes << std::endl;
+    for (const auto& u : all_nids) {
+      belongs[u] = u;
+    }
+  }
 
   int all_active_nodes = 0;
   std::vector<std::vector<int>> all_blocks(num_nodes);
@@ -370,16 +384,11 @@ int main(int argc, char **argv) {
   for (int i = num_mask; i < all_blocks.size(); ++i) {
     assert(all_blocks[i].size() == 0);
   }
-  ///////////
-
-
 
   // // all block size
   // for (auto & p : all_blocks) {
   //   std::cout << p.size() << " ";
   // } std::cout << std::endl;
-
-
 
 
   // assign blocks
