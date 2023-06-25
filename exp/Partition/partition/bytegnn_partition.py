@@ -19,7 +19,6 @@ import os
 import sys
 sys.path.append('..')
 
-from partition.utils import show_time
 from partition.utils import extract_dataset
 from partition.utils import setup_seed
 from partition.utils import generate_nts_dataset
@@ -37,29 +36,64 @@ from partition.hash_partition import hash_partition_graph
 
 
 
+# @show_time
+# def bfs_with_time(start_time, nid, rowptr, col, hop):
+#     # 从nid开始进行hop次bfs，每个bfs的节点，标记{nid, time.time() - start_time}
+#     bfs_result = [{nid}]
+#     node_with_time = {nid: (nid, 0)}
+#     visit_nids = {nid}
+#     for h in range(hop):
+#         curr_layer = set()
+#         for u in bfs_result[-1]:
+#             for v in col[rowptr[u]: rowptr[u+1]]:
+#                 if v in visit_nids:
+#                     continue
+#                 assert v not in node_with_time
+#                 node_with_time[v] = (nid, time.time() - start_time)
+#                 curr_layer.add(v)
+#                 visit_nids.add(v)
+#         bfs_result.append(curr_layer)
+#     # print(bfs_result, node_with_time, len(node_with_time))
+#     return node_with_time
 
-def bfs_with_time(start_time, nid, rowptr, col, hop):
+
+
+
+def bfs_with_time(nid, rowptr, col, hop):
     # 从nid开始进行hop次bfs，每个bfs的节点，标记{nid, time.time() - start_time}
+    start_time = time.time()
     bfs_result = [{nid}]
-    node_with_time = {nid: (nid, 0)}
+    node_time = [(nid, 0)]
     visit_nids = {nid}
+    print('start', nid)
     for h in range(hop):
-        curr_layer = set()
+        curr_layer = []
+        # print(h, bfs_result[-1])
         for u in bfs_result[-1]:
-            for v in col[rowptr[u]: rowptr[u+1]]:
-                v = v.item()
-                if v in visit_nids:
-                    continue
-                assert v not in node_with_time
-                node_with_time[v] = (nid, time.time() - start_time)
-                curr_layer.add(v)
-                visit_nids.add(v)
-        bfs_result.append(curr_layer)
-    # print(bfs_result, node_with_time, len(node_with_time))
-    return node_with_time
+            # print(u, col[rowptr[u]: rowptr[u+1]])
+            # for v in col[rowptr[u]: rowptr[u+1]]:
+                # print(u, v)
+                # node_time.append((v, time.time() - start_time))
+            # print(u, col[rowptr[u]: rowptr[u+1]])
+            tmp = [(v, time.time() - start_time) for v in col[rowptr[u]: rowptr[u+1]]]
+            # print(tmp)
+            node_time += tmp
+            # print(node_time)
+            curr_layer += col[rowptr[u]: rowptr[u+1]]
+            # print(curr_layer)
+            # visit_nids.update(v_st)
+        # print(h, curr_layer)
+        bfs_result.append(set(curr_layer))
+        # print(h, bfs_result[-1])
+    print('done bfs', nid, len(node_time))
+    return node_time
+
+
+
 
 import copy
 
+# @show_time
 def update_node_time(X, Y):
     X_copy = copy.copy(X)
     for k,v in Y.items():
@@ -74,14 +108,65 @@ def update_node_time(X, Y):
             update_count += 1
     # print(f'insert {insert_count} nodes and update {update_count}')
     
+# @show_time
+# def bfs_mark_node(nids, hop, rowptr, col):
+#     node_with_time = {}
+#     for i, u in enumerate(nids):
+#         print('start bfs', u, i, len(nids))
+#         ret = bfs_with_time(time.time(), u, rowptr, col, hop)
+#         update_node_time(node_with_time, ret)
+#     return node_with_time
 
-def bfs_mark_node(nids, hop, rowptr, col):
-    node_with_time = {}
-    for u in nids:
-        # print('start bfs', u)
-        ret = bfs_with_time(time.time(), u, rowptr, col, hop)
-        update_node_time(node_with_time, ret)
+
+
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
+
+import threading
+import time
+
+
+import multiprocessing as mp
+
+@show_time
+def mp_cross_edges(block, partition_nodes, rowptr, col):
+    num_cores = int(mp.cpu_count()) // 2
+    pool = mp.Pool(num_cores)
+    results = [pool.apply_async(cross_edge_one_node, args=(x, partition_nodes, rowptr, col)) for x in block]
+    results = [p.get() for p in results]
+    # print(block, partition_nodes)
+    # print('results length:', len(results))
+    # print(results, sum(results))
+    return sum(results)
+
+   
+@show_time
+def mp_bfs_mark_node(nids, hop, rowptr, col):
+    num_cores = int(mp.cpu_count()) // 2
+    num_cores = int(mp.cpu_count())
+
+    # pool = mp.Pool(num_cores)
+    # results = [pool.apply_async(bfs_with_time, args=(u, rowptr, col, hop)) for u in nids]
+    # print("mp_bfs_mark_node, len results", len(results))
+    # node_with_time = {}
+    # for p in results:
+    #     update_node_time(node_with_time, p.get())
+
+    # 创建一个包含4条线程的线程池
+    
+    # with ThreadPoolExecutor(max_workers=num_cores) as pool:
+    with ProcessPoolExecutor(max_workers=2) as pool:
+        print("satrt threads", num_cores)
+        all_thread = [pool.submit(bfs_with_time, u, rowptr, col, hop) for u in nids]
+        print("mp_bfs_mark_node, thread-version len results", len(all_thread))
+        all_results = [thread.result() for thread in all_thread]
+        node_with_time = {}
+        for p in all_results:
+            update_node_time(node_with_time, p)
+
+    
     return node_with_time
+
 
 
 def test_lable_nids_mark_result(label_nids, node_with_time):
@@ -90,6 +175,7 @@ def test_lable_nids_mark_result(label_nids, node_with_time):
         assert node_with_time[u][0] == u
 
 
+@show_time
 def get_all_blocks(node_with_time):
     mark_block = {}
     for k,v in node_with_time.items():
@@ -102,7 +188,7 @@ def get_all_blocks(node_with_time):
     return mark_block
 
 
-
+@show_time
 def get_label_blocks(all_blocks, nids):
     ret = []
     for k,v in all_blocks.items():
@@ -126,11 +212,41 @@ def test_blocks_info(train_blocks, val_blocks, test_blocks, all_blocks, train_ni
         print('test_blocks', len(test_blocks), 'test_block_node:', sum([len(x) for x in test_blocks]))
 
 
-def cross_edges(block, nodes, rowptr, col):
+
+
+def cross_edge_one_node(u, partition_nodes, rowptr, col):
+    assert isinstance(rowptr, list)
+    assert isinstance(partition_nodes, list)
+    # print('cross_edge_one_node', u, partition_nodes, col[rowptr[u] : rowptr[u + 1]])
+    return len(set(partition_nodes) & set(col[rowptr[u] : rowptr[u + 1]]))
+
+
+@show_time
+def cross_edges(block, partition_nodes, rowptr, col):
     count = 0
     for u in block:
-        count += len(set(nodes) & set(col[rowptr[u] : rowptr[u + 1]]))
+        count += len(set(partition_nodes) & set(col[rowptr[u] : rowptr[u + 1]]))
+        # count += cross_edge_one_node(u, partition_nodes, rowptr, col)
     return count
+
+
+import multiprocessing as mp
+
+@show_time
+def mp_cross_edges(block, partition_nodes, rowptr, col):
+
+    num_cores = int(mp.cpu_count()) // 2
+    # print("本地计算机有: " + str(num_cores) + " 核心")
+    pool = mp.Pool(num_cores)
+    
+    # results = [pool.apply_async(train_on_parameter, args=(name, param)) for name, param in param_dict.items()]
+    
+    results = [pool.apply_async(cross_edge_one_node, args=(x, partition_nodes, rowptr, col)) for x in block]
+    results = [p.get() for p in results]
+    # print(block, partition_nodes)
+    # print('results length:', len(results))
+    # print(results, sum(results))
+    return sum(results)
 
 
 def get_label_nums(nodes, train_nids, val_nids, test_nids):
@@ -148,7 +264,7 @@ def bytegnn_partition_graph(dataset, num_parts, num_hops, rowptr, col, train_mas
 
     save_partition_result = f'/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/bytegnn-{dataset}-parts.pt'
     if os.path.exists(save_partition_result):
-        print(f'read from partition result {save_partition_result}.')
+        print(f'read from partition result {save_partition_result}')
         parts = torch.load(save_partition_result)
     else:
         train_nids = torch.where(train_mask > 0)[0].tolist()
@@ -159,9 +275,16 @@ def bytegnn_partition_graph(dataset, num_parts, num_hops, rowptr, col, train_mas
         assert train_num + test_num + val_num == len(label_nids)
 
         node_with_time = {}
-        train_mark = bfs_mark_node(train_nids, num_hops, rowptr, col)
-        val_mark = bfs_mark_node(val_nids, num_hops, rowptr, col)
-        test_mark = bfs_mark_node(test_nids, num_hops, rowptr, col)
+        # train_mark = bfs_mark_node(train_nids, num_hops, rowptr, col)
+        # val_mark = bfs_mark_node(val_nids, num_hops, rowptr, col)
+        # test_mark = bfs_mark_node(test_nids, num_hops, rowptr, col)
+
+
+        train_mark_mp = mp_bfs_mark_node(train_nids, num_hops, rowptr, col)
+        val_mark_mp = mp_bfs_mark_node(val_nids, num_hops, rowptr, col)
+        test_mark_mp = mp_bfs_mark_node(test_nids, num_hops, rowptr, col)
+
+
         update_node_time(node_with_time, train_mark)
         update_node_time(node_with_time, val_mark)
         update_node_time(node_with_time, test_mark)
@@ -191,8 +314,18 @@ def bytegnn_partition_graph(dataset, num_parts, num_hops, rowptr, col, train_mas
             score = np.zeros(num_parts, dtype=np.float32)
             for j in range(num_parts):
                 ce = 1
+                ce2 = 1
                 if len(partition_nodes[j]) > 0:
                     ce += cross_edges(block, partition_nodes[j], rowptr, col) / len(partition_nodes[j])
+                    # ce2 = mp_cross_edges(block, partition_nodes[j], rowptr, col) / len(partition_nodes[j])
+
+                    # ce += cross_edges(block, partition_nodes[j], rowptr, col)
+                    ce2 += mp_cross_edges(block, partition_nodes[j], rowptr, col)
+                    # if ce > 1:
+                    #     print('len block', len(block))
+                    #     print(ce, ce2)
+                    # assert ce == ce2
+                    # ce /= len(partition_nodes[j])
                 P_train, P_val, P_test = get_label_nums(partition_nodes[j], train_nids, val_nids, test_nids)
                 bs = 1 - alpha * P_train / train_num - beta * P_val / val_num - gamma * P_test / test_num
                 score[j] = ce * bs
@@ -212,6 +345,25 @@ def bytegnn_partition_graph(dataset, num_parts, num_hops, rowptr, col, train_mas
     return parts
 
 
+def read_bytegnn_partition_result(dataset, num_nodes):
+    filename = '/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/bytegnn/' + dataset + '-parts.txt'
+    assert os.path.exists(filename)
+    with open(filename, 'r') as f:
+        partition_nodes = []
+        for line in f.readlines():
+            line = list(map(int, line.split(' ')))
+            assert len(line) == line[1] + 2
+            # partition_nodes.append(torch.tensor(line[2:], dtype=torch.long))
+            partition_nodes.append(line[2:])
+    num_parts = len(partition_nodes)
+    print('partition num', num_parts, [len(x) for x in partition_nodes])
+    parts = -1 * torch.ones(num_nodes, dtype=torch.long)
+    for i in range(num_parts):
+        parts[partition_nodes[i]] = i
+
+    return parts
+
+        
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Generate Dataset')
@@ -245,30 +397,26 @@ if __name__ == '__main__':
     assert (len(edges) == edge_nums == len(set(edges)) == edges_list.shape[0])
     indices = torch.tensor([src_nodes, dst_nodes])
     rowptr, col, value = dglsp.spmatrix(indices).csc()
+    rowptr = rowptr.tolist()
+    col = col.tolist()
+    # print(rowptr, col)
 
     
-    parts = bytegnn_partition_graph(args.dataset, args.num_parts, args.num_hops, rowptr, col, train_mask, val_mask, test_mask, alpha=1.0, beta=1.0, gamma=1.0)
+    # parts = bytegnn_partition_graph(args.dataset, args.num_parts, args.num_hops, rowptr, col, train_mask, val_mask, test_mask, alpha=1.0, beta=1.0, gamma=1.0)
+    parts = read_bytegnn_partition_result(args.dataset, node_nums)
     partition_nodes = []
     for i in range(args.num_parts):
         partition_nodes.append(torch.where(parts == i)[0].tolist()) 
 
-    if args.save_nts:
-        # if not os.path.exists('/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/bytegnn'):
-        #     os.makedirs('/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/bytegnn')
-        save_partition_nts = f'/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/bytegnn/{args.dataset}-parts.txt'
-        with open(save_partition_nts, 'w') as f:
-            for i in range(args.num_parts):
-                f.write(f'part{i} node{len(partition_nodes[i])}: ')
-                f.write(' '.join([str(x) for x in partition_nodes[i]]))
-                # print(save_partition[i])
-                f.write('\n')
 
-
-    # for _ in train_blocks:
-    #     for u in _:
-    #         assert u not in val_nids + test_nids
-
-    
-    
-    # print(all_blocks)
+    # if args.save_nts:
+    #     # if not os.path.exists('/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/bytegnn'):
+    #     #     os.makedirs('/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/bytegnn')
+    #     save_partition_nts = f'/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/bytegnn/{args.dataset}-parts.txt'
+    #     with open(save_partition_nts, 'w') as f:
+    #         for i in range(args.num_parts):
+    #             f.write(f'part{i} node{len(partition_nodes[i])}: ')
+    #             f.write(' '.join([str(x) for x in partition_nodes[i]]))
+    #             # print(save_partition[i])
+    #             f.write('\n')
 
