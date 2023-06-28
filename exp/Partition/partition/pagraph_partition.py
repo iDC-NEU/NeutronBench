@@ -17,6 +17,8 @@ def in_neighbors_hop(rowptr, col, nid, hops):
         nids = []
         for depth in range(hops):
             neighs = nids[-1] if len(nids) != 0 else [nid]
+            for n in neighs:
+                nids.append(in_neighbors(rowptr, col, n))
             # print('neighs', neighs)
             
             # TODO(Sanzo): less duplicated nodes, efficient?
@@ -25,10 +27,10 @@ def in_neighbors_hop(rowptr, col, nid, hops):
             #     in_neighs.append(in_neighbors(rowptr, col, n))
             # nids.append(list(in_neighs))
 
-            in_neighs = []
-            for n in neighs:
-                in_neighs += in_neighbors(rowptr, col, n)
-            nids.append(in_neighs)
+            # in_neighs = []
+            # for n in neighs:
+            #     in_neighs += in_neighbors(rowptr, col, n)
+            # nids.append(in_neighs)
             # print('nids', nids)
         return np.unique(np.hstack(nids))
 

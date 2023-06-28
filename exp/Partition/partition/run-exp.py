@@ -132,13 +132,23 @@ def plot_bar(plot_params, Y, labels, xlabel, ylabel, xticks, anchor=None, figpat
   
   
   width = 0.15
-  color_list = ['b', 'g', 'c', 'r', 'm']
+  # color_list = ['b', 'g', 'c', 'r', 'm']
+  # color_list = ['b', 'g', 'c', 'r', 'm', 'y'] 
+  # Green	#40a02b
+  # Yellow	#df8e1d
+  # Pink	#ea76cb	
+  # Maroon	#e64553	
+  # Lavender	#7287fd
+  # color_list = ['#7c4e44', '#c4342b', '#f47a2d', '#419136', '#2a6ca6'] 
+  color_list = ['#2a6ca6', '#419136', '#7c4e44', '#c4342b', '#f47a2d', ] 
+
   n = len(Y[0])
   ind = np.arange(n)                # the x locations for the groups
   m = len(labels)
   offset = np.arange(m) - m / 2 + 0.5
 
   for i, y in enumerate(Y):
+    # plt.bar(ind+(offset[i]*width),y,width, label=labels[i])  
     plt.bar(ind+(offset[i]*width),y,width,color=color_list[i], label=labels[i])  
   
   # plt.xticks(np.arange(n) + (len(labels)/2-0.5)*width, xticks)
@@ -184,7 +194,9 @@ def plot_stack_multi_bar(plot_params, Y, labels, xlabel, ylabel, xticks, anchor=
   
 
   width = 0.25
-  color_list = ['b', 'g', 'c', 'r', 'm']
+  # color_list = ['b', 'g', 'c', 'r', 'm']
+  # color_list = ['#2a6ca6', '#419136', '#7c4e44', '#c4342b', '#f47a2d', ] 
+  
 
   n = len(Y[0][0])
   ind = np.arange(n)                # the x locations for the groups
@@ -267,13 +279,14 @@ def plot_stack_bar(plot_params, Y, labels, xlabel, ylabel, xticks, anchor=None, 
 
   width = 0.25
   color_list = ['b', 'g', 'c', 'r', 'm']
+  color_list = ['#2a6ca6', '#419136', '#7c4e44', '#c4342b', '#f47a2d', ] 
   n = Y.shape[1]
   ind = np.arange(n)                # the x locations for the groups
   pre_bottom = np.zeros(len(Y[0]))
   for i, y in enumerate(Y):
     # plt.bar(ind+width*i,y,width,color=color_list[i], label =labels[i])  
     # print(ind, y)
-    plt.bar(ind,y,width,color=color_list[i], label =labels[i], bottom=pre_bottom)
+    plt.bar(ind,y,width,color=color_list[i], label=labels[i], bottom=pre_bottom)
     pre_bottom += y  
 
   
@@ -377,15 +390,17 @@ def get_depcache_result(dataset, mode, log_file):
 
 
 if __name__ == '__main__':
+    # print(plt.rcParams.keys())
     params={
       'axes.labelsize': '14',
       'xtick.labelsize':'14',
       'ytick.labelsize':'14',
       'lines.linewidth': 1,
-      'legend.fontsize': '14.2',
-      'figure.figsize' : '8, 4',
+      'legend.fontsize': '14',
+      'figure.figsize' : '10.3, 4',
       'legend.loc': 'upper center', #[]"upper right", "upper left"]
       # 'legend.loc': 'best', #[]"upper right", "upper left"]
+      'legend.frameon': False,
     }
 
     datasets = ['reddit', 'ogbn-products']
@@ -395,6 +410,7 @@ if __name__ == '__main__':
     datasets = ['reddit']
     datasets = ['computer']
     datasets = ['ogbn-arxiv', 'ogbn-products', 'reddit', 'computer']
+    datasets = ['reddit', 'computer']
     
     batch_sizes = {
         # 'AmazonCoBuy_computers': (512, 1024, 2048, 4096, 8250),
@@ -409,23 +425,23 @@ if __name__ == '__main__':
     # batch_size = 1024
 
     for ds in datasets:
-      for dim in [1, 2, 4]:
-        log_file = f'./log/{ds}/{ds}-{dim}.log'
-        get_partition_statistic(ds, num_parts, fanout, batch_sizes[ds], dim, log_file, 'metis')
+      # for dim in [1, 2, 4]:
+      #   log_file = f'./log/{ds}/{ds}-{dim}.log'
+      #   get_partition_statistic(ds, num_parts, fanout, batch_sizes[ds], dim, log_file, 'metis')
       
-      log_file = f'./log/{ds}/{ds}-hash.log'
-      get_partition_statistic(ds, num_parts, fanout, batch_sizes[ds], 1, log_file, 'hash')
+      # log_file = f'./log/{ds}/{ds}-hash.log'
+      # get_partition_statistic(ds, num_parts, fanout, batch_sizes[ds], 1, log_file, 'hash')
       
       log_file = f'./log/{ds}/{ds}-pagraph.log'
       get_partition_statistic(ds, num_parts, fanout, batch_sizes[ds], 1, log_file, 'pagraph')
       
-      log_file = f'./log/{ds}/{ds}-bytegnn.log'
-      get_partition_statistic(ds, num_parts, fanout, batch_sizes[ds], 1, log_file, 'bytegnn')
+      # log_file = f'./log/{ds}/{ds}-bytegnn.log'
+      # get_partition_statistic(ds, num_parts, fanout, batch_sizes[ds], 1, log_file, 'bytegnn')
     exit(0)
 
 
-    modes = ['1', '4', 'pagraph', 'hash', 'bytegnn']
-    labels = ['metis1', 'metis4', 'pagraph', 'hash', 'bytegnn']
+    modes = ['1', '4', 'pagraph', 'bytegnn', 'hash']
+    labels = ['metis1', 'metis4', 'pagraph', 'bytegnn', 'hash']
     
     # modes = ['1', '4', 'hash', 'bytegnn']
     # labels = ['metis1', 'metis4', 'hash', 'bytegnn']
@@ -474,14 +490,24 @@ if __name__ == '__main__':
       xlabel = 'communication load'
       ylabel = 'MB'
       xticks = [f'part {x}' for x in range(num_parts)]
-      plot_bar(params, comm_Y, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.15), figpath=f'./overleaf/{ds}-depcache-comm.pdf')
+      plot_bar(params, comm_Y, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.185), figpath=f'./partition-exp/{ds}-comm.pdf')
 
       ylabel = ''
       xlabel = 'compute load'
-      plot_bar(params, compute_Y, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.15), figpath=f'./overleaf/{ds}-depcache-compute.pdf')
+      plot_bar(params, compute_Y, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.185), figpath=f'./partition-exp/{ds}-compute.pdf')
+      # plot_bar(params, compute_Y, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.15), figpath=f'./partition-exp/{ds}-compute.pdf')
 
 
-
+    params={
+      'axes.labelsize': '14',
+      'xtick.labelsize':'14',
+      'ytick.labelsize':'14',
+      'lines.linewidth': 1,
+      'legend.fontsize': '14',
+      'figure.figsize' : '6, 3',
+      'legend.loc': 'upper center', #[]"upper right", "upper left"]
+      # 'legend.loc': 'best', #[]"upper right", "upper left"]
+    }
     
     # dep cache statistics (stack bar)
     for ds in datasets:
@@ -502,7 +528,7 @@ if __name__ == '__main__':
       print(modes, 'remote edges', [sum(x) for x in remote_edges])
 
       xlabel = '#partition ID'
-      partiton_algo = ['metis1', 'metis4', 'pagraph', 'hash', 'bytegnn']
+      partiton_algo = ['metis1', 'metis4', 'pagraph', 'bytegnn', 'hash']
       # partiton_algo = ['metis1', 'metis4', 'hash', 'bytegnn']
       labels = ['Local', 'Remote']
       for i, algo in enumerate(partiton_algo):
@@ -510,5 +536,6 @@ if __name__ == '__main__':
         Y /= 1e6
         print(algo, 'all data request', Y.sum())
         ylabel = '#Reqeust Number 1e6'
-        plot_stack_bar(params, Y, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.15), figpath=f'./overleaf/{ds}-{algo}-datarequire.pdf')
+        plot_stack_bar(params, Y, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.22), figpath=f'./partition-exp/{ds}-datarequire-{algo}.pdf')
+        # plot_stack_bar(params, Y, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.185), figpath=f'./partition-exp/{ds}-datarequire-{algo}.pdf')
 
