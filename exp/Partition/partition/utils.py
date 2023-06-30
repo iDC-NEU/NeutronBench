@@ -155,10 +155,10 @@ def get_all_edges(partition_edges):
 def extract_dataset(args):
     dataset = args.dataset
 
-    # change dir
-    if not os.path.exists(dataset):
-        os.mkdir(dataset)
-    os.chdir(dataset)
+    # # change dir
+    # if not os.path.exists(dataset):
+    #     os.mkdir(dataset)
+    # os.chdir(dataset)
 
     if dataset in ['cora', 'citeseer', 'pubmed', 'reddit', 'reddit-small']:
         # load dataset

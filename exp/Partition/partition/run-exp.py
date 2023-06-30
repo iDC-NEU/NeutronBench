@@ -93,6 +93,16 @@ def new_command(
     return ret
 
 
+# color_list = ['#8c510a','#d8b365','#f6e8c3','#c7eae5','#5ab4ac','#01665e']
+# color_list = ['#c51b7d','#e9a3c9','#fde0ef','#e6f5d0','#a1d76a','#4d9221']
+# color_list = ['#762a83','#af8dc3','#e7d4e8','#d9f0d3','#7fbf7b','#1b7837']
+# color_list = ['#b35806','#f1a340','#fee0b6','#d8daeb','#998ec3','#542788']
+# color_list = ['#b2182b','#ef8a62','#fddbc7','#d1e5f0','#67a9cf','#2166ac']
+# color_list = ['#b2182b','#ef8a62','#fddbc7','#e0e0e0','#999999','#4d4d4d']
+#this# color_list = ['#d73027','#fc8d59','#fee090','#e0f3f8','#91bfdb','#4575b4']
+# color_list = ['#d73027','#fc8d59','#fee08b','#d9ef8b','#91cf60','#1a9850']
+# color_list = ['#d73027','#fc8d59','#fee08b','#d9ef8b','#91cf60','#1a9850']
+# color_list =
 
 def get_partition_statistic(dataset, num_parts, fanout, batch_size, dim, log_file, algo):
     if not os.path.exists(os.path.dirname(log_file)):
@@ -113,7 +123,7 @@ def draw_partition_statistic(dataset, log_file, figpath, suffix):
     os.system(run_command)
 
 
-def plot_bar(plot_params, Y, labels, xlabel, ylabel, xticks, anchor=None, figpath=None):
+def plot_bar(plot_params, Y, labels, xlabel, ylabel, xticks, color_list, anchor=None, figpath=None):
   
   # plt.rcParams.update(plt.rcParamsDefault)
   # print(plt.rcParams.keys())
@@ -140,7 +150,9 @@ def plot_bar(plot_params, Y, labels, xlabel, ylabel, xticks, anchor=None, figpat
   # Maroon	#e64553	
   # Lavender	#7287fd
   # color_list = ['#7c4e44', '#c4342b', '#f47a2d', '#419136', '#2a6ca6'] 
-  color_list = ['#2a6ca6', '#419136', '#7c4e44', '#c4342b', '#f47a2d', ] 
+  # color_list = ['#2a6ca6', '#419136', '#7c4e44', '#c4342b', '#f47a2d', '#EA6632', '#f47a2d', ]
+  # color_list = ['#b35806','#f1a340','#fee0b6','#d8daeb','#998ec3','#542788']
+  
 
   n = len(Y[0])
   ind = np.arange(n)                # the x locations for the groups
@@ -154,7 +166,8 @@ def plot_bar(plot_params, Y, labels, xlabel, ylabel, xticks, anchor=None, figpat
   # plt.xticks(np.arange(n) + (len(labels)/2-0.5)*width, xticks)
   plt.xticks(np.arange(n), xticks)
   
-  plt.legend(ncol=len(labels), bbox_to_anchor=anchor)
+  plt.legend(ncol=len(labels)//2, bbox_to_anchor=anchor)
+  # plt.legend(nrow=len(labels)//2, bbox_to_anchor=anchor)
 
   plt.xlabel(xlabel)
   plt.ylabel(ylabel)
@@ -260,7 +273,7 @@ def plot_stack_multi_bar(plot_params, Y, labels, xlabel, ylabel, xticks, anchor=
 
 
 
-def plot_stack_bar(plot_params, Y, labels, xlabel, ylabel, xticks, anchor=None, figpath=None):
+def plot_stack_bar(plot_params, Y, labels, xlabel, ylabel, xticks, color_list, anchor=None, figpath=None):
   plt.rcParams.update(plt.rcParamsDefault)
   # print(plt.rcParams.keys())
   
@@ -278,8 +291,8 @@ def plot_stack_bar(plot_params, Y, labels, xlabel, ylabel, xticks, anchor=None, 
   
 
   width = 0.25
-  color_list = ['b', 'g', 'c', 'r', 'm']
-  color_list = ['#2a6ca6', '#419136', '#7c4e44', '#c4342b', '#f47a2d', ] 
+  # color_list = ['b', 'g', 'c', 'r', 'm']
+  # color_list = ['#2a6ca6', '#419136', '#7c4e44', '#c4342b', '#f47a2d', ] 
   n = Y.shape[1]
   ind = np.arange(n)                # the x locations for the groups
   pre_bottom = np.zeros(len(Y[0]))
@@ -397,7 +410,7 @@ if __name__ == '__main__':
       'ytick.labelsize':'14',
       'lines.linewidth': 1,
       'legend.fontsize': '14',
-      'figure.figsize' : '10.3, 4',
+      'figure.figsize' : '11.2, 4',
       'legend.loc': 'upper center', #[]"upper right", "upper left"]
       # 'legend.loc': 'best', #[]"upper right", "upper left"]
       'legend.frameon': False,
@@ -409,8 +422,8 @@ if __name__ == '__main__':
     datasets = ['ogbn-arxiv']
     datasets = ['reddit']
     datasets = ['computer']
-    datasets = ['ogbn-arxiv', 'ogbn-products', 'reddit', 'computer']
     datasets = ['reddit', 'computer']
+    datasets = ['ogbn-arxiv', 'ogbn-products', 'reddit', 'computer']
     
     batch_sizes = {
         # 'AmazonCoBuy_computers': (512, 1024, 2048, 4096, 8250),
@@ -424,25 +437,28 @@ if __name__ == '__main__':
     fanout = '10 25'
     # batch_size = 1024
 
-    for ds in datasets:
+    # for ds in datasets:
       # for dim in [1, 2, 4]:
       #   log_file = f'./log/{ds}/{ds}-{dim}.log'
       #   get_partition_statistic(ds, num_parts, fanout, batch_sizes[ds], dim, log_file, 'metis')
       
       # log_file = f'./log/{ds}/{ds}-hash.log'
       # get_partition_statistic(ds, num_parts, fanout, batch_sizes[ds], 1, log_file, 'hash')
+
+      # log_file = f'./log/{ds}/{ds}-dgl.log'
+      # get_partition_statistic(ds, num_parts, fanout, batch_sizes[ds], 1, log_file, 'dgl')
       
-      log_file = f'./log/{ds}/{ds}-pagraph.log'
-      get_partition_statistic(ds, num_parts, fanout, batch_sizes[ds], 1, log_file, 'pagraph')
+      # log_file = f'./log/{ds}/{ds}-pagraph.log'
+      # get_partition_statistic(ds, num_parts, fanout, batch_sizes[ds], 1, log_file, 'pagraph')
       
       # log_file = f'./log/{ds}/{ds}-bytegnn.log'
       # get_partition_statistic(ds, num_parts, fanout, batch_sizes[ds], 1, log_file, 'bytegnn')
-    exit(0)
+    # exit(0)
 
 
-    modes = ['1', '4', 'pagraph', 'bytegnn', 'hash']
-    labels = ['metis1', 'metis4', 'pagraph', 'bytegnn', 'hash']
-    
+    modes = ['1', 'dgl', '4', 'pagraph', 'bytegnn', 'hash']
+    labels = ['metis1', 'metis2', 'metis4', 'pagraph', 'bytegnn', 'hash']
+
     # modes = ['1', '4', 'hash', 'bytegnn']
     # labels = ['metis1', 'metis4', 'hash', 'bytegnn']
     # partition graph result
@@ -487,14 +503,15 @@ if __name__ == '__main__':
       print(modes, 'compute load', [sum(x) for x in compute_Y])
       print(modes, 'comm load', [sum(x) for x in comm_Y])
 
+      color_list = ['#d73027','#fc8d59','#fee090','#e0f3f8','#91bfdb','#4575b4']
       xlabel = 'communication load'
       ylabel = 'MB'
       xticks = [f'part {x}' for x in range(num_parts)]
-      plot_bar(params, comm_Y, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.185), figpath=f'./partition-exp/{ds}-comm.pdf')
+      plot_bar(params, comm_Y, labels, xlabel, ylabel, xticks, color_list, anchor=(0.5, 1.25), figpath=f'./partition-exp/{ds}-comm.pdf')
 
       ylabel = ''
       xlabel = 'compute load'
-      plot_bar(params, compute_Y, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.185), figpath=f'./partition-exp/{ds}-compute.pdf')
+      plot_bar(params, compute_Y, labels, xlabel, ylabel, xticks, color_list, anchor=(0.5, 1.25), figpath=f'./partition-exp/{ds}-compute.pdf')
       # plot_bar(params, compute_Y, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.15), figpath=f'./partition-exp/{ds}-compute.pdf')
 
 
@@ -510,6 +527,10 @@ if __name__ == '__main__':
     }
     
     # dep cache statistics (stack bar)
+
+    modes = ['1', '2', 'dgl', '4', 'pagraph', 'bytegnn', 'hash']
+    partiton_algo = ['metis1', 'metis2','dgl', 'metis4', 'pagraph', 'bytegnn', 'hash']
+
     for ds in datasets:
       local_edges = []
       remote_edges = []
@@ -528,14 +549,16 @@ if __name__ == '__main__':
       print(modes, 'remote edges', [sum(x) for x in remote_edges])
 
       xlabel = '#partition ID'
-      partiton_algo = ['metis1', 'metis4', 'pagraph', 'bytegnn', 'hash']
+      # partiton_algo = ['metis1', 'metis4', 'pagraph', 'bytegnn', 'hash']
+
       # partiton_algo = ['metis1', 'metis4', 'hash', 'bytegnn']
+      color_list = ['#f0f0f0','#bdbdbd','#636363']
       labels = ['Local', 'Remote']
       for i, algo in enumerate(partiton_algo):
         Y = np.array([local_edges[i], remote_edges[i]])
         Y /= 1e6
         print(algo, 'all data request', Y.sum())
         ylabel = '#Reqeust Number 1e6'
-        plot_stack_bar(params, Y, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.22), figpath=f'./partition-exp/{ds}-datarequire-{algo}.pdf')
+        plot_stack_bar(params, Y, labels, xlabel, ylabel, xticks, color_list, anchor=(0.5, 1.22), figpath=f'./partition-exp/{ds}-datarequire-{algo}.pdf')
         # plot_stack_bar(params, Y, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.185), figpath=f'./partition-exp/{ds}-datarequire-{algo}.pdf')
 

@@ -14,7 +14,7 @@ import torch
 from partition.utils import setup_seed
 from partition.metis_partition import metis_partition_graph
 from partition.pagraph_partition import pagraph_partition_graph
-from exp.Partition.partition.dgl_partition import hash_partition_graph
+from partition.hash_partition import hash_partition_graph
 from partition.bytegnn_partition import bytegnn_partition_graph
 from partition.bytegnn_partition import read_bytegnn_partition_result
 from partition.utils import extract_dataset
@@ -35,60 +35,62 @@ if __name__ == '__main__':
 
   setup_seed(2000)
   # graph dataset
-  edges_list, features, labels, train_mask, val_mask, test_mask, graph = extract_dataset(args)
-  feature_dim = features.shape[1]
-  train_mask = train_mask.to(torch.long)
-  val_mask = val_mask.to(torch.long)
-  test_mask = test_mask.to(torch.long)
-
-  node_nums = graph.number_of_nodes()
-  edge_nums = graph.number_of_edges()
-  src_nodes = edges_list[:, 0].tolist()
-  dst_nodes = edges_list[:, 1].tolist()
-  edges = [(x, y) for x, y in zip(src_nodes, dst_nodes)]
-  assert (len(edges) == edge_nums == len(set(edges)) == edges_list.shape[0])
-  indices = torch.tensor([src_nodes, dst_nodes])
-  rowptr, col, value = dglsp.spmatrix(indices).csc()
-  
-
   
   for dataset in ['ogbn-arxiv', 'ogbn-products', 'reddit', 'computer']:
+  # for dataset in ['ogbn-products', 'reddit', 'computer']:
+  # for dataset in ['computer']:
+  # for dataset in ['reddit']:
   # for dataset in ['ogbn-arxiv']:
-  # for dataset in ['ogbn-arxiv']:
+    args.dataset = dataset
+    print('dataset', args.dataset)
+    edges_list, features, labels, train_mask, val_mask, test_mask, graph = extract_dataset(args)
+    feature_dim = features.shape[1]
+    train_mask = train_mask.to(torch.long)
+    val_mask = val_mask.to(torch.long)
+    test_mask = test_mask.to(torch.long)
+
+    node_nums = graph.number_of_nodes()
+    edge_nums = graph.number_of_edges()
+    src_nodes = edges_list[:, 0].tolist()
+    dst_nodes = edges_list[:, 1].tolist()
+    edges = [(x, y) for x, y in zip(src_nodes, dst_nodes)]
+    assert (len(edges) == edge_nums == len(set(edges)) == edges_list.shape[0])
+    indices = torch.tensor([src_nodes, dst_nodes])
+    rowptr, col, value = dglsp.spmatrix(indices).csc()
+
+
     mode_list = []
     time_list = []
     for dim in [1,2,4]:
       time_cost = -time.time()
-      parts = metis_partition_graph(dataset, args.num_parts, rowptr, col, train_mask, val_mask, test_mask, node_weight_dim=dim)
+      parts = metis_partition_graph(args.dataset, args.num_parts, rowptr, col, train_mask, val_mask, test_mask, node_weight_dim=dim)
       time_cost += time.time()
       time_list.append(round(time_cost, 3))
       mode_list.append(f'metis-dim{dim}')
       
 
     time_cost = -time.time()
-    partition_nodes, partition_train_nodes = pagraph_partition_graph(dataset, args.num_parts, args.num_hops, graph, rowptr, col, train_mask, val_mask, test_mask)
+    partition_nodes, partition_train_nodes = pagraph_partition_graph(args.dataset, args.num_parts, args.num_hops, graph, rowptr, col, train_mask, val_mask, test_mask)
     time_cost += time.time()
     time_list.append(round(time_cost, 3))
     mode_list.append(f'pagraph')
 
     time_cost = -time.time()
-    parts = hash_partition_graph(dataset, args.num_parts, node_nums)
+    parts = hash_partition_graph(args.dataset, args.num_parts, node_nums)
     time_cost += time.time()
     time_list.append(round(time_cost, 3))
     mode_list.append(f'hash')
 
 
     time_cost = -time.time()
-    command = f'./bytegnn ~/neutron-sanzo/data/{dataset} {dataset} {args.num_parts} {args.num_hops} ./partition_result'
+    command = f'./bytegnn ~/neutron-sanzo/data/{args.dataset} {args.dataset} {args.num_parts} {args.num_hops} ./partition_result'
     os.system(command)
     time_cost += time.time()
     time_list.append(round(time_cost, 3))
-    mode_list.append(f'hash')
+    mode_list.append(f'bytegnn')
 
 
-
-
-    print(f'####### Partition Time {dataset}')
+    print(f'####### Partition Time {args.dataset}')
     print(mode_list)
     print(time_list)
 

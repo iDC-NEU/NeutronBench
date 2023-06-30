@@ -229,7 +229,7 @@ if __name__ == '__main__':
     'ytick.labelsize':'14',
     'lines.linewidth': 1,
     'legend.fontsize': '14.7',
-    'figure.figsize' : '8, 4',
+    'figure.figsize' : '12, 4',
     'legend.loc': 'upper center', #[]"upper right", "upper left"]
     # 'legend.loc': 'best', #[]"upper right", "upper left"]
   }
