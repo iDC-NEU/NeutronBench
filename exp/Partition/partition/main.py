@@ -914,7 +914,7 @@ if __name__ == '__main__':
     # metis partition result
     if args.algo == 'metis':
         parts = metis_partition_graph(args.dataset, args.num_parts, rowptr, col, train_mask, val_mask, test_mask, node_weight_dim=args.dim)
-        partition_nodes, partition_edges, partition_train_nodes, partition_val_nodes, partition_test_nodes = get_partition_result(parts, rowptr, col, args.num_parts, train_mask, val_mask, test_mask)
+        partition_nodes, partition_edges, partition_train_nodes, partition_val_nodes, partition_test_nodes = get_partition_result(parts, rowptr, col, args.num_parts, train_mask, val_mask, test_mask, args.algo)
         statistic_info(graph, partition_nodes, partition_edges, partition_train_nodes, rowptr, col, args.batch_size, args.fanout, args.algo)
     elif args.algo == 'pagraph':
         partition_nodes, partition_train_nodes = pagraph_partition_graph(args.dataset, args.num_parts, args.num_hops, graph, rowptr, col, train_mask, val_mask, test_mask)
@@ -924,18 +924,18 @@ if __name__ == '__main__':
         statistic_info(graph, partition_nodes, partition_edges, partition_train_nodes, rowptr, col, args.batch_size, args.fanout, args.algo)
     elif args.algo == 'hash':
         parts = hash_partition_graph(args.dataset, args.num_parts, node_nums)
-        partition_nodes, partition_edges, partition_train_nodes, partition_val_nodes, partition_test_nodes = get_partition_result(parts, rowptr, col, args.num_parts, train_mask, val_mask, test_mask, args.algo)
+        partition_nodes, partition_edges, partition_train_nodes, partition_val_nodes, partition_test_nodes = get_partition_result(parts, rowptr, col, args.num_parts, train_mask, val_mask, test_mask, args.algo, args.algo)
         statistic_info(graph, partition_nodes, partition_edges, partition_train_nodes, rowptr, col, args.batch_size, args.fanout, args.algo)
     elif args.algo == 'bytegnn':
         # parts = bytegnn_partition_graph(args.dataset, args.num_parts, args.num_hops, rowptr, col, train_mask, val_mask, test_mask, alpha=1.0, beta=1.0, gamma=1.0)
         parts =  read_bytegnn_partition_result(args.dataset, node_nums)
-        partition_nodes, partition_edges, partition_train_nodes, partition_val_nodes, partition_test_nodes = get_partition_result(parts, rowptr, col, args.num_parts, train_mask, val_mask, test_mask, args.algo)
+        partition_nodes, partition_edges, partition_train_nodes, partition_val_nodes, partition_test_nodes = get_partition_result(parts, rowptr, col, args.num_parts, train_mask, val_mask, test_mask, args.algo, args.algo)
         print('all_partition_nodes', sum([len(x) for x in partition_nodes]))
         statistic_info(graph, partition_nodes, partition_edges, partition_train_nodes, rowptr, col, args.batch_size, args.fanout, args.algo)
     elif args.algo == 'dgl':
-        parts = dgl_partition_graph(args.dataset, args.num_parts, rowptr, col, train_mask, val_mask, test_mask, node_weight_dim=args.dim)
-        # partition_nodes, partition_edges, partition_train_nodes, partition_val_nodes, partition_test_nodes = get_partition_result(parts, rowptr, col, args.num_parts, train_mask, val_mask, test_mask)
-        # statistic_info(graph, partition_nodes, partition_edges, partition_train_nodes, rowptr, col, args.batch_size, args.fanout, args.algo)
+        parts = dgl_partition_graph(args.dataset, args.num_parts, graph, train_mask, val_mask, test_mask)
+        partition_nodes, partition_edges, partition_train_nodes, partition_val_nodes, partition_test_nodes = get_partition_result(parts, rowptr, col, args.num_parts, train_mask, val_mask, test_mask, args.algo)
+        statistic_info(graph, partition_nodes, partition_edges, partition_train_nodes, rowptr, col, args.batch_size, args.fanout, args.algo)
     else:
 
         raise NotImplementedError

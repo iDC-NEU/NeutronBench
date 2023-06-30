@@ -320,6 +320,7 @@ class GCN_GPU_NEIGHBOR_impl {
       epoch_sample_time -= get_time();
       auto ssg = sampler->subgraph;
       sampler->sample_one(ssg, graph->config->batch_type, ctx->is_train());
+      // sampler->sample_one_with_dst(ssg, graph->config->batch_type, ctx->is_train());
       epoch_sample_time += get_time();
 
       epoch_trans_graph_time -= get_time();
@@ -440,6 +441,7 @@ class GCN_GPU_NEIGHBOR_impl {
       ++i;
       auto ssg = sampler->subgraph;
       sampler->sample_one(ssg, graph->config->batch_type, ctx->is_train());
+      // sampler->sample_one_with_dst(ssg, graph->config->batch_type, ctx->is_train());
 
       ssg->trans_graph_to_gpu(graph->config->mini_pull > 0);  // wheather trans csr data to gpu
       sampler->load_feature_gpu(X[0], gnndatum->dev_local_feature);
@@ -562,14 +564,15 @@ void count_sample_hop_nodes(Sampler* sampler) {
       train_nids.erase(train_nids.begin() + static_cast<int>(sz * (1 - graph->config->del_frac)), train_nids.end());
     }
     train_sampler = new Sampler(fully_rep_graph, train_nids);
-    // train_sampler->show_fanout("train sampler");
+    train_sampler->show_fanout("train sampler");
     // eval_sampler = new Sampler(fully_rep_graph, val_nids, true);  // true mean full batch
     eval_sampler = new Sampler(fully_rep_graph, val_nids);  // true mean full batch
     if (graph->config->val_batch_size == 0) graph->config->val_batch_size = graph->config->batch_size;
     eval_sampler->update_batch_size(graph->config->val_batch_size);  // true mean full batch
     // eval_sampler->update_fanout(-1);        ÷            // val not sample
     eval_sampler->update_fanout(graph->gnnctx->val_fanout);  // val not sample
-    // eval_sampler->show_fanout("val sampler");
+    eval_sampler->show_fanout("val sampler");
+    eval_sampler->subgraph->show_fanout("val subgraph sampler");
     test_sampler = new Sampler(fully_rep_graph, test_nids, true);  // true mean full batch
 
     // count_sample_hop_nodes(train_sampler);

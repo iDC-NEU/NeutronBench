@@ -12,6 +12,7 @@ from dgl import DGLGraph
 from dgl.data import load_data
 from dgl.data import CoraFullDataset, CoauthorCSDataset, CoauthorPhysicsDataset
 from dgl.data import AmazonCoBuyComputerDataset, AmazonCoBuyPhotoDataset
+# from load_graph import load_ogb, load_reddit
 from ogb.nodeproppred import DglNodePropPredDataset
 import random
 import psutil

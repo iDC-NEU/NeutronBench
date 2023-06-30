@@ -39,6 +39,28 @@ class SampledSubgraph {
     // LOG_DEBUG("SamplerSubgraph thraeds %d", threads);
     seeds = new unsigned[threads];
   }
+  
+  void update_fanout(const std::vector<int> fanout_) {
+    assert (fanout.size() == fanout_.size());
+    for (int i = 0; i < fanout.size(); ++i) {
+      fanout[i] = fanout_[i];
+    }
+  }
+
+  void show_fanout(std::string info) {
+    std::cout << info << " ";
+    for (auto& it : fanout) {
+      printf("%d, ", it);
+    }
+    printf("\n");
+  }
+
+  void update_fanout(int nums) {
+    for (auto& it : fanout) {
+      it = nums;
+    }
+  }
+  
   SampledSubgraph(int layers_, int batch_size_, const std::vector<int> &fanout_) {
     layers = layers_;
     batch_size = batch_size_;

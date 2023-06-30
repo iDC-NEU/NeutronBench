@@ -313,6 +313,7 @@ class Sampler {
     for (auto it : fanout) {
       assert(it == nums);
     }
+    subgraph->update_fanout(nums);
   }
 
   void update_fanout(std::vector<int> nums) {
@@ -320,6 +321,7 @@ class Sampler {
     for (int i = 0; i < nums.size(); ++i) {
       fanout[i] = nums[i];
     }
+    subgraph->update_fanout(nums);
   }
 
   void show_fanout(std::string info) {
@@ -633,6 +635,215 @@ class Sampler {
   }
 
   void sample_one(int type = 0, bool phase = true) { sample_one(subgraph, type, phase); }
+
+
+  void sample_one_with_dst(SampledSubgraph* ssg, int type = 0, bool phase = true) {
+    assert(work_offset < work_range[1]);
+    // assert(batch_size == batch_size_);
+    VertexId actl_batch_size = std::min(batch_size, work_range[1] - work_offset);
+    if (phase && whole_graph->graph_->config->batch_type == METIS) {
+      actl_batch_size = batch_nodes[metis_batch_id].size();
+    }
+    assert(actl_batch_size > 0);
+    // LOG_DEBUG("actl_batch %d", actl_batch_size);
+    // SampledSubgraph* ssg=new SampledSubgraph(layers,fanout_);
+    // auto ssg = work_queue[work_offset / batch_size_];
+    // auto ssg = subgraph;
+    // LOG_DEBUG("fuck batch_size %d", actl_batch_size);
+    ssg->curr_dst_size = actl_batch_size;
+    for (int i = 0; i < layers; i++) {
+      layer_time -= get_time();
+      ssg->curr_layer = i;
+      sample_load_dst -= get_time();
+      auto csc_layer = ssg->sampled_sgs[i];
+      // LOG_DEBUG("sample_one layer %d update_vertices done, dst_size %d", i, ssg->curr_dst_size);
+      // csc_layer->update_vertices(ssg->curr_dst_size);
+      csc_layer->alloc_vertices(ssg->curr_dst_size);
+      if (i == 0) {
+        if (phase && whole_graph->graph_->config->batch_type == RANDOM) {
+          // LOG_DEBUG("batch: random_batch");
+          csc_layer->random_batch(sample_nids);
+        } else if (phase && whole_graph->graph_->config->batch_type == METIS) {
+          // LOG_DEBUG("init dst batch_nodes %d", metis_batch_id);
+          csc_layer->init_dst(batch_nodes[metis_batch_id++]);
+        } else {
+          // LOG_DEBUG("batch: work_offset");
+          csc_layer->init_dst(sample_nids.data() + work_offset);
+        }
+        work_offset += actl_batch_size;
+        // LOG_DEBUG("dst size %d", csc_layer->v_size);
+        /////////////// check
+        // for (int j = 0; j < csc_layer->v_size; ++j) {
+        //   assert(csc_layer->dst()[j] == sample_nids[j + work_offset]);
+        // }
+        // LOG_DEBUG("layer 0 src size %d", csc_layer->src().size());
+      } else {
+        csc_layer->init_dst(ssg->sampled_sgs[i - 1]->src());
+        // LOG_DEBUG("dst size %d", csc_layer->v_size);
+        // LOG_DEBUG("after init_dst csc v_size %d, pre src size %d", csc_layer->v_size, ssg->sampled_sgs[i -
+        // 1]->src_size);
+
+        // #pragma omp parallel for num_threads(threads)
+        //         for (int j = 0; j < csc_layer->v_size; ++j) {
+        //           assert(csc_layer->dst()[j] == ssg->sampled_sgs[i - 1]->src()[j]);
+        //         }
+      }
+      // LOG_DEBUG("sample_one layer %d init_dst done", i);
+      // LOG_DEBUG("after init dst");
+      // ssg->sampled_sgs.push_back(csc_layer);
+      sample_load_dst += get_time();
+      // LOG_DEBUG("sample_load_dst cost %.3f", sample_load_dst);
+
+      sample_init_co -= get_time();
+      if (whole_graph->graph_->config->sample_rate > 0) {  // use sample rate
+        float sample_rate = whole_graph->graph_->config->sample_rate;
+        // LOG_DEBUG("sample_rate %.3f", sample_rate);
+        ssg->init_co(
+            [&](VertexId dst) {
+              int nbrs = whole_graph->column_offset[dst + 1] - whole_graph->column_offset[dst];
+              // if (fanout[i] < 0) return nbrs;
+              int lower_edge = std::min(whole_graph->graph_->config->lower_fanout, nbrs);
+              return std::max(int(nbrs * sample_rate), lower_edge) + 1;
+            },
+            i);
+      } else {
+        ssg->init_co(
+            [&](VertexId dst) {
+              int nbrs = whole_graph->column_offset[dst + 1] - whole_graph->column_offset[dst];
+              // if (fanout[i] < 0 && full_batch) {
+              //   assert(false);
+              // }
+              if (fanout[i] < 0) return nbrs;
+              return std::min(nbrs, fanout[i]) + 1;
+            },
+            i);
+      }
+
+      sample_init_co += get_time();
+      // LOG_DEBUG("sample_one layer %d init_column_offset done", i);
+
+      // LOG_DEBUG("sample_init_co cost %.3f", sample_init_co);
+
+      sample_processing_time -= get_time();
+      sample_bits->clear();
+      // LOG_DEBUG("fanout_i %d\n", fanout_i[i]);
+      // ssg->sample_processing(std::bind(&Sampler::NeighborUniformSample, this, std::placeholders::_1,
+      // std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5));
+      ssg->sample_processing(
+          [&](VertexId fanout_i, VertexId dst, VertexId* column_offset, VertexId* row_indices, VertexId id) {
+            // this->NeighborUniformSample(fanout_i, dst, column_offset, row_indices, id);
+
+            auto whole_offset = whole_graph->column_offset;
+            auto whole_indices = whole_graph->row_indices;
+            VertexId edge_nums = whole_offset[dst + 1] - whole_offset[dst];
+            // fanout_i = column_offset[id + 1] - column_offset[id];
+
+            if (whole_graph->graph_->config->sample_rate > 0) {
+              VertexId tmp_fanout = std::max(whole_graph->graph_->config->lower_fanout,
+                                             int(edge_nums * whole_graph->graph_->config->sample_rate));
+              // LOG_DEBUG("neightbor sample fanout %d, edge %d sample rate %d", fanout_i, edge_nums, tmp_fanout);
+              fanout_i = tmp_fanout;
+            }
+            VertexId actl_fanout = min(fanout_i, edge_nums);
+            assert(column_offset[id + 1] - column_offset[id] == actl_fanout + 1);
+
+            ///////////// no sorted_idxs copy //////////////////
+            int pos = column_offset[id];
+            if (fanout_i < edge_nums) {
+              std::unordered_set<size_t> sampled_idxs;
+              while (sampled_idxs.size() < fanout_i) {
+                // sampled_idxs.insert(rand_int(fanout_i));
+                // sampled_idxs.insert(rand_int_seed(fanout_i));
+                sampled_idxs.insert(random_uniform_int(0, edge_nums - 1));
+              }
+
+              for (auto& idx : sampled_idxs) {
+                row_indices[pos++] = whole_indices[whole_offset[dst] + idx];
+                sample_bits->set_bit(whole_indices[whole_offset[dst] + idx]);
+              }
+
+              // random replace
+              // include dst
+
+              // sorted_idxs.insert(sorted_idxs.end(), sampled_idxs.begin(), sampled_idxs.end());
+            } else {
+              for (size_t i = 0; i < edge_nums; ++i) {
+                // sorted_idxs.push_back(i);
+
+                row_indices[pos++] = whole_indices[whole_offset[dst] + i];
+                sample_bits->set_bit(whole_indices[whole_offset[dst] + i]);
+              }
+            }
+            row_indices[pos++] = dst;
+            sample_bits->set_bit(dst);
+            assert(pos == column_offset[id+1]);
+          });
+
+          std::unordered_set<VertexId> check_sample_result;
+          VertexId all_node_num = sample_bits->get_size();
+          for(VertexId i_src=0;i_src<all_node_num;i_src+=64){
+              unsigned long word= sample_bits->data[WORD_OFFSET(i_src)];
+              VertexId vtx=i_src;
+              VertexId offset=0;
+              while(word != 0){
+                  if(word & 1){
+                      check_sample_result.insert(vtx + offset);
+                  }
+                  offset++;
+                  word = word >> 1;
+              }
+          }
+
+          bool all_dst_in = true;
+          for (auto u : csc_layer->dst()) {
+            if (check_sample_result.find(u) == check_sample_result.end()) {
+              all_dst_in = false;
+              break;
+            }
+          }
+          if (!all_dst_in)  {
+            std::cout << "all_dst_in false!" << std::endl;;
+            assert(false);
+          }
+
+
+
+
+      sample_processing_time += get_time();
+      // LOG_DEBUG("sample_one layer %d processing done", i);
+
+      // whole_graph->SyncAndLog("sample_processing");
+      sample_post_time -= get_time();
+      // ssg->sample_postprocessing();
+      ssg->sample_postprocessing(sample_bits, i, node_idx);
+    
+      sample_post_time += get_time();
+      layer_time += get_time();
+    }
+
+    // ssg->add_pre_layer_edges();
+    // std::cout << "add pre layer done" << std::endl;
+
+    std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
+
+    sample_convert_graph_time -= get_time();
+    if (whole_graph->graph_->config->mini_pull > 0) {  // generate csr structure for backward of pull mode
+      for (auto p : ssg->sampled_sgs) {
+        p->generate_csr_from_csc();
+      }
+    }
+    sample_convert_graph_time += get_time();
+
+    ssg->alloc_dev_array(whole_graph->graph_->config->mini_pull > 0);
+    sample_compute_weight -= get_time();
+    ssg->compute_weight(whole_graph->graph_);
+
+    // auto [degree_time, weight_time] = ssg->compute_weight(whole_graph->graph_);
+    // sample_degree_time += degree_time;
+    // sample_weight_time += weight_time;
+    sample_compute_weight += get_time();
+  }
+
 
   void sample_one(SampledSubgraph* ssg, int type = 0, bool phase = true) {
     assert(work_offset < work_range[1]);
