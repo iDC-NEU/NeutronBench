@@ -1164,7 +1164,7 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
       LOG_DEBUG("zerocopy version");
       zerocopy_version(sampler);
     } else {
-      std::cout << "not support" << std::endl;
+      LOG_DEBUG("not support");
       assert(false);
     }
 
