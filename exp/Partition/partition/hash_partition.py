@@ -10,7 +10,7 @@ from partition.utils import show_time
 
 @show_time
 def hash_partition_graph(dataset, num_parts, num_nodes):
-    save_hash_parts = f'/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/hash-{dataset}.pt'
+    save_hash_parts = f'/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/hash-{dataset}-part{num_parts}.pt'
     if os.path.exists(save_hash_parts):
         print(f'read from partition result {save_hash_parts}.')
         parts = torch.load(save_hash_parts)

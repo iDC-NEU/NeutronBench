@@ -57,7 +57,7 @@ def get_homogeneous(g, balance_ntypes):
 
 @show_time
 def dgl_partition_graph(dataset, num_parts, graph, train_mask, val_mask, test_mask):
-    save_dgl_parts = f'/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/dgl-{dataset}.pt'
+    save_dgl_parts = f'/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/dgl-{dataset}-part{num_parts}.pt'
     if os.path.exists(save_dgl_parts):
         print(f'read from partition result {save_dgl_parts}.')
         parts = torch.load(save_dgl_parts)

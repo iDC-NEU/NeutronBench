@@ -259,6 +259,7 @@ def get_label_nums(nodes, train_nids, val_nids, test_nids):
 
 @show_time
 def bytegnn_partition_graph(dataset, num_parts, num_hops, rowptr, col, train_mask, val_mask, test_mask, alpha=1.0, beta=1.0, gamma=1.0):
+    raise NotImplementedError
     print("\n######## bytegnn_partition_graph #########")
     print("num_parts {} num_hops {} ".format(num_parts, num_hops))
 
@@ -345,8 +346,9 @@ def bytegnn_partition_graph(dataset, num_parts, num_hops, rowptr, col, train_mas
     return parts
 
 
-def read_bytegnn_partition_result(dataset, num_nodes):
-    filename = '/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/bytegnn/' + dataset + '-parts.txt'
+def read_bytegnn_partition_result(dataset, num_nodes, num_parts):
+    filename = f'/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/bytegnn-{dataset}-part{num_parts}.txt'
+    print(filename)
     assert os.path.exists(filename)
     with open(filename, 'r') as f:
         partition_nodes = []

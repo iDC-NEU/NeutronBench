@@ -130,8 +130,8 @@ def pagraph_partition_graph(dataset, num_parts, num_hops, graph, rowptr, col, tr
     print("\n######## pagraph_partition_graph #########")
     print("num_parts {} num_hops {} ".format(num_parts, num_hops))
 
-    save_partition_nodes = f'/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/pargraph-{dataset}-parts.pt'
-    save_partition_train_nodes = f'/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/pargraph-{dataset}-train.pt'
+    save_partition_nodes = f'/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/pagraph-{dataset}-part{num_parts}.pt'
+    save_partition_train_nodes = f'/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/pagraph-{dataset}-train-part{num_parts}.pt'
     if os.path.exists(save_partition_nodes) and os.path.exists(save_partition_train_nodes):
         print(f'read from partition result {save_partition_nodes} and {save_partition_train_nodes}.')
         partition_nodes = torch.load(save_partition_nodes)

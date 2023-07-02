@@ -87,7 +87,7 @@ def metis_partition(rowptr, col, node_weights, edge_weights, nodew_dim=1, num_pa
 def metis_partition_graph(dataset, num_parts, rowptr, col, train_mask, val_mask, test_mask, node_weight_dim=1):
     print("\n######## metis_partition_graph #########")
 
-    save_metis_partition_result = f'/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/metis-{dataset}-dim{node_weight_dim}.pt'
+    save_metis_partition_result = f'/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/metis-{dataset}-dim{node_weight_dim}-part{num_parts}.pt'
     if os.path.exists(save_metis_partition_result):
         print(f'read from partition result {save_metis_partition_result}.')
         parts = torch.load(save_metis_partition_result)
