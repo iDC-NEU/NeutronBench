@@ -22,6 +22,9 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 #include "GCN_CPU_LAYER.hpp"
 #include "GCN_CPU_NEIGHBOR.hpp"
 #include "GCN_GPU_NEIGHBOR-exp3.hpp"
+#include "GCN_GPU_NEIGHBOR-cache-exp.hpp"
+#include "GCN_GPU_NEIGHBOR-cache-dgl-exp.hpp"
+#include "GCN_GPU_NEIGHBOR-trans-exp.hpp"
 #include "GIN_CPU.hpp"
 #include "test_batch_distributed.hpp"
 #include "test_getdepneighbor_cpu.hpp"
@@ -137,7 +140,12 @@ int main(int argc, char **argv) {
     GCN_GPU_NEIGHBOR_EXP3_impl *ntsGCN = new GCN_GPU_NEIGHBOR_EXP3_impl(graph, iterations);
     ntsGCN->init_graph();
     ntsGCN->init_nn();
-    float acc = ntsGCN->run();
+
+    if (graph->config->cache_exp == 1) {
+      ntsGCN->run_cache_exp();
+    } else {
+      float acc = ntsGCN->run();
+    }
 
     // std::vector<int> batch_size_list {512, 1024, 512, 1024};
     // for (auto it : batch_size_list) {
@@ -166,7 +174,30 @@ int main(int argc, char **argv) {
     // std::cout << "edge_file: " << graph->config->edge_file << std::endl;
 
     // ntsGCN->run();
-  } else if (graph->config->algorithm == std::string("TEST_BATCH_DIST")) {
+  } else if (graph->config->algorithm == std::string("GCNNEIGHBORGPUCACHEEXP")) {
+    graph->load_directed(graph->config->edge_file, graph->config->vertices);
+    graph->generate_backward_structure();
+    GCN_GPU_NEIGHBOR_CACHE_EXP_impl *ntsGCN = new GCN_GPU_NEIGHBOR_CACHE_EXP_impl(graph, iterations);
+    ntsGCN->init_graph();
+    ntsGCN->init_nn();
+    float acc = ntsGCN->run();
+  
+  } else if (graph->config->algorithm == std::string("GCNNEIGHBORGPUCACHEDGLEXP")) {
+    graph->load_directed(graph->config->edge_file, graph->config->vertices);
+    graph->generate_backward_structure();
+    GCN_GPU_NEIGHBOR_CACHE_DGL_EXP_impl *ntsGCN = new GCN_GPU_NEIGHBOR_CACHE_DGL_EXP_impl(graph, iterations);
+    ntsGCN->init_graph();
+    ntsGCN->init_nn();
+    float acc = ntsGCN->run();
+  } else if (graph->config->algorithm == std::string("GCNNEIGHBORGPUTRANSEXP")) {
+    graph->load_directed(graph->config->edge_file, graph->config->vertices);
+    graph->generate_backward_structure();
+    GCN_GPU_NEIGHBOR_TRANS_EXP_impl *ntsGCN = new GCN_GPU_NEIGHBOR_TRANS_EXP_impl(graph, iterations);
+    ntsGCN->init_graph();
+    ntsGCN->init_nn();
+    float acc = ntsGCN->run();
+  } 
+  else if (graph->config->algorithm == std::string("TEST_BATCH_DIST")) {
     graph->load_directed(graph->config->edge_file, graph->config->vertices);
     graph->generate_backward_structure();
     TEST_BATCH_DIST_impl *ntsGCN = new TEST_BATCH_DIST_impl(graph, iterations);

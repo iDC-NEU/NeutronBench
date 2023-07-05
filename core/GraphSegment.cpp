@@ -296,6 +296,17 @@ void InputInfo::readFromCfgFile(std::string config_file) {
     } else if (0 == cfg_k.compare("RUN_TIME")) {
       this->run_time = std::atof(cfg_v.c_str());
       assert(this->run_time > 0);
+    } else if (0 == cfg_k.compare("CACHE_RATE_END")) {
+      this->cache_rate_end = std::atof(cfg_v.c_str());
+      assert(cache_rate_end >= 0 && cache_rate_end <= 1 && cache_rate_start < cache_rate_end);
+    } else if (0 == cfg_k.compare("CACHE_RATE_START")) {
+      this->cache_rate_start = std::atof(cfg_v.c_str());
+      assert(cache_rate_start >= 0);
+    }else if (0 == cfg_k.compare("CACHE_RATE_NUM")) {
+      this->cache_rate_num = std::atof(cfg_v.c_str());
+      assert(this->cache_rate_num > 0);
+    } else if (0 == cfg_k.compare("CACHE_EXP")) {
+      this->cache_exp = std::atoi(cfg_v.c_str());
     } else if (0 == cfg_k.compare("BATCH_SWITCH_TIME")) {
       this->batch_switch_time = std::atof(cfg_v.c_str());
       // printf("batch_switch_time %.3f\n", batch_switch_time);
@@ -434,6 +445,10 @@ void InputInfo::print() {
   std::cout << "mode\t\t:\t" << mode << std::endl;
   std::cout << "best_parameter\t:\t" << best_parameter << std::endl;
   std::cout << "threshold_trans\t:\t" << threshold_trans << std::endl;
+  std::cout << "cache_rate_start\t:\t" << cache_rate_start << std::endl;
+  std::cout << "cache_rate_end\t:\t" << cache_rate_end << std::endl;
+  std::cout << "cache_rate_num\t:\t" << cache_rate_num << std::endl;
+  std::cout << "cache_exp\t:\t" << cache_exp << std::endl;
 
   std::cout << "------------------input info--------------" << std::endl;
 }
