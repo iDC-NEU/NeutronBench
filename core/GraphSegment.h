@@ -169,10 +169,17 @@ class InputInfo {
   float sample_rate = -1;
   double run_time = -1;
   int best_parameter = 0;
-  float threshold_trans = 0;
   float cache_rate_end;
   float cache_rate_num;
   float cache_rate_start = 0;
+
+
+  float threshold_trans = 0;
+  float trans_threshold_start = 0;
+  float trans_threshold_end;
+  float trans_threshold_num;
+  int block_size = 256;
+
   int cache_exp = 0;
   // int dynamic_sample = -1;
 

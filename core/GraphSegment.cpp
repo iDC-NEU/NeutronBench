@@ -305,7 +305,19 @@ void InputInfo::readFromCfgFile(std::string config_file) {
     }else if (0 == cfg_k.compare("CACHE_RATE_NUM")) {
       this->cache_rate_num = std::atof(cfg_v.c_str());
       assert(this->cache_rate_num > 0);
-    } else if (0 == cfg_k.compare("CACHE_EXP")) {
+    } else if (0 == cfg_k.compare("TRANS_THRESHOLD_NUM")) {
+      this->trans_threshold_num = std::atof(cfg_v.c_str());
+      assert(this->trans_threshold_num > 0);
+    }else if (0 == cfg_k.compare("TRANS_THRESHOLD_START")) {
+      this->trans_threshold_start = std::atof(cfg_v.c_str());
+      assert(this->trans_threshold_start >= 0);
+    }else if (0 == cfg_k.compare("BLOCK_SIZE")) {
+      this->block_size = std::atoi(cfg_v.c_str());
+      assert(this->block_size > 0);
+    }else if (0 == cfg_k.compare("TRANS_THRESHOLD_END")) {
+      this->trans_threshold_end = std::atof(cfg_v.c_str());
+      assert(trans_threshold_end >= 0 && trans_threshold_end <= 1 && trans_threshold_start < trans_threshold_end);
+    }else if (0 == cfg_k.compare("CACHE_EXP")) {
       this->cache_exp = std::atoi(cfg_v.c_str());
     } else if (0 == cfg_k.compare("BATCH_SWITCH_TIME")) {
       this->batch_switch_time = std::atof(cfg_v.c_str());
@@ -448,6 +460,11 @@ void InputInfo::print() {
   std::cout << "cache_rate_start\t:\t" << cache_rate_start << std::endl;
   std::cout << "cache_rate_end\t:\t" << cache_rate_end << std::endl;
   std::cout << "cache_rate_num\t:\t" << cache_rate_num << std::endl;
+  std::cout << "trans_threshold_start\t:\t" << trans_threshold_start << std::endl;
+  std::cout << "trans_threshold_end\t:\t" << trans_threshold_end << std::endl;
+  std::cout << "trans_threshold_num\t:\t" << trans_threshold_num << std::endl;
+  std::cout << "block_size\t:\t" << block_size << std::endl;
+  
   std::cout << "cache_exp\t:\t" << cache_exp << std::endl;
 
   std::cout << "------------------input info--------------" << std::endl;
