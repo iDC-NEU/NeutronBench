@@ -119,6 +119,8 @@ class GCN_GPU_NEIGHBOR_TRANS_EXP_impl {
     graph = graph_;
     iterations = iterations_;
 
+    cache_node_hashmap = nullptr;
+
     active = graph->alloc_vertex_subset();
     active->fill();
 
@@ -217,13 +219,15 @@ class GCN_GPU_NEIGHBOR_TRANS_EXP_impl {
     dev_local_idx_cache = (VertexId*)getDevicePointer(local_idx_cache);
   }
 
-  void mark_cache_node(std::vector<int>& cache_nodes) {
-    // init mask
-    // #pragma omp parallel for
-    // #pragma omp parallel for num_threads(threads)
+  void mark_cache_node(const std::vector<int>& cache_nodes) {
+    #pragma omp parallel for num_threads(threads)
     for (int i = 0; i < graph->vertices; ++i) {
       cache_node_hashmap[i] = -1;
-      // assert(cache_node_hashmap[i] == -1);
+    }
+
+    #pragma omp parallel for num_threads(threads)
+    for (int i = 0; i < graph->vertices; ++i) {
+      assert(cache_node_hashmap[i] == -1);
     }
 
     // mark cache nodes
@@ -232,17 +236,7 @@ class GCN_GPU_NEIGHBOR_TRANS_EXP_impl {
       // LOG_DEBUG("cache_nodes[%d] = %d", i, cache_nodes[i]);
       cache_node_hashmap[cache_nodes[i]] = tmp_idx++;
     }
-    LOG_DEBUG("cache_node_num %d tmp_idx %d", cache_node_num, tmp_idx);
     assert(cache_node_num == tmp_idx);
-
-    // // debug
-    // int cache_node_hashmap_num = 0;
-    // for (int i = 0; i < graph->vertices; ++i) {
-    //   // LOG_DEBUG("cache_node_hashmap[%d] = %d", i, cache_node_hashmap[i]);
-    //   cache_node_hashmap_num += cache_node_hashmap[i] != -1; // unsigned
-    // }
-    // LOG_DEBUG("cache_node_hashmap_num %d", cache_node_hashmap_num);
-    // assert(cache_node_hashmap_num == cache_node_num);
   }
 
   void cache_high_degree(std::vector<int>& node_idx) {
@@ -253,12 +247,14 @@ class GCN_GPU_NEIGHBOR_TRANS_EXP_impl {
     for (int i = 1; i < graph->vertices; ++i) {
       assert(graph->out_degree_for_backward[node_idx[i]] <= graph->out_degree_for_backward[node_idx[i - 1]]);
     }
-    mark_cache_node(node_idx);
+    // mark_cache_node(node_idx);
+
+    
   }
 
   void cache_random_node(std::vector<int>& node_idx) {
     shuffle_vec_seed(node_idx);
-    mark_cache_node(node_idx);
+    // mark_cache_node(node_idx);
   }
 
   void cache_sample(std::vector<int>& node_idx) {
@@ -285,8 +281,14 @@ class GCN_GPU_NEIGHBOR_TRANS_EXP_impl {
     // for (int i = 1; i < node_idx.size(); ++i) {
     //   assert(node_sample_cnt[node_idx[i - 1]] >= node_sample_cnt[node_idx[i]]);
     // }
-    mark_cache_node(node_idx);
+    // mark_cache_node(node_idx);
   }
+
+  
+
+
+
+
 
   // pre train some epochs to get idle memory of GPU when training
   double get_gpu_idle_mem() {
@@ -489,24 +491,14 @@ class GCN_GPU_NEIGHBOR_TRANS_EXP_impl {
     return max_gpu_used;
   }
 
-  void determine_cache_node_idx(int node_nums) {
-    if (node_nums > graph->vertices) node_nums = graph->vertices;
-    cache_node_num = node_nums;
-    LOG_DEBUG("cache_node_num %d (%.3f)", cache_node_num, 1.0 * cache_node_num / graph->vertices);
+  void determine_cache_node_seq() {
+    if (cache_node_hashmap == nullptr) {
+      cache_node_hashmap = (VertexId*)cudaMallocPinned(1ll * graph->vertices * sizeof(VertexId));
+    }
+    dev_cache_node_hashmap = (VertexId*)getDevicePointer(cache_node_hashmap);
 
     cache_node_idx_seq.resize(graph->vertices);
     std::iota(cache_node_idx_seq.begin(), cache_node_idx_seq.end(), 0);
-    // cache_node_hashmap.resize(graph->vertices);
-    cache_node_hashmap = (VertexId*)cudaMallocPinned(1ll * graph->vertices * sizeof(VertexId));
-    dev_cache_node_hashmap = (VertexId*)getDevicePointer(cache_node_hashmap);
-
-    // #pragma omp parallel for
-    // #pragma omp parallel for num_threads(threads)
-    for (int i = 0; i < graph->vertices; ++i) {
-      cache_node_hashmap[i] = -1;
-      // assert(cache_node_hashmap[i] == -1);
-    }
-
     if (graph->config->cache_policy == "sample") {
       LOG_DEBUG("cache_sample");
       cache_sample(cache_node_idx_seq);
@@ -517,9 +509,12 @@ class GCN_GPU_NEIGHBOR_TRANS_EXP_impl {
       LOG_DEBUG("cache_random_node");
       cache_random_node(cache_node_idx_seq);
     }
-    gater_cpu_cache_feature_and_trans_to_gpu();
   }
 
+    
+
+
+  
   void init_active() {
     active = graph->alloc_vertex_subset();
     active->fill();
@@ -940,12 +935,16 @@ class GCN_GPU_NEIGHBOR_TRANS_EXP_impl {
   }
 
   void zerocopy_version(Sampler* sampler) {
+    // double sample_time = -get_time();
+    explicit_rate.clear();
     while (sampler->work_offset < sampler->work_range[1]) {
       auto ssg = sampler->subgraph;
       sampler->sample_one(ssg, graph->config->batch_type, ctx->is_train());
       // sampler->sample_one_with_dst(ssg, graph->config->batch_type, ctx->is_train());
       if (graph->config->cache_type == "none") {  // trans feature use zero copy (omit gather feature)
-        if (graph->config->threshold_trans > 0) explicit_rate.push_back(cnt_suit_explicit_block(ssg));
+        if (graph->config->threshold_trans > 0) {
+          explicit_rate.push_back(cnt_suit_explicit_block(ssg));
+        }
       } else if (graph->config->cache_type == "gpu_memory" ||
                  graph->config->cache_type == "rate") {  // trans freature which is not cache in gpu
         epoch_all_node += ssg->sampled_sgs[0]->src().size();
@@ -961,6 +960,9 @@ class GCN_GPU_NEIGHBOR_TRANS_EXP_impl {
         assert(false);
       }
     }
+    // sample_time += get_time();
+    // std::cout << "sample_time " << sample_time << std::endl;
+
     assert(sampler->work_offset == sampler->work_range[1]);
     sampler->restart();
   }
@@ -991,7 +993,7 @@ class GCN_GPU_NEIGHBOR_TRANS_EXP_impl {
 
   // std::pair<int,int>
   float cnt_suit_explicit_block(SampledSubgraph* ssg, VertexId* cache_node_hashmap = nullptr) {
-    int node_num_block = 256 * 1024 / 4 / graph->gnnctx->layer_size[0];
+    int node_num_block = graph->config->block_size * 1024 / 4 / graph->gnnctx->layer_size[0];
     int threshold_node_num_block = node_num_block * graph->config->threshold_trans;
     auto csc_layer = ssg->sampled_sgs[0];
     std::vector<int> need_transfer(graph->vertices, 0);
@@ -1066,22 +1068,15 @@ class GCN_GPU_NEIGHBOR_TRANS_EXP_impl {
     // sampler->zero_debug_time();
     epoch_cache_hit = 0;
     epoch_all_node = 0;
-    
-    explicit_rate.clear();
     zerocopy_version(sampler);
-    if (graph->config->threshold_trans > 0) {
-      LOG_DEBUG("epoch %3d suit_explicit_rate %.3f(%.3f)", graph->rtminfo->epoch, get_mean(explicit_rate), get_var(explicit_rate));
-    }
-
-
     double epoch_cache_hit_rate = epoch_all_node > 0 ? 1.0 * epoch_cache_hit / epoch_all_node : 0;
     if (graph->rtminfo->epoch >= graph->config->time_skip) {
       gcn_cache_hit_rate += epoch_cache_hit_rate;
     }
     epoch_run_time += get_time();
-    LOG_INFO(
-        "Epoch %03d epoch_time %.3lf cache_rate %.3f cache_hit_rate %.3f",
-        graph->rtminfo->epoch, epoch_run_time, graph->config->cache_rate, epoch_cache_hit_rate);
+    // LOG_INFO(
+    //     "Epoch %03d epoch_time %.3lf cache_rate %.3f cache_hit_rate %.3f",
+    //     graph->rtminfo->epoch, epoch_run_time, graph->config->cache_rate, epoch_cache_hit_rate);
     return acc;
   }
 
@@ -1094,9 +1089,6 @@ class GCN_GPU_NEIGHBOR_TRANS_EXP_impl {
   }
 
   float run() {
-    float cache_rate_end = graph->config->cache_rate_end;
-    float cache_rate_num = graph->config->cache_rate_num;
-
     init_nids();
     LOG_INFO("label rate: %.3f, train/val/test: (%d/%d/%d) (%.3f/%.3f/%.3f)",
              1.0 * (train_nids.size() + val_nids.size() + test_nids.size()) / graph->vertices, train_nids.size(),
@@ -1120,31 +1112,58 @@ class GCN_GPU_NEIGHBOR_TRANS_EXP_impl {
 
     // train_sampler = new Sampler(fully_rep_graph, train_nids);
     train_sampler = new Sampler(fully_rep_graph, train_nids, pipelines, false);
-    eval_sampler = new Sampler(fully_rep_graph, val_nids, true);  // true mean full batch
-    test_sampler = new Sampler(fully_rep_graph, test_nids, true);  // true mean full batch
-    // eval_sampler->update_fanout(-1);                            // val not sample
 
-    for (int i = 0; i < cache_rate_num + 1; ++i) {
+    determine_cache_node_seq();
+    graph->config->cache_rate = graph->config->cache_rate;
+    mark_cache_node(cache_node_idx_seq);
 
+    float trans_threshold_start = graph->config->trans_threshold_start;
+    float trans_threshold_end = graph->config->trans_threshold_end;
+    float trans_threshold_num = graph->config->trans_threshold_num;
+    float trans_threshold_step = (trans_threshold_end - trans_threshold_start) / trans_threshold_num;
+    
+    int zero_count = 0;
+    for (int i = 0; i < trans_threshold_num + 1; ++i) {
       gcn_cache_hit_rate = 0;
-      float curr_cache_rate = cache_rate_end / cache_rate_num * i;
-      graph->config->cache_rate = curr_cache_rate;
-      // std::cout << i << " " << curr_cache_rate << std::endl;
-      assert(curr_cache_rate >= 0 && curr_cache_rate <= 1);
-      determine_cache_node_idx(graph->vertices * curr_cache_rate);
+      float curr_threshold = trans_threshold_start + i * trans_threshold_step;
+      graph->config->threshold_trans = curr_threshold;
+      assert(curr_threshold >= 0 && curr_threshold <= 1);
       assert(iterations == graph->config->epochs);
+      
+      if (zero_count >= 3) {
+        get_gpu_mem(used_gpu_mem, total_gpu_mem);
+        LOG_DEBUG("dataset %s gcn_trans_threshold %.3f gcn_block_size %d gcn_suit_explicit_trans_rate %.3f(var %.3f) gpu_used_memory %.3f\n",
+          graph->config->dataset_name.c_str(), graph->config->threshold_trans, graph->config->block_size, 0, 0, used_gpu_mem);         
+        continue;
+      }
+
+
+      std::vector<float> epoch_explicit_rate;
       for (int i_i = 0; i_i < iterations; i_i++) {
         graph->rtminfo->epoch = i_i;
         ctx->train();
         graph->rtminfo->forward = true;
+        double epoch_time = -get_time();
         float train_acc = Forward(train_sampler, 0);
-        float train_loss = loss_epoch;
+        epoch_time += get_time();
+        epoch_explicit_rate.insert(epoch_explicit_rate.end(), explicit_rate.begin(), explicit_rate.end());
+        if (graph->config->threshold_trans > 0) {
+          LOG_DEBUG("epoch %03d epoch_time %.3f suit explicit trans block rate %.3f(%.3f) (explicit_rate_num %d epoch_explicit_rate_num %d)", 
+                    i_i, epoch_time, get_mean(explicit_rate), get_var(explicit_rate), explicit_rate.size(), epoch_explicit_rate.size());
+        }
       }
-      gcn_cache_hit_rate /= (graph->config->epochs - graph->config->time_skip);
 
-      LOG_DEBUG("dataset %s gcn_cache_rate %.3f gcn_cache_type %s batch_size %u gcn_cache_hit_rate %.3f",
-          graph->config->dataset_name.c_str(), curr_cache_rate, graph->config->cache_type.c_str(), graph->config->batch_size, gcn_cache_hit_rate);
-      cudaFreeHost(cache_node_hashmap);
+      gcn_cache_hit_rate /= (graph->config->epochs - graph->config->time_skip);
+      get_gpu_mem(used_gpu_mem, total_gpu_mem);
+      // LOG_DEBUG("dataset %s gcn_cache_num %d gcn_cache_rate %.3f gcn_cache_type %s batch_size %u gcn_cache_hit_rate %.3f gpu_used_memory %.3f",
+      //     graph->config->dataset_name.c_str(), cache_node_num, graph->config->cache_rate, graph->config->cache_type.c_str(), graph->config->batch_size, gcn_cache_hit_rate, used_gpu_mem);
+      if (get_mean(epoch_explicit_rate) == 0) {
+        // std::cout << "epoch_explicit_rate " << get_mean(epoch_explicit_rate) << " " << zero_count << std::endl;
+        zero_count++;
+      }
+      
+      LOG_DEBUG("dataset %s gcn_trans_threshold %.3f gcn_block_size %d gcn_suit_explicit_trans_rate %.3f(var %.3f) gpu_used_memory %.3f\n",
+          graph->config->dataset_name.c_str(), graph->config->threshold_trans, graph->config->block_size, get_mean(epoch_explicit_rate), get_var(epoch_explicit_rate), used_gpu_mem);      
     }
     return 0;
   }
