@@ -306,7 +306,7 @@ void InputInfo::readFromCfgFile(std::string config_file) {
       this->cache_rate_num = std::atof(cfg_v.c_str());
       assert(this->cache_rate_num > 0);
     } else if (0 == cfg_k.compare("TRANS_THRESHOLD_NUM")) {
-      this->trans_threshold_num = std::atof(cfg_v.c_str());
+      this->trans_threshold_num = std::atoi(cfg_v.c_str());
       assert(this->trans_threshold_num > 0);
     }else if (0 == cfg_k.compare("TRANS_THRESHOLD_START")) {
       this->trans_threshold_start = std::atof(cfg_v.c_str());

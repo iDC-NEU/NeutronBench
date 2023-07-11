@@ -174,10 +174,10 @@ class InputInfo {
   float cache_rate_start = 0;
 
 
-  float threshold_trans = 0;
+  float threshold_trans = -1;
   float trans_threshold_start = 0;
   float trans_threshold_end;
-  float trans_threshold_num;
+  int trans_threshold_num;
   int block_size = 256;
 
   int cache_exp = 0;

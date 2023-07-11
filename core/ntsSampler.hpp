@@ -999,6 +999,31 @@ class Sampler {
                 sample_bits->set_bit(whole_indices[whole_offset[dst] + idx]);
               }
 
+
+              // speed sample rate when use sample rate
+              // std::unordered_set<size_t> sampled_idxs;
+              // if (fanout_i * 2 < edge_nums) {
+              //   while (sampled_idxs.size() < fanout_i) {
+              //     sampled_idxs.insert(random_uniform_int(0, edge_nums - 1));
+              //   }
+              //   for (auto& idx : sampled_idxs) {
+              //     row_indices[pos++] = whole_indices[whole_offset[dst] + idx];
+              //     sample_bits->set_bit(whole_indices[whole_offset[dst] + idx]);
+              //   }
+              // } else {
+              //   while (sampled_idxs.size() < edge_nums - fanout_i) {
+              //     // sampled_idxs.insert(rand_int(fanout_i));
+              //     // sampled_idxs.insert(rand_int_seed(fanout_i));
+              //     sampled_idxs.insert(random_uniform_int(0, edge_nums - 1));
+              //   }
+              //   for (int idx = 0; idx < edge_nums; ++idx) {
+              //     if (sampled_idxs.find(idx) != sampled_idxs.end()) continue;
+              //     row_indices[pos++] = whole_indices[whole_offset[dst] + idx];
+              //     sample_bits->set_bit(whole_indices[whole_offset[dst] + idx]);
+              //   }
+              // }
+              ////////////////////////////////////////////////////////////////////////
+
               // sorted_idxs.insert(sorted_idxs.end(), sampled_idxs.begin(), sampled_idxs.end());
             } else {
               for (size_t i = 0; i < edge_nums; ++i) {
