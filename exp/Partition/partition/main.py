@@ -895,6 +895,8 @@ if __name__ == '__main__':
     setup_seed(2000)
     # graph dataset
     edges_list, features, labels, train_mask, val_mask, test_mask, graph = extract_dataset(args)
+    print(graph)
+
     feature_dim = features.shape[1]
     train_mask = train_mask.to(torch.long)
     val_mask = val_mask.to(torch.long)
@@ -924,12 +926,12 @@ if __name__ == '__main__':
         statistic_info(graph, partition_nodes, partition_edges, partition_train_nodes, rowptr, col, args.batch_size, args.fanout, args.algo)
     elif args.algo == 'hash':
         parts = hash_partition_graph(args.dataset, args.num_parts, node_nums)
-        partition_nodes, partition_edges, partition_train_nodes, partition_val_nodes, partition_test_nodes = get_partition_result(parts, rowptr, col, args.num_parts, train_mask, val_mask, test_mask, args.algo, args.algo)
+        partition_nodes, partition_edges, partition_train_nodes, partition_val_nodes, partition_test_nodes = get_partition_result(parts, rowptr, col, args.num_parts, train_mask, val_mask, test_mask, args.algo)
         statistic_info(graph, partition_nodes, partition_edges, partition_train_nodes, rowptr, col, args.batch_size, args.fanout, args.algo)
     elif args.algo == 'bytegnn':
         # parts = bytegnn_partition_graph(args.dataset, args.num_parts, args.num_hops, rowptr, col, train_mask, val_mask, test_mask, alpha=1.0, beta=1.0, gamma=1.0)
-        parts =  read_bytegnn_partition_result(args.dataset, node_nums)
-        partition_nodes, partition_edges, partition_train_nodes, partition_val_nodes, partition_test_nodes = get_partition_result(parts, rowptr, col, args.num_parts, train_mask, val_mask, test_mask, args.algo, args.algo)
+        parts =  read_bytegnn_partition_result(args.dataset, node_nums, args.num_parts)
+        partition_nodes, partition_edges, partition_train_nodes, partition_val_nodes, partition_test_nodes = get_partition_result(parts, rowptr, col, args.num_parts, train_mask, val_mask, test_mask, args.algo)
         print('all_partition_nodes', sum([len(x) for x in partition_nodes]))
         statistic_info(graph, partition_nodes, partition_edges, partition_train_nodes, rowptr, col, args.batch_size, args.fanout, args.algo)
     elif args.algo == 'dgl':

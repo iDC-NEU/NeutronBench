@@ -449,7 +449,7 @@ int main(int argc, char **argv) {
 
   // save partiton result
   // std::string save_partition_result = "~/neutron-sanzo/exp/Partition/partition/partition_result/bytegnn/" + dataname + "-parts.txt";
-  std::string save_partition_result = out_dir + '/' + dataname + "-parts.txt";
+  std::string save_partition_result = out_dir + "/bytegnn-" + dataname + "-part" + std::to_string(num_parts) + ".txt";
   std::ofstream outFile(save_partition_result, std::ios::out);
   if (!outFile.is_open()) {
     std::cout << save_partition_result << " create failed!" << std::endl;
