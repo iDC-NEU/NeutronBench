@@ -381,6 +381,11 @@ void Cuda_Stream::zero_copy_feature_move_gpu(float* dev_feature, float* host_pin
 #if CUDA_ENABLE
   zero_copy_feature_move_gpu_kernel<<<CUDA_NUM_BLOCKS, CUDA_NUM_THREADS, 0, stream>>>(
       dev_feature, host_pinned_feature, src_vertex, feature_size, vertex_size);
+    
+  // VertexId_CUDA const  sharedMemoryBytes = 32 * feature_size * sizeof(float);
+  // CHECK_CUDA_RESULT(cudaFuncSetAttribute(zero_copy_feature_move_gpu_shared_memory_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, sharedMemoryBytes));
+  // zero_copy_feature_move_gpu_shared_memory_kernel<<<CUDA_NUM_BLOCKS, CUDA_NUM_THREADS, sharedMemoryBytes, stream>>>(dev_feature, host_pinned_feature, src_vertex, feature_size, vertex_size);
+  
   this->CUDA_DEVICE_SYNCHRONIZE();
 #else
   printf("CUDA DISABLED Cuda_Stream::zero_copy_feature_move_gpu\n");

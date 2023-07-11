@@ -101,11 +101,54 @@ __global__ void zero_copy_feature_move_gpu_kernel(float *dev_feature, float *pin
 	for (long i = threadId; i < (long) vertex_size * WARPSIZE; i += blockDim.x * gridDim.x) {
 		VertexId_CUDA vtx_lid = i / WARPSIZE;
 		VertexId_CUDA vtx_gid = src_vertex[vtx_lid];
-		for (int j = laneId; j < feature_size; j += 32) {
+		for (int j = laneId; j < feature_size; j += WARPSIZE) {
 			dev_feature[vtx_lid * feature_size + j] = pinned_host_feature[vtx_gid * feature_size + j];
 		}
 	}
 }
+
+
+// __global__ void zero_copy_feature_move_gpu_kernel(float *dev_feature, float *pinned_host_feature, VertexId_CUDA *src_vertex, VertexId_CUDA feature_size, VertexId_CUDA vertex_size) {
+  // size_t threadId = blockIdx.x * blockDim.x + threadIdx.x;
+  // const int WARPSIZE = 32;
+  // size_t laneId = threadId % WARPSIZE;
+  // size_t warpId = threadId / WARPSIZE;
+  // for (long i = warpId; i < (long) vertex_size; i += blockDim.x * gridDim.x / WARPSIZE) {
+  //   VertexId_CUDA vtx_lid = i;
+  //   VertexId_CUDA vtx_gid = src_vertex[vtx_lid];
+  //   for (int j = laneId; j < feature_size; j += WARPSIZE) {
+  //     dev_feature[vtx_lid * feature_size + j] = pinned_host_feature[vtx_gid * feature_size + j];
+  //   }
+  // }
+// }
+
+
+__global__ void zero_copy_feature_move_gpu_shared_memory_kernel(float *dev_feature, float *pinned_host_feature, VertexId_CUDA *src_vertex, VertexId_CUDA feature_size, VertexId_CUDA vertex_size) {
+	size_t threadId = blockIdx.x * blockDim.x + threadIdx.x;
+  const int WARPSIZE = 32;
+  size_t laneId = threadId % WARPSIZE;
+  size_t warpId = threadId / WARPSIZE;
+
+	extern __shared__ float shared_feature[];
+
+  for (long i = warpId; i < (long) vertex_size; i += blockDim.x * gridDim.x / WARPSIZE) {
+    VertexId_CUDA vtx_lid = i;
+    VertexId_CUDA vtx_gid = src_vertex[vtx_lid];
+    
+    for (int j = laneId; j < feature_size; j += WARPSIZE) {
+      shared_feature[laneId * feature_size + j] = pinned_host_feature[vtx_gid * feature_size + j];
+    }
+    
+    __syncthreads();
+    
+    for (int j = laneId; j < feature_size; j += WARPSIZE) {
+      dev_feature[vtx_lid * feature_size + j] = shared_feature[laneId * feature_size + j];
+    }
+    __syncthreads();
+  }
+}
+
+
 
 __global__ void zero_copy_feature_move_gpu_cache_kernel(float *dev_feature, float *pinned_host_feature, VertexId_CUDA *src_vertex, VertexId_CUDA feature_size, VertexId_CUDA vertex_size,
 																												VertexId_CUDA* local_idx) {
