@@ -106,7 +106,7 @@ def run(dataset, cmd, log_path, suffix=''):
     run_time = time.time() - run_time
     print(f'done! cost {run_time:.2f}s')
 
-    # process.kill()
+    process.kill()
     # os.killpg(process.pid, signal.SIGKILL)
 
 
