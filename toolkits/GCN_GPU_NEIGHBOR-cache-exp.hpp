@@ -67,8 +67,8 @@ class GCN_GPU_NEIGHBOR_CACHE_EXP_impl {
   double epoch_transfer_feat_time = 0;
   double epoch_transfer_label_time = 0;
   double epoch_train_time = 0;
-  int epoch_cache_hit = 0;
-  int epoch_all_node = 0;
+  long long epoch_cache_hit = 0;
+  long long epoch_all_node = 0;
   double debug_time = 0;
   vector<float> explicit_rate;
 
@@ -934,6 +934,49 @@ class GCN_GPU_NEIGHBOR_CACHE_EXP_impl {
     sampler->restart();
   }
 
+  void get_sample_nodes_one_epoch(Sampler* sampler, std::vector<std::unordered_set<VertexId>>& active_nodes) {
+    int batch_num = 0;
+    while (sampler->work_offset < sampler->work_range[1]) {
+      batch_num++;
+      auto ssg = sampler->subgraph;
+      sampler->sample_one(ssg, graph->config->batch_type, ctx->is_train());
+      std::unordered_set<VertexId> batch_active;
+      // sampler->sample_one_with_dst(ssg, graph->config->batch_type, ctx->is_train());
+      if (graph->config->cache_type == "none") {  // trans feature use zero copy (omit gather feature)
+        if (graph->config->threshold_trans > 0) explicit_rate.push_back(cnt_suit_explicit_block(ssg));
+      } else if (graph->config->cache_type == "gpu_memory" || graph->config->cache_type == "rate") {  
+        for (int i = 0; i < layers; ++i) {
+          // LOG_DEBUG("layer %d src %d", i, ssg->sampled_sgs[i]->src().size());
+          for (auto& it : ssg->sampled_sgs[i]->src()) {
+            batch_active.insert(it);
+          }
+          if (layers - 1 == i) {
+            // LOG_DEBUG("layer %d dst %d\n", i, ssg->sampled_sgs[i]->dst().size());
+            for (auto& it : ssg->sampled_sgs[i]->dst()) {
+              batch_active.insert(it);
+            } 
+          }
+        }
+        if (graph->config->threshold_trans > 0)
+          explicit_rate.push_back(cnt_suit_explicit_block(ssg, cache_node_hashmap));
+      } else {
+        std::cout << "cache_type: " << graph->config->cache_type << " is not support!" << std::endl;
+        assert(false);
+      }
+      active_nodes.push_back(batch_active);
+      sampler->reverse_sgs();
+    }
+    assert(active_nodes.size() == batch_num);
+    // sample_time += get_time();
+    // std::cout << "sample_time " << sample_time << std::endl;
+
+    assert(sampler->work_offset == sampler->work_range[1]);
+    sampler->restart();
+    // if (graph->config->threshold_trans > 0) {
+    //   LOG_DEBUG("epoch suit explicit trans block rate %.3f(%.3f)", get_mean(explicit_rate), get_var(explicit_rate));
+    // }
+  }
+
   void zerocopy_version(Sampler* sampler) {
     // double sample_time = -get_time();
     while (sampler->work_offset < sampler->work_range[1]) {
@@ -1112,8 +1155,17 @@ class GCN_GPU_NEIGHBOR_CACHE_EXP_impl {
 
     // train_sampler = new Sampler(fully_rep_graph, train_nids);
     train_sampler = new Sampler(fully_rep_graph, train_nids, pipelines, false);
-
+    double init_node_seq = -get_time();
     determine_cache_node_seq();
+    init_node_seq += get_time();
+    LOG_DEBUG("determine_cache_node_seq cost %.3f", init_node_seq);
+
+
+    shuffle_vec(train_sampler->sample_nids);
+    std::vector<std::unordered_set<VertexId>> active_nodes;
+    active_nodes.clear();
+    get_sample_nodes_one_epoch(train_sampler, active_nodes);
+    
     float cache_rate_end = graph->config->cache_rate_end;
     float cache_rate_num = graph->config->cache_rate_num;
     float cache_rate_start = graph->config->cache_rate_start;
@@ -1127,23 +1179,42 @@ class GCN_GPU_NEIGHBOR_CACHE_EXP_impl {
       cache_node_num = graph->config->vertices * curr_cache_rate;
       // std::cout << i << " " << curr_cache_rate << std::endl;
       assert(curr_cache_rate >= 0 && curr_cache_rate <= 1);
-
       mark_cache_node(cache_node_idx_seq);
 
-      assert(iterations == graph->config->epochs);
-      for (int i_i = 0; i_i < iterations; i_i++) {
-        graph->rtminfo->epoch = i_i;
-        ctx->train();
-        graph->rtminfo->forward = true;
-        float train_acc = Forward(train_sampler, 0);
-        float train_loss = loss_epoch;
+      epoch_cache_hit = 0;
+      epoch_all_node = 0;
+      double count_cache_hit_time = -get_time();
+      for (int i = 0; i < active_nodes.size(); ++i) {
+        epoch_all_node += active_nodes[i].size();
+        for (auto v : active_nodes[i]) {
+          if (cache_node_hashmap[v] != -1) {
+            epoch_cache_hit++;
+          }
+        }
       }
+      count_cache_hit_time += get_time();
+      LOG_DEBUG("epoch_cache_hit %lld epoch_all_nodes %lld", epoch_cache_hit, epoch_all_node);
+      double epoch_cache_hit_rate = epoch_all_node > 0 ? 1.0 * epoch_cache_hit / epoch_all_node : 0;
+      LOG_INFO("Epoch %03d epoch_time %.3f cache_rate %.3f cache_hit_rate %.3f",
+          graph->rtminfo->epoch, count_cache_hit_time, graph->config->cache_rate, epoch_cache_hit_rate);
 
-
-      gcn_cache_hit_rate /= (graph->config->epochs - graph->config->time_skip);
       get_gpu_mem(used_gpu_mem, total_gpu_mem);
-      LOG_DEBUG("dataset %s gcn_cache_num %d gcn_cache_rate %.3f gcn_cache_type %s batch_size %u gcn_cache_hit_rate %.3f gpu_used_memory %.3f",
-          graph->config->dataset_name.c_str(), cache_node_num, curr_cache_rate, graph->config->cache_type.c_str(), graph->config->batch_size, gcn_cache_hit_rate, used_gpu_mem);
+      LOG_DEBUG("dataset %s gcn_cache_num %d gcn_cache_rate %.3f gcn_cache_hit_rate %.3f gcn_cache_type %s batch_size %u gpu_used_memory %.3f",
+          graph->config->dataset_name.c_str(), cache_node_num, curr_cache_rate, epoch_cache_hit_rate, graph->config->cache_type.c_str(), graph->config->batch_size, used_gpu_mem);
+    
+
+      // assert(iterations == graph->config->epochs);
+      // for (int i_i = 0; i_i < iterations; i_i++) {
+      //   graph->rtminfo->epoch = i_i;
+      //   ctx->train();
+      //   graph->rtminfo->forward = true;
+      //   float train_acc = Forward(train_sampler, 0);
+      //   float train_loss = loss_epoch;
+      // }
+      // gcn_cache_hit_rate /= (graph->config->epochs - graph->config->time_skip);
+      // get_gpu_mem(used_gpu_mem, total_gpu_mem);
+      // LOG_DEBUG("dataset %s gcn_cache_num %d gcn_cache_rate %.3f gcn_cache_type %s batch_size %u gcn_cache_hit_rate %.3f gpu_used_memory %.3f",
+      //     graph->config->dataset_name.c_str(), cache_node_num, curr_cache_rate, graph->config->cache_type.c_str(), graph->config->batch_size, gcn_cache_hit_rate, used_gpu_mem);
     }
     return 0;
   }
