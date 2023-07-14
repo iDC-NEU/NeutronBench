@@ -160,6 +160,12 @@ class InputInfo {
   std::string label_file;
   std::string mask_file;
   std::string dataset_name;
+
+  int part_num;
+  std::string part_algo;
+  int part_dim;
+  
+
   float del_frac = 0;
   bool with_cuda;
   int batch_norm = 0;

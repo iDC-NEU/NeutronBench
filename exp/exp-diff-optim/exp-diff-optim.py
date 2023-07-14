@@ -159,7 +159,7 @@ if __name__ == '__main__':
   datasets = ['hollywood-2011', 'lj-links', 'reddit', 'enwiki-2016', 'enwiki-links']
   datasets = ['enwiki-2016']
   datasets = ['hollywood-2011', 'reddit']
-  datasets = ['reddit', 'livejournal', 'lj-links', 'lj-large', 'enwiki-links', 'ogbn-arxiv', 'ogbn-products']
   datasets = ['ogbn-arxiv']
+  datasets = ['reddit', 'livejournal', 'lj-links', 'lj-large', 'enwiki-links', 'ogbn-arxiv', 'ogbn-products']
   
   different_optim(datasets)

@@ -11,40 +11,6 @@ import matplotlib.pylab as pylab
 # datasets = ['ppi', 'ppi-large', 'reddit', 'flickr', 'yelp', 'amazon']
 # batch_size = {'ppi':4096, 'ppi-large':4096, 'flickr':40960, 'yelp':40960, 'amazon':40960, 'reddit':40960}
 
-init_command = [
-  "WEIGHT_DECAY:0.0001",
-  "DROP_RATE:0.5",
-  "DECAY_RATE:0.97",
-  "DECAY_EPOCH:100",
-  "PROC_OVERLAP:0",
-  "PROC_LOCAL:0",
-  "PROC_CUDA:0",
-  "PROC_REP:0",
-  "LOCK_FREE:1",
-  "TIME_SKIP:3",
-  "MINI_PULL:1",
-  "BATCH_NORM:0",
-  "PROC_REP:0",
-  "LOCK_FREE:1",
-]
-
-graph_config = {
-  'reddit': "VERTICES:232965\nEDGE_FILE:../data/reddit/reddit.edge\nFEATURE_FILE:../data/reddit/reddit.feat\nLABEL_FILE:../data/reddit/reddit.label\nMASK_FILE:../data/reddit/reddit.mask\nLAYERS:602-128-41\n",
-  'ogbn-arxiv': "VERTICES:169343\nEDGE_FILE:../data/ogbn-arxiv/ogbn-arxiv.edge\nFEATURE_FILE:../data/ogbn-arxiv/ogbn-arxiv.feat\nLABEL_FILE:../data/ogbn-arxiv/ogbn-arxiv.label\nMASK_FILE:../data/ogbn-arxiv/ogbn-arxiv.mask\nLAYERS:128-128-40\n",
-  'ogbn-products': "VERTICES:2449029\nEDGE_FILE:../data/ogbn-products/ogbn-products.edge\nFEATURE_FILE:../data/ogbn-products/ogbn-products.feat\nLABEL_FILE:../data/ogbn-products/ogbn-products.label\nMASK_FILE:../data/ogbn-products/ogbn-products.mask\nLAYERS:100-128-47\n",
-  'enwiki-links': "VERTICES:13593032\nEDGE_FILE:../data/enwiki-links/enwiki-links.edge\nFEATURE_FILE:random\nLABEL_FILE:random\nMASK_FILE:random\nLAYERS:600-128-60\n",
-  'livejournal': "VERTICES:4846609\nEDGE_FILE:../data/livejournal/livejournal.edge\nFEATURE_FILE:random\nLABEL_FILE:random\nMASK_FILE:random\nLAYERS:600-128-60\n",
-  'lj-large': "VERTICES:7489073\nEDGE_FILE:../data/lj-large/lj-large.edge\nFEATURE_FILE:random\nLABEL_FILE:random\nMASK_FILE:random\nLAYERS:600-128-60\n",
-  'lj-links': "VERTICES:5204175\nEDGE_FILE:../data/lj-links/lj-links.edge\nFEATURE_FILE:random\nLABEL_FILE:random\nMASK_FILE:random\nLAYERS:600-128-60\n",
-  'europe_osm': "VERTICES:50912018\nEDGE_FILE:../data/europe_osm/europe_osm.edge\nFEATURE_FILE:random\nLABEL_FILE:random\nMASK_FILE:random\nLAYERS:600-128-60\n",
-  'dblp-2011': "VERTICES:933258\nEDGE_FILE:../data/dblp-2011/dblp-2011.edge\nFEATURE_FILE:random\nLABEL_FILE:random\nMASK_FILE:random\nLAYERS:600-128-60\n",
-  'frwiki-2013': "VERTICES:1350986\nEDGE_FILE:../data/frwiki-2013/frwiki-2013.edge\nFEATURE_FILE:random\nLABEL_FILE:random\nMASK_FILE:random\nLAYERS:600-128-60\n",
-  'dewiki-2013': "VERTICES:1510148\nEDGE_FILE:../data/dewiki-2013/dewiki-2013.edge\nFEATURE_FILE:random\nLABEL_FILE:random\nMASK_FILE:random\nLAYERS:600-128-60\n",
-  'itwiki-2013': "VERTICES:1016179\nEDGE_FILE:../data/itwiki-2013/itwiki-2013.edge\nFEATURE_FILE:random\nLABEL_FILE:random\nMASK_FILE:random\nLAYERS:600-128-60\n",
-  'hollywood-2011': "VERTICES:1985306\nEDGE_FILE:../data/hollywood-2011/hollywood-2011.edge\nFEATURE_FILE:random\nLABEL_FILE:random\nMASK_FILE:random\nLAYERS:600-128-60\n",
-  'enwiki-2016': "VERTICES:5088560\nEDGE_FILE:../data/enwiki-2016/enwiki-2016.edge\nFEATURE_FILE:random\nLABEL_FILE:random\nMASK_FILE:random\nLAYERS:600-128-60\n",
-}
-
 
 def create_dir(path):
   if path and not os.path.exists(path):
@@ -216,7 +182,7 @@ if __name__ == '__main__':
 
   run_times = {
         'reddit': 50,
-        'ogbn-arxiv': 50,
+        'ogbn-arxiv': 5,
         'ogbn-products': 300,
         'AmazonCoBuy_computers': 50,
         'AmazonCoBuy_photo': 25,
@@ -237,7 +203,8 @@ if __name__ == '__main__':
   
 
   ret = print_diff_cache_ratio(datasets, './log')
-  print(ret.keys())
+  for k,v in ret.items():
+    print(k, len(v))
   
   for ds in datasets:
     X, Y = [], []
@@ -245,6 +212,7 @@ if __name__ == '__main__':
     for mode in ['zerocopy', 'pipeline']:
       X.append(ret[ds+mode+'cputime'])
       Y.append(ret[ds+mode+'cpu'])
+      print(len(X[-1]), len(Y[-1]))
     X, Y = split_list(X, Y, 0.2)
 
     x_ticks = np.linspace(0, run_times[ds], 6)

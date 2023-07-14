@@ -142,7 +142,7 @@ if __name__ == '__main__':
 
     run_times = {
         'reddit': 50,
-        'ogbn-arxiv': 50,
+        'ogbn-arxiv': 1,
         'ogbn-products': 300,
         'lj-links': 100,
     }

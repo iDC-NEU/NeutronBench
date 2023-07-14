@@ -1164,7 +1164,11 @@ class GCN_GPU_NEIGHBOR_CACHE_EXP_impl {
     shuffle_vec(train_sampler->sample_nids);
     std::vector<std::unordered_set<VertexId>> active_nodes;
     active_nodes.clear();
+
+    double get_sample_nodes_time = -get_time();
     get_sample_nodes_one_epoch(train_sampler, active_nodes);
+    get_sample_nodes_time += get_time();
+    LOG_DEBUG("get_sample_nodes_one_epoch %.3f", get_sample_nodes_time);
     
     float cache_rate_end = graph->config->cache_rate_end;
     float cache_rate_num = graph->config->cache_rate_num;

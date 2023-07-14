@@ -68,9 +68,6 @@ def plot_bar(plot_params, Y, labels, xlabel, ylabel, xticks, anchor=None, figpat
   color_list = ['#223d4a','#236863','#259386','#80a870','#e4bd5f','#e36347']
   color_list = ['#1b9e77','#d95f02','#7570b3','#e7298a','#66a61e','#e6ab02']
   
-  
-
-
   color_list = ['#44a185','#83ae93','#ead8ba','#ebb561','#d4452c','#783923','',]
   color_list = ['#44a185','#ead8ba','#ebb561','#d4452c','',]
 
@@ -118,21 +115,21 @@ def plot_bar(plot_params, Y, labels, xlabel, ylabel, xticks, anchor=None, figpat
 
 if __name__ == '__main__':
   params={
-    'axes.labelsize': '14',
-    'xtick.labelsize':'14',
-    'ytick.labelsize':'14',
+    'axes.labelsize': '15',
+    'xtick.labelsize':'15',
+    'ytick.labelsize':'15',
     'lines.linewidth': 2,
-    # 'legend.fontsize': '14.7',
-    'legend.fontsize': '14',
+    # 'legend.fontsize': '15.7',
+    'legend.fontsize': '15',
     'figure.figsize' : '8, 4',
     'legend.loc': 'upper center', #[]"upper right", "upper left"]
     'legend.frameon': False,
   }
 
-  datasets = ['reddit', 'livejournal', 'lj-links', 'lj-large', 'enwiki-links']
   datasets = ['ogbn-arxiv']
+  datasets = ['reddit', 'livejournal', 'lj-links', 'lj-large', 'enwiki-links']
   # ret = print_different_optim('one_epoch_time', datasets, '../log/gpu-cache-t4')
-  ret = print_different_optim('one_epoch_time', datasets, './log/')
+  ret = print_different_optim('one_epoch_time', datasets, './log')
   # to numpy array
   for k,v in ret.items():
     print(k, v)
@@ -161,12 +158,13 @@ if __name__ == '__main__':
 
   
 
-  xticks = datasets
+  xticks = ['reddit', 'livejournal', 'lj-links', 'lj-large', 'enwiki']
   ylabel = 'Normalized Speedup'
   xlabel = ''
   # labels = ['base', 'zerocopy', 'pipeline', 'pipeline+cache']
   labels = list(ret.keys())
   Y = list(ret.values())
   labels = ['base', 'zero', 'zero+P', 'zero+PC']
-  plot_bar(params, Y, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.16), figpath='diff-optim.pdf')
+  labels = ['Explicit', 'Zerocopy', 'Zerocopy + Pipeline', 'Zerocopy + Pipeline + Cache']
+  plot_bar(params, Y, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.25), figpath='diff-optim.pdf')
   # plot_bar(params, Y, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.145), figpath='diff-optim.pdf')

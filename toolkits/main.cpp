@@ -25,6 +25,7 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 #include "GCN_GPU_NEIGHBOR-cache-exp.hpp"
 #include "GCN_GPU_NEIGHBOR-cache-dgl-exp.hpp"
 #include "GCN_GPU_NEIGHBOR-trans-exp.hpp"
+#include "GCN_GPU_NEIGHBOR-partition.hpp"
 #include "GIN_CPU.hpp"
 #include "test_batch_distributed.hpp"
 #include "test_getdepneighbor_cpu.hpp"
@@ -178,8 +179,15 @@ int main(int argc, char **argv) {
     graph->load_directed(graph->config->edge_file, graph->config->vertices);
     graph->generate_backward_structure();
     GCN_GPU_NEIGHBOR_CACHE_EXP_impl *ntsGCN = new GCN_GPU_NEIGHBOR_CACHE_EXP_impl(graph, iterations);
+    float init_graph = -get_time();
     ntsGCN->init_graph();
+    init_graph += get_time();
+    LOG_DEBUG("init_graph cost %.3f", init_graph);
+    
+    init_graph = -get_time();
     ntsGCN->init_nn();
+    init_graph += get_time();
+    LOG_DEBUG("init_nn cost %.3f", init_graph);
     float acc = ntsGCN->run();
   
   } else if (graph->config->algorithm == std::string("GCNNEIGHBORGPUCACHEDGLEXP")) {
@@ -196,6 +204,14 @@ int main(int argc, char **argv) {
     ntsGCN->init_graph();
     ntsGCN->init_nn();
     float acc = ntsGCN->run();
+  } else if (graph->config->algorithm == std::string("GCNNEIGHBORGPUPARTITION")) {
+    graph->load_directed(graph->config->edge_file, graph->config->vertices);
+    graph->generate_backward_structure();
+    GCN_GPU_NEIGHBOR_partition_impl *ntsGCN = new GCN_GPU_NEIGHBOR_partition_impl(graph, iterations);
+    ntsGCN->init_graph();
+    ntsGCN->init_nn();
+    // float acc = ntsGCN->run();
+    ntsGCN->test_depcache();
   } 
   else if (graph->config->algorithm == std::string("TEST_BATCH_DIST")) {
     graph->load_directed(graph->config->edge_file, graph->config->vertices);

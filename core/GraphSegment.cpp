@@ -325,8 +325,16 @@ void InputInfo::readFromCfgFile(std::string config_file) {
     } else if (0 == cfg_k.compare("THREADS")) {
       this->threads = std::atoi(cfg_v.c_str());
       // printf("batch_switch_time %.3f\n", batch_switch_time);
+    }  else if (0 == cfg_k.compare("PART_NUM")) {
+      this->part_num = std::atoi(cfg_v.c_str());
+      assert(part_num > 0);
+    }  else if (0 == cfg_k.compare("PART_DIM")) {
+      this->part_dim = std::atoi(cfg_v.c_str());
+      assert(part_dim > 0);
+    } else if (0 == cfg_k.compare("PART_ALGO")) {
+      this->part_algo = cfg_v;
+      // printf("batch_switch_time %.3f\n", batch_switch_time);
     }
-
     // else if (0 == cfg_k.compare("DYNAMIC_SAMPLE")) {
     //   this->dynamic_sample = std::atoi(cfg_v.c_str());
     // }
@@ -464,8 +472,11 @@ void InputInfo::print() {
   std::cout << "trans_threshold_end\t:\t" << trans_threshold_end << std::endl;
   std::cout << "trans_threshold_num\t:\t" << trans_threshold_num << std::endl;
   std::cout << "block_size\t:\t" << block_size << std::endl;
-  
   std::cout << "cache_exp\t:\t" << cache_exp << std::endl;
+  std::cout << "part_num\t:\t" << part_num << std::endl;
+  std::cout << "part_algo\t:\t" << part_algo << std::endl;
+  std::cout << "part_dim\t:\t" << part_dim << std::endl;
+  
 
   std::cout << "------------------input info--------------" << std::endl;
 }

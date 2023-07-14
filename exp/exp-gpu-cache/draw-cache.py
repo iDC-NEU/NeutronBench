@@ -164,7 +164,7 @@ if __name__ == '__main__':
   datasets = ['hollywood-2011']
   datasets = ['rmat']
   datasets = ['reddit', 'lj-links', 'enwiki-links', 'ogbn-arxiv', 'ogbn-products', 'hollywood-2011']
-  datasets = ['ogbn-arxiv']
+  datasets = ['ogbn-arxiv', 'ogbn-papers100M']
 
 
   ret = print_diff_cache_ratio(datasets, './log')
@@ -193,6 +193,7 @@ if __name__ == '__main__':
   
 
     x_ticks = np.linspace(0, 100, 6)
+    x_ticks = np.linspace(0, 30, 6)
     y_ticks = np.linspace(0, 100, 6)
     y_lim = (0, 100)
     # y_name = [f'{x*100:.0f}' for x in y_ticks]

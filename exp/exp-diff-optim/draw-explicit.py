@@ -129,8 +129,8 @@ def plot_stack_bar(plot_params, Y, labels, xlabel, ylabel, xticks, anchor=None, 
 
 
 if __name__ == '__main__':
-  datasets = ['reddit', 'livejournal', 'lj-links', 'lj-large', 'enwiki-links']
   datasets = ['ogbn-arxiv']
+  datasets = ['reddit', 'livejournal', 'lj-links', 'lj-large', 'enwiki-links']
   ret = get_explicit_time(datasets)
   for k, v in ret.items():
     print(k, v)
@@ -146,24 +146,37 @@ if __name__ == '__main__':
   print('\nsample, gather, transfer, train, avg%:\n', avg_percent)
   # x_name = ['arxiv', 'products', 'reddit', 'livejournal', 'lj-links', 'lj-large', 'enwiki']
 
+  # params={
+  #   'axes.labelsize': '14',
+  #   'xtick.labelsize':'14',
+  #   'ytick.labelsize':'14',
+  #   'lines.linewidth': 1,
+  #   # 'legend.fontsize': '14.31',
+  #   'legend.fontsize': '14',
+  #   'figure.figsize' : '8, 4',
+  #   'legend.loc': 'upper center', #[]"upper right", "upper left"]
+  #   'legend.frameon': False,
+
+  # }
+
+
   params={
-    'axes.labelsize': '14',
-    'xtick.labelsize':'14',
-    'ytick.labelsize':'14',
-    'lines.linewidth': 1,
-    # 'legend.fontsize': '14.31',
+    'axes.labelsize': '15',
+    'xtick.labelsize':'15',
+    'ytick.labelsize':'15',
+    'lines.linewidth': 2,
+    # 'legend.fontsize': '14.7',
     'legend.fontsize': '14',
     'figure.figsize' : '8, 4',
     'legend.loc': 'upper center', #[]"upper right", "upper left"]
     'legend.frameon': False,
-
   }
 
 
   labels = ['sample', 'gather', 'transfer', 'train']
-  xticks = datasets
+  xticks = ['reddit', 'livejournal', 'lj-links', 'lj-large', 'enwiki']
   xlabel = ''
   ylabel = 'Norm. Execute Time (%)'
   # labels = list(ret.keys())
-  plot_stack_bar(params, diff_stage_time, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.16), figpath='explicit-breakdown.pdf')
+  plot_stack_bar(params, diff_stage_time, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.15), figpath='explicit-breakdown.pdf')
   exit(0)
