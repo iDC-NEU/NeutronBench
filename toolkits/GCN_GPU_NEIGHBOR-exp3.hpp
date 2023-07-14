@@ -1370,9 +1370,17 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     cache_init_time += get_time();
 
     // move to constructor
+
+    double fractional_seconds_since_epoch
+    = std::chrono::duration_cast<std::chrono::duration<double>>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+
+    LOG_DEBUG("gcn_start_run_at %.3f", fractional_seconds_since_epoch);
+
     double iteration_time = 0;
     for (int i_i = 0; i_i < iterations; i_i++) {
-      if (config_run_time > 0 && gcn_run_time >= config_run_time) {
+      if (config_run_time > 0 && iteration_time >= config_run_time) {
+        graph->config->epochs = i_i;
         iterations = i_i;
         break;
       }
