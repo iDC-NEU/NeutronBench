@@ -100,7 +100,7 @@ python ./exp/exp-partition/exp-partition.py
 
 ```bash
 # batch size
-python .exp/exp-batch-size/exp-batch-size.py
+python ./exp/exp-batch-size/exp-batch-size.py
 
 # sample rate
 python ./exp/exp-sample-rate/sample-rate.py
@@ -112,15 +112,15 @@ python ./exp/exp-sample-rate/sample-rate.py
 
 ```bash
 # different optimization
-python .exp/exp-diff-optim/exp-diff-optim.py
+python ./exp/exp-diff-optim/exp-diff-optim.py
 
 # hybrid transfer
-python .exp/exp-hybrid-trans/exp-hybrid-trans.py
+python ./exp/exp-hybrid-trans/exp-hybrid-trans.py
 
 # pipeline
-python .exp/exp-diff-optim/exp-diff-pipe.py
+python ./exp/exp-diff-optim/exp-diff-pipe.py
 
 # gpu cache 
-python .exp/exp-gpu-cache/exp-gpu-cache.py
+python ./exp/exp-gpu-cache/exp-gpu-cache.py
 ```
 
