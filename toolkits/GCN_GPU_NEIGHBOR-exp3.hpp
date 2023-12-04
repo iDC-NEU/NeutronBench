@@ -855,6 +855,164 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     sampler->restart();
   }
 
+
+  void pipelineS_version(Sampler* sampler) {
+    NtsVar tmp_X0[pipelines];
+    NtsVar tmp_target_lab[pipelines];
+    LOG_DEBUG("pipeline %d", pipelines);
+    for (int i = 0; i < pipelines; i++) {
+      tmp_X0[i] = graph->Nts->NewLeafTensor({1000, F.size(1)}, torch::DeviceType::CUDA);
+      if (graph->config->classes > 1) {
+        tmp_target_lab[i] =
+            graph->Nts->NewLabelTensor({graph->config->batch_size, graph->config->classes}, torch::DeviceType::CUDA);
+      } else {
+        tmp_target_lab[i] = graph->Nts->NewLabelTensor({graph->config->batch_size}, torch::DeviceType::CUDA);
+      }
+    }
+
+    // std::queue<SampledSubgraph*> ssg_que;
+    // std::unique_lock<std::mutex> sample_lock(sample_mutex, std::defer_lock);
+    condition_variable bufferNotEmpty;
+    condition_variable bufferNotFull;
+
+    int sample_idx = 0;
+    std::cout << &sample_idx << std::endl;
+    int que_size = 10;
+    std::queue<SampledSubgraph*> sample_que;
+
+    std::thread sample_thread = std::thread(
+      [&]() {
+        std::cout << "work_offset " << sampler->work_offset  << " " <<  sampler->work_range[1] << std::endl;
+        while (sampler->work_offset < sampler->work_range[1]) {
+          // sample_lock.lock();
+          std::unique_lock<std::mutex> sample_lock(sample_mutex, std::defer_lock);
+          bufferNotFull.wait(sample_lock, [&]() {return que_size > sample_que.size(); });
+
+          // auto ssg = sampler->subgraph_list[sample_idx];
+          auto ssg = new SampledSubgraph(sampler->layers, sampler->fanout);
+          sample_que.push(ssg);
+
+          epoch_sample_time -= get_time();
+          sampler->sample_one(ssg, graph->config->batch_type, ctx->is_train());
+          epoch_sample_time += get_time();
+          std::cout << "sample " << &sample_idx << " " << sample_idx << " is done!" << std::endl;
+          std::cout << ssg->sampled_sgs[0]->v_size << " "  << ssg->sampled_sgs[0]->e_size << " " 
+          << ssg->sampled_sgs[1]->v_size << " "  << ssg->sampled_sgs[1]->e_size << " " 
+          << std::endl;
+          std::cout << "que size " << sample_que.size() << std::endl;
+
+          sample_idx++;
+          bufferNotEmpty.notify_one();
+          // sample_lock.unlock();
+        }
+      }
+    );
+    // std::cout << "sample_idx " << sample_idx << std::endl;
+
+    SampledSubgraph* curr_ssg;
+    // std::cout << "batch_nums " << sampler->batch_nums << std::endl;
+    for (int i = 0; i < sampler->batch_nums; ++i) {
+      {
+        std::unique_lock<std::mutex> compute_lock(sample_mutex, std::defer_lock);
+        // std::cout << i << " wait for sample result" << std::endl;
+        // bufferNotEmpty.wait(compute_lock, [&]() {return i < sample_idx; });
+        bufferNotEmpty.wait(compute_lock, [&]() {return !sample_que.empty(); });
+
+        curr_ssg = sample_que.front();
+        sample_que.pop();
+        bufferNotFull.notify_one();
+      }
+      // std::cout << "start compute batch " << i << std::endl;
+      // curr_ssg = sampler->subgraph_list[i];
+      
+      epoch_transfer_graph_time -= get_time();
+      curr_ssg->trans_graph_to_gpu_async(cuda_stream_list[0].stream, graph->config->mini_pull > 0);
+      epoch_transfer_graph_time += get_time();
+      if (graph->config->cache_type == "none") {  // trans feature use zero copy (omit gather feature)
+        epoch_transfer_feat_time -= get_time();
+        sampler->load_feature_gpu(&cuda_stream_list[0], curr_ssg, tmp_X0[0],
+                                  gnndatum->dev_local_feature);
+        epoch_transfer_feat_time += get_time();
+        // get_gpu_mem(used_gpu_mem, total_gpu_mem);
+      } else if (graph->config->cache_type == "gpu_memory" ||
+                  graph->config->cache_type == "rate") {  // trans freature which is not cache in gpu
+        // epoch_transfer_feat_time -= get_time();
+        auto [trans_feature_tmp, gather_gpu_cache_tmp] = sampler->load_feature_gpu_cache(
+            &cuda_stream_list[0], curr_ssg, tmp_X0[0], gnndatum->dev_local_feature,
+            dev_cache_feature, local_idx, local_idx_cache, cache_node_hashmap, dev_local_idx,
+            dev_local_idx_cache, dev_cache_node_hashmap);
+        // epoch_transfer_feat_time += get_time();
+        epoch_transfer_feat_time += trans_feature_tmp;
+        epoch_gather_feat_time += gather_gpu_cache_tmp;
+
+        debug_time -= get_time();
+        epoch_all_node += curr_ssg->sampled_sgs[0]->src().size();
+        for (auto& it : curr_ssg->sampled_sgs[0]->src()) {
+          if (cache_node_hashmap[it] != -1) {
+            epoch_cache_hit++;
+          }
+        }
+        debug_time += get_time();
+      } else {
+        std::cout << "cache_type: " << graph->config->cache_type << " is not support!" << std::endl;
+        assert(false);
+      }
+      epoch_transfer_label_time -= get_time();
+      sampler->load_label_gpu(&cuda_stream_list[0], curr_ssg, tmp_target_lab[0],
+                              gnndatum->dev_local_label);
+
+      epoch_transfer_label_time += get_time();
+      // cudaStreamSynchronize(cuda_stream_list[0].stream);
+
+      ////////////////////////////////// train //////////////////////////////////
+      // at::cuda::setCurrentCUDAStream(torch_stream[0]);
+      if (ctx->training == true) zero_grad();  // should zero grad after every mini batch compute
+      epoch_train_time -= get_time();
+      for (int l = 0; l < layers; l++) {  // forward
+        graph->rtminfo->curr_layer = l;
+        if (l == 0) {
+          NtsVar Y_i = ctx->runGraphOp<nts::op::SingleGPUSampleGraphOp>(curr_ssg, graph, l, tmp_X0[0],
+                                                                        &cuda_stream_list[0]);
+          X[l + 1] = ctx->runVertexForward([&](NtsVar n_i) { return vertexForward(n_i); }, Y_i);
+        } else {
+          NtsVar Y_i = ctx->runGraphOp<nts::op::SingleGPUSampleGraphOp>(curr_ssg, graph, l, X[l],
+                                                                        &cuda_stream_list[0]);
+          X[l + 1] = ctx->runVertexForward([&](NtsVar n_i) { return vertexForward(n_i); }, Y_i);
+        }
+      }
+
+      auto loss_ = Loss(X[layers], tmp_target_lab[0], graph->config->classes == 1);
+      loss_epoch += loss_.item<float>();
+
+      if (ctx->training == true) {
+        ctx->appendNNOp(X[layers], loss_);
+        ctx->self_backward(false);
+        Update();
+      }
+
+      if (graph->config->classes == 1) {
+        correct += get_correct(X[layers], tmp_target_lab[0], graph->config->classes == 1);
+        train_nodes += tmp_target_lab[0].size(0);
+      } else {
+        f1_epoch += f1_score(X[layers], tmp_target_lab[0], graph->config->classes == 1);
+      }
+      epoch_train_time += get_time();
+
+      // cudaStreamSynchronize(cuda_stream_list[0].stream);
+      // delete curr_ssg;
+      // delete sampler->subgraph_list[i];
+
+      // delete sample_que.front();
+      delete curr_ssg;
+      // sample_que.pop();
+    }
+    sample_thread.join();
+    assert(sampler->work_offset == sampler->work_range[1]);
+    sampler->restart();
+  }
+
+
+
   void explicit_version(Sampler* sampler) {
     X[0] = graph->Nts->NewLeafTensor({1000, F.size(1)}, torch::DeviceType::CUDA);
     NtsVar target_lab;
@@ -1004,7 +1162,7 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
             &cuda_stream_list[0], ssg, X[0], gnndatum->dev_local_feature, dev_cache_feature, local_idx, local_idx_cache,
             cache_node_hashmap, dev_local_idx, dev_local_idx_cache, dev_cache_node_hashmap);
         epoch_transfer_feat_time += get_time();
-       LOG_DEBUG("trans_feat_cache done %.3f", epoch_transfer_feat_time);
+      //  LOG_DEBUG("trans_feat_cache done %.3f", epoch_transfer_feat_time);
 
         epoch_all_node += ssg->sampled_sgs[0]->src().size();
         for (auto& it : ssg->sampled_sgs[0]->src()) {
@@ -1174,6 +1332,9 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     if (graph->config->mode == "pipeline") {
       LOG_DEBUG("pipeline version");
       pipeline_version(sampler);
+    } else if (graph->config->mode == "pipelineS") {
+      LOG_DEBUG("pipeline version");
+      pipelineS_version(sampler);
     } else if (graph->config->mode == "explicit") {
       LOG_DEBUG("explicit version");
       explicit_version(sampler);
@@ -1324,7 +1485,14 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     }
 
     // train_sampler = new Sampler(fully_rep_graph, train_nids);
-    train_sampler = new Sampler(fully_rep_graph, train_nids, pipelines, false);
+
+    if (graph->config->mode == "pipelineS") {
+      int batch_num = (train_nids.size() + graph->config->batch_size - 1) / graph->config->batch_size;
+      train_sampler = new Sampler(fully_rep_graph, train_nids, batch_num, false);
+    } else {
+      train_sampler = new Sampler(fully_rep_graph, train_nids, pipelines, false);
+    }
+
     eval_sampler = new Sampler(fully_rep_graph, val_nids, true);  // true mean full batch
     test_sampler = new Sampler(fully_rep_graph, test_nids, true);  // true mean full batch
     // eval_sampler->update_fanout(-1);                            // val not sample
