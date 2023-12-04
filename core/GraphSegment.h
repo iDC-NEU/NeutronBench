@@ -205,6 +205,7 @@ class InputInfo {
   int pipelines = 1;
 
   // algorithm related:
+  VertexId target_degree;
   VertexId batch_size;
   VertexId val_batch_size;
   ValueType learn_rate;

@@ -86,6 +86,29 @@ class SampledSubgraph {
     }
   }
 
+  // void copy_to_ssg(SampledSubgraph* ssg) {
+  //   ssg->layers = layers;
+  //   ssg->batch_size = batch_size;
+  //   ssg->fanout = fanout;
+  //   ssg->curr_layer = curr_layer;
+  //   ssg->curr_dst_size = curr_dst_size;
+  //   ssg->threads = threads;
+
+  //   std::vector<sampCSC *> sampled_sgs;
+  //   int layers;
+  //   int batch_size;
+  //   std::vector<int> fanout;
+  //   int curr_layer;
+  //   int curr_dst_size;
+  //   int threads;
+  //   unsigned *seeds;
+
+  //   ssg->sampled_sgs.resize(sampled_sgs.size());
+  //   for (int i = 0; i < layers; ++i) {
+  //     // ssg->sampled_sgs[i] = new sampCSC
+  //   }
+  // }
+
   ~SampledSubgraph() {
     fanout.clear();
     for (int i = 0; i < sampled_sgs.size(); i++) {
@@ -232,6 +255,116 @@ omp_set_num_threads(threads);
     curr_dst_size = sampled_sgs[layer]->src_size;
     // curr_layer++;
   }
+
+
+  // void add_pre_layer_edges() {
+  //   std::cout << "layers " << layers << std::endl;
+  //   for (int i = 0; i < layers; ++i) {
+  //     std::cout << "layer " << i << std::endl;
+  //     auto one_layer = sampled_sgs[i];
+  //     int dst_size = one_layer->dst().size();
+  //     int src_size = one_layer->src().size();
+  //     std::cout << dst_size << " " << src_size << std::endl;
+  //     std::cout << one_layer->c_o().size() << " " << one_layer->r_i().size() << std::endl;
+  //   }
+
+  //   for (int i = 1; i < layers; ++i) {
+  //     auto curr_layer = sampled_sgs[i];
+  //     auto pre_layer = sampled_sgs[i - 1];
+  //     std::set<VertexId> tmp;
+  //     std::vector<VertexId> curr_source;       // global id
+  //     std::vector<VertexId> curr_destination;  // global id
+
+  //     tmp.insert(pre_layer->dst().begin(), pre_layer->dst().end());
+  //     tmp.insert(curr_layer->dst().begin(), curr_layer->dst().end());
+  //     std::copy(tmp.begin(), tmp.end(), std::back_inserter(curr_destination));
+  //     VertexId curr_dst_size = curr_destination.size();
+
+  //     tmp.clear();
+  //     tmp.insert(pre_layer->src().begin(), pre_layer->src().end());
+  //     tmp.insert(curr_layer->src().begin(), curr_layer->src().end());
+  //     std::copy(tmp.begin(), tmp.end(), std::back_inserter(curr_source));
+  //     VertexId curr_src_size = curr_source.size();
+
+  //     std::unordered_map<VertexId, VertexId> src_idx;
+  //     for (int i = 0; i < curr_src_size; ++i) {
+  //       src_idx[curr_source[i]] - i;
+  //     }
+      
+
+  //     std::vector<VertexId> curr_row_offset(curr_dst_size + 1, 0);
+  //     std::vector<VertexId> curr_row_indices;  // local id
+
+      
+  //     std::unordered_map<VertexId, std::unordered_set<VertexId>> count_offset;
+  //     // add pre layer edges
+  //     for (int i = 0; i < pre_layer->dst().size(); ++i) {
+  //       // std::cout << i << " " << pre_layer->c_o(i) <<  " " << pre_layer->c_o(i + 1) << std::endl;
+  //       for (int j = pre_layer->c_o(i); j < pre_layer->c_o(i + 1); ++j) {
+  //         // if (j >= pre_layer->src_size) {
+  //         //   std::cout << pre_layer->src_size << " " << i << " " << pre_layer->dst(i) << " " << j << " " << pre_layer->c_o(i) << " " << pre_layer->c_o(i + 1) << std::endl;
+  //         // }
+  //         count_offset[pre_layer->dst(i)].insert(pre_layer->src(pre_layer->r_i(j)));
+  //       }
+  //     }
+  //     std::cout << "add pre done" << std::endl;
+      
+  //     // add curr layer edges
+  //     for (int i = 0; i < curr_layer->dst().size(); ++i) {
+  //       for (int j = curr_layer->c_o(i); j < curr_layer->c_o(i + 1); ++j) {
+  //         count_offset[curr_layer->dst(i)].insert(curr_layer->src(curr_layer->r_i(j)));
+  //       }
+  //     }
+  //     std::cout << "add curr done" << std::endl;
+
+  //     // get curr layer column offset
+  //     for (int i = 0; i < curr_dst_size; ++i) {
+  //       curr_row_offset[i + 1] = count_offset[curr_destination[i]].size() + curr_row_offset[i];
+  //       // printf("%d %d\n", i, curr_row_offset[i + 1]);
+  //     }
+  //     std::cout << "curr row offset done" << std::endl;
+
+  //     curr_layer->alloc_vertices(curr_dst_size);
+  //     for (int i = 0; i < curr_dst_size + 1; ++i) {
+  //       curr_layer->c_o()[i] = curr_row_offset[i];
+  //     }
+  //     std::cout << "curr offset setdone" << std::endl;
+
+  //     curr_layer->dst().clear();
+  //     std::copy(curr_destination.begin(), curr_destination.end(), std::back_inserter(curr_layer->dst()));
+  //     curr_layer->src().clear();
+  //     std::copy(curr_source.begin(), curr_source.end(), std::back_inserter(curr_layer->src()));
+  //     std::cout << "copy src dst done" << std::endl;
+
+  //     int tmp_e_size = 0;
+  //     for (int i = 0; i < curr_dst_size; ++i) {
+  //       int dst = curr_destination[i];
+  //       tmp_e_size += count_offset[dst].size();
+  //     }
+  //     curr_layer->alloc_edges(tmp_e_size);
+  //     std::cout << "alloc edges done" << std::endl;
+
+  //     for (int i = 0; i < curr_dst_size; ++i) {
+  //       int dst = curr_destination[i];
+  //       for (const auto& v : count_offset[dst]) {
+  //         curr_layer->r_i()[curr_row_offset[i]++] = src_idx[v];
+  //       }
+  //     }
+  //     std::cout << "r_i done" << std::endl;
+  //   }
+  //   // exit(0);
+
+
+  //   for (int i = 0; i < layers; ++i) {
+  //     std::cout << "layer " << i << std::endl;
+  //     auto one_layer = sampled_sgs[i];
+  //     int dst_size = one_layer->dst().size();
+  //     int src_size = one_layer->src().size();
+  //     std::cout << dst_size << " " << src_size << std::endl;
+  //     std::cout << one_layer->c_o().size() << " " << one_layer->r_i().size() << std::endl;
+  //   }
+    
+  // }
 
   void compute_one_layer(
       std::function<void(VertexId local_dst, VertexId *column_offset, VertexId *row_indices)> sparse_slot,

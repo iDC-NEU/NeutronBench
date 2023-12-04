@@ -263,7 +263,8 @@ def bytegnn_partition_graph(dataset, num_parts, num_hops, rowptr, col, train_mas
     print("\n######## bytegnn_partition_graph #########")
     print("num_parts {} num_hops {} ".format(num_parts, num_hops))
 
-    save_partition_result = f'/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/bytegnn-{dataset}-parts.pt'
+    # save_partition_result = f'/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/bytegnn-{dataset}-parts.pt'
+    save_partition_result = f'/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/bytegnn-{dataset}-part{num_parts}.pt'
     if os.path.exists(save_partition_result):
         print(f'read from partition result {save_partition_result}')
         parts = torch.load(save_partition_result)

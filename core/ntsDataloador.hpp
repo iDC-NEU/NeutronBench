@@ -138,6 +138,8 @@ class GNNDatum {
     assert(cnt0 + cnt1 + cnt2 == tmpN);
     LOG_DEBUG("local_mask: (%d %d %d) (%.1f %.1f %.1f)", cnt0, cnt1, cnt2, cnt0 * 1.0 / cnt2, cnt1 * 1.0 / cnt2, 1.0);
   }
+
+
   /**
    * @brief
    * Create tensor corresponding to local label
@@ -366,6 +368,17 @@ class GNNDatum {
     input_msk.close();
     input_lbl.close();
     // std::cout << "read all done" << std::endl;
+
+    // for (int i = 0; i < graph->vertices; ++i) {
+    //   if (global_mask[i] == 0 && graph->in_degree[i] > 100) {
+    //     global_mask[i] = 3;
+    //   }
+    //   if (local_mask[i] == 0 && graph->in_degree[i] > 100) {
+    //     local_mask[i] = 3;
+    //   }
+    // }
+
+
   }
 
   void readFeature_Label_Mask_OGB(std::string inputF, std::string inputL, std::string inputM) {

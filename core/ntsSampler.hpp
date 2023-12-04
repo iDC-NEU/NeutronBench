@@ -903,7 +903,8 @@ class Sampler {
       // LOG_DEBUG("sample_load_dst cost %.3f", sample_load_dst);
 
       sample_init_co -= get_time();
-      if (whole_graph->graph_->config->sample_rate > 0) {  // use sample rate
+      if (phase && whole_graph->graph_->config->sample_rate > 0) {  // use sample rate
+      // LOG_DEBUG("phase %d use sample rate", phase);
         float sample_rate = whole_graph->graph_->config->sample_rate;
         // LOG_DEBUG("sample_rate %.3f", sample_rate);
         ssg->init_co(
@@ -946,7 +947,7 @@ class Sampler {
             VertexId edge_nums = whole_offset[dst + 1] - whole_offset[dst];
             // fanout_i = column_offset[id + 1] - column_offset[id];
 
-            if (whole_graph->graph_->config->sample_rate > 0) {
+            if (phase && whole_graph->graph_->config->sample_rate > 0) {
               VertexId tmp_fanout = std::max(whole_graph->graph_->config->lower_fanout,
                                              int(edge_nums * whole_graph->graph_->config->sample_rate));
               // LOG_DEBUG("neightbor sample fanout %d, edge %d sample rate %d", fanout_i, edge_nums, tmp_fanout);
@@ -987,13 +988,23 @@ class Sampler {
             ///////////// no sorted_idxs copy //////////////////
             int pos = column_offset[id];
             if (fanout_i < edge_nums) {
+            // whrong version
+            // if (edge_nums < fanout_i) {
+            //   std::unordered_set<size_t> sampled_idxs;
+            //   while (sampled_idxs.size() < edge_nums) {
+            //     sampled_idxs.insert(random_uniform_int(0, fanout_i - 1));
+            //   }  
+            //   for (auto& idx : sampled_idxs) {
+            //     row_indices[pos++] = whole_indices[whole_offset[dst] + idx];
+            //     sample_bits->set_bit(whole_indices[whole_offset[dst] + idx]);
+            //   }
+              ////////////////////////////////////////////////////////////////
+
+
               std::unordered_set<size_t> sampled_idxs;
               while (sampled_idxs.size() < fanout_i) {
-                // sampled_idxs.insert(rand_int(fanout_i));
-                // sampled_idxs.insert(rand_int_seed(fanout_i));
                 sampled_idxs.insert(random_uniform_int(0, edge_nums - 1));
               }
-
               for (auto& idx : sampled_idxs) {
                 row_indices[pos++] = whole_indices[whole_offset[dst] + idx];
                 sample_bits->set_bit(whole_indices[whole_offset[dst] + idx]);
@@ -1027,7 +1038,11 @@ class Sampler {
               // sorted_idxs.insert(sorted_idxs.end(), sampled_idxs.begin(), sampled_idxs.end());
             } else {
               for (size_t i = 0; i < edge_nums; ++i) {
-                // sorted_idxs.push_back(i);
+
+
+            // } else {
+            //   for (size_t i = 0; i < fanout_i; ++i) {
+            //     // sorted_idxs.push_back(i);
 
                 row_indices[pos++] = whole_indices[whole_offset[dst] + i];
                 sample_bits->set_bit(whole_indices[whole_offset[dst] + i]);
@@ -1075,6 +1090,10 @@ class Sampler {
       sample_post_time += get_time();
       layer_time += get_time();
     }
+
+    // ssg->add_pre_layer_edges();
+    // std::cout << "add pre layer done" << std::endl;
+
     std::reverse(ssg->sampled_sgs.begin(), ssg->sampled_sgs.end());
 
     sample_convert_graph_time -= get_time();

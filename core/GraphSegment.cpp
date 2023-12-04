@@ -394,6 +394,9 @@ void InputInfo::readFromCfgFile(std::string config_file) {
     } else if (0 == cfg_k.compare("THRESHOLD_TRANS")) {
       this->threshold_trans = std::atof(cfg_v.c_str());
       assert(threshold_trans >= 0 && threshold_trans <= 1);
+    } else if (0 == cfg_k.compare("TARGET_DEGREE")) {
+      this->target_degree = std::atoi(cfg_v.c_str());
+      assert(target_degree >= 0);
     } else {
       printf("not supported configure\n");
     }
@@ -476,6 +479,8 @@ void InputInfo::print() {
   std::cout << "part_num\t:\t" << part_num << std::endl;
   std::cout << "part_algo\t:\t" << part_algo << std::endl;
   std::cout << "part_dim\t:\t" << part_dim << std::endl;
+  std::cout << "target_degree\t:\t" << target_degree << std::endl;
+  
   
 
   std::cout << "------------------input info--------------" << std::endl;

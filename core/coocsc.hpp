@@ -104,6 +104,14 @@ class sampCSC {
     source.clear();
     row_offset.clear();
     column_indices.clear();
+    FreeEdge(dev_row_indices);
+    FreeEdge(dev_column_indices);
+    FreeBuffer(dev_edge_weight_backward);
+    FreeBuffer(dev_edge_weight_forward);
+    FreeEdge(dev_destination);
+    FreeEdge(dev_column_offset);
+    FreeEdge(dev_row_offset);
+    FreeEdge(dev_source);
     // delete[] node_idx;
   }
 
@@ -813,6 +821,18 @@ class sampCSC {
   VertexId size_dev_ci, size_dev_ro, size_dev_ewb;
   VertexId size_dev_edge, size_dev_edge_max = 0;
   double method1, method2, method3;
+
+
+  void copy_to(sampCSC* csc) {
+    csc->threads = threads;
+    csc->v_size = v_size;
+    csc->e_size = e_size;
+    csc->src_size = src_size;
+    csc->threads = threads;
+    csc->threads = threads;
+    csc->threads = threads;
+    csc->threads = threads;
+  }
 };
 
 #endif
