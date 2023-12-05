@@ -600,7 +600,11 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     MASK_gpu = MASK.cuda();
     // get_gpu_mem(used_gpu_mem, total_gpu_mem);
     // LOG_DEBUG("init_nn() after maks.cuda(): gcn_gpu_mem %.3fM", used_gpu_mem);
-    gnndatum->generate_gpu_data();
+    if (graph->config->mode == "unified") {
+      gnndatum->generate_gpu_data_unified();
+    } else {
+      gnndatum->generate_gpu_data();
+    }
     // get_gpu_mem(used_gpu_mem, total_gpu_mem);
     // LOG_DEBUG("init_nn() after generate_gpu_data(): gcn_gpu_mem %.3fM", used_gpu_mem);
 
@@ -1214,6 +1218,139 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     LOG_DEBUG("epoch trans_graph %.3f trans_feat %.3f trans_label %.3f", epoch_transfer_graph_time, epoch_transfer_feat_time, epoch_transfer_label_time);
   }
 
+   void unified_version(Sampler* sampler) {
+    X[0] = graph->Nts->NewLeafTensor({1000, F.size(1)}, torch::DeviceType::CUDA);
+    NtsVar target_lab;
+    if (graph->config->classes > 1) {
+      target_lab =
+          graph->Nts->NewLabelTensor({graph->config->batch_size, graph->config->classes}, torch::DeviceType::CUDA);
+    } else {
+      target_lab = graph->Nts->NewLabelTensor({graph->config->batch_size}, torch::DeviceType::CUDA);
+    }
+    sampler->metis_batch_id = 0;
+    while (sampler->work_offset < sampler->work_range[1]) {
+      if (ctx->training == true) zero_grad();  // should zero grad after every mini batch compute
+      auto ssg = sampler->subgraph;
+      epoch_sample_time -= get_time();
+      sampler->sample_one(ssg, graph->config->batch_type, ctx->is_train());
+      // sampler->sample_one_with_dst(ssg, graph->config->batch_type, ctx->is_train());
+      epoch_sample_time += get_time();
+      // LOG_DEBUG("sample done %.3f", epoch_sample_time);
+
+      epoch_transfer_graph_time -= get_time();
+      ssg->trans_graph_to_gpu_async(cuda_stream_list[0].stream, graph->config->mini_pull > 0);  // trans subgraph to gpu
+      // ssg->trans_graph_to_gpu_async(cuda_stream->stream, graph->config->mini_pull > 0);  // trans subgraph to gpu
+      epoch_transfer_graph_time += get_time();
+      // LOG_DEBUG("trans_graph done %.3f", epoch_transfer_graph_time);
+
+      ///////start trans target_lab (zero copy) //////
+      // sampler->load_label_gpu(target_lab, gnndatum->dev_local_label);
+      epoch_transfer_label_time -= get_time();
+      sampler->load_label_gpu(&cuda_stream_list[0], ssg, target_lab, gnndatum->dev_local_label);
+      epoch_transfer_label_time += get_time();
+      // LOG_DEBUG("trans_label done %.3f", epoch_transfer_label_time);
+      // /end trans target_lab (zero  copy)////////
+
+      ///////// trans feature (zero copy or cache  version)//////////////////
+      // if (graph->config->cache_rate <= 0) { // trans feature use zero
+      // graph->config->cache_type = "none";
+      if (graph->config->cache_type == "none") {  // trans feature use zero copy (omit gather feature)
+        // sampler->load_feature_gpu(X[0], gnndatum->dev_local_feature);
+        // sampler->load_feature_gpu(cuda_stream, ssg, X[0], gnndatum->dev_local_feature);
+        if (graph->config->mode == "unified") {
+          // unified don't need transfer feature to gpu
+
+          // method 1
+          epoch_transfer_feat_time -= get_time();
+          sampler->load_feature_gpu(&cuda_stream_list[0], ssg, X[0], gnndatum->dev_local_feature);
+          epoch_transfer_feat_time += get_time();
+
+          // // method 2
+          // auto local_feature = X[0];
+          // auto csc_layer = ssg->sampled_sgs[0];
+          // if (local_feature.size(0) < csc_layer->src_size) {
+          //   local_feature.resize_({csc_layer->src_size, local_feature.size(1)});
+          // }
+
+        } else {
+          epoch_transfer_feat_time -= get_time();
+          sampler->load_feature_gpu(&cuda_stream_list[0], ssg, X[0], gnndatum->dev_local_feature);
+          epoch_transfer_feat_time += get_time();
+        }
+
+      //  LOG_DEBUG("trans_feat done %.3f", epoch_transfer_feat_time);
+        // trans freature which is not cache in gpu
+        // } else if (graph->config->cache_type == "gpu_memory" && graph->rtminfo->epoch >= 5){
+        if (graph->config->threshold_trans > 0) explicit_rate.push_back(cnt_suit_explicit_block(ssg));
+      } else if (graph->config->cache_type == "gpu_memory" || graph->config->cache_type == "rate") {  
+                  // trans freature which is not cache in gpu
+                                                         // trans_feature_cost -= get_time();
+        // auto [trans_feature_tmp, gather_gpu_cache_tmp] = sampler->load_feature_gpu_cache(
+        //     X[0], gnndatum->dev_local_feature, dev_cache_feature, local_idx, local_idx_cache, cache_node_hashmap,
+        //     dev_local_idx, dev_local_idx_cache, dev_cache_node_hashmap);
+
+        epoch_transfer_feat_time -= get_time();
+        auto [trans_feature_tmp, gather_gpu_cache_tmp] = sampler->load_feature_gpu_cache(
+            &cuda_stream_list[0], ssg, X[0], gnndatum->dev_local_feature, dev_cache_feature, local_idx, local_idx_cache,
+            cache_node_hashmap, dev_local_idx, dev_local_idx_cache, dev_cache_node_hashmap);
+        epoch_transfer_feat_time += get_time();
+      //  LOG_DEBUG("trans_feat_cache done %.3f", epoch_transfer_feat_time);
+
+        epoch_all_node += ssg->sampled_sgs[0]->src().size();
+        for (auto& it : ssg->sampled_sgs[0]->src()) {
+          if (cache_node_hashmap[it] != -1) {
+            epoch_cache_hit++;
+          }
+        }
+        if (graph->config->threshold_trans > 0)
+          explicit_rate.push_back(cnt_suit_explicit_block(ssg, cache_node_hashmap));
+      } else {
+        std::cout << "cache_type: " << graph->config->cache_type << " is not support!" << std::endl;
+        assert(false);
+      }
+      // /####/end trans feature (zero copy or cache version) ############/
+
+
+      epoch_train_time -= get_time();
+      at::cuda::setCurrentCUDAStream(torch_stream[0]);
+      for (int l = 0; l < layers; l++) {  // forward
+        graph->rtminfo->curr_layer = l;
+        // NtsVar Y_i = ctx->runGraphOp<nts::op::SingleGPUSampleGraphOp>(ssg, graph, l, X[l]);
+        // gnndatum->dev_local_feature
+        // if (l == 0 && graph->config->mode == "unified") {
+        //   NtsVar Y_i = ctx->runGraphOp<nts::op::SingleGPUSampleGraphOp>(ssg, graph, l, X[l], &cuda_stream_list[0]);
+        // } else {
+        NtsVar Y_i = ctx->runGraphOp<nts::op::SingleGPUSampleGraphOp>(ssg, graph, l, X[l], &cuda_stream_list[0]);
+        // }
+        X[l + 1] = ctx->runVertexForward([&](NtsVar n_i) { return vertexForward(n_i); }, Y_i);
+      }
+      // LOG_DEBUG("forward done");
+
+      auto loss_ = Loss(X[layers], target_lab, graph->config->classes == 1);
+      loss_epoch += loss_.item<float>();
+
+      if (ctx->training == true) {
+        ctx->appendNNOp(X[layers], loss_);
+        ctx->self_backward(false);
+        Update();
+      }
+      if (graph->config->classes == 1) {
+        correct += get_correct(X[layers], target_lab, graph->config->classes == 1);
+        train_nodes += target_lab.size(0);
+      } else {
+        f1_epoch += f1_score(X[layers], target_lab, graph->config->classes == 1);
+      }
+      epoch_train_time += get_time();
+      sampler->reverse_sgs();
+    }
+    assert(sampler->work_offset == sampler->work_range[1]);
+    sampler->restart();
+    if (graph->config->threshold_trans > 0) {
+      LOG_DEBUG("epoch suit explicit trans block rate %.3f(%.3f)", get_mean(explicit_rate), get_var(explicit_rate));
+    }
+    LOG_DEBUG("epoch trans_graph %.3f trans_feat %.3f trans_label %.3f", epoch_transfer_graph_time, epoch_transfer_feat_time, epoch_transfer_label_time);
+  }
+
   void count_sample_hop_nodes(Sampler* sampler) {
     std::vector<std::vector<int>> all_batch_hop_nodes;
     while (sampler->work_offset < sampler->work_range[1]) {
@@ -1341,6 +1478,9 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     } else if (graph->config->mode == "zerocopy") {
       LOG_DEBUG("zerocopy version");
       zerocopy_version(sampler);
+    } else if (graph->config->mode == "unified") {
+      LOG_DEBUG("unified memory version");
+      unified_version(sampler);
     } else {
       LOG_DEBUG("not support");
       assert(false);
