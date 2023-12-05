@@ -142,6 +142,46 @@ def different_optim(datasets):
 
 
 
+def explicit_breakdown(datasets):
+  for ds in datasets:
+    cmd = new_command(ds, cache_type='none', cache_policy='none', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=1, MODE='explicit')
+    run(ds, cmd, './log/explicit')
+
+
+
+import multiprocessing
+import time
+
+def unfied_optimization(datasets):
+  for ds in datasets:
+    # process = subprocess.Popen(["python", "cpu-gpu-usage.py"], stdout=output_file, stderr=output_file)
+    # print(f'subprocess pid {process.pid} python cpu-gpu-usage.py > {usage_log}')
+    
+    # run_command = f'../build/nts tmp.cfg > {log_path}/{dataset}{suffix}.log'
+    # print('running: ', run_command)
+    # os.system(run_command)
+
+    # run_time = time.time() - run_time
+    # print(f'done! cost {run_time:.2f}s')
+
+    # process.kill()
+    # os.killpg(process.pid, signal.SIGKILL)
+
+    
+    # run(ds, cmd, './log/unifid-memory')
+
+    # zero_copy (gather)
+    cmd = new_command(ds, cache_type='none', cache_policy='none', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=1, MODE='unified')
+    process = multiprocessing.Process(target=run, args=(ds, cmd, '.log/unifid-memory'))
+    process.start()
+
+    process.join(timeout=3600)
+    if process.is_alive():
+        print("函数运行超时，停止函数运行", ds)
+        process.terminate()
+    
+
+
 if __name__ == '__main__':
   create_dir('./build')
   os.system('cd ../build && cmake ../.. && make -j $(nproc) && cd -')
@@ -161,5 +201,7 @@ if __name__ == '__main__':
   datasets = ['hollywood-2011', 'reddit']
   datasets = ['ogbn-arxiv']
   datasets = ['reddit', 'livejournal', 'lj-links', 'lj-large', 'enwiki-links', 'ogbn-arxiv', 'ogbn-products']
+  # explicit_breakdown(datasets)
+  # different_optim(datasets)
+  unfied_optimization(datasets)
   
-  different_optim(datasets)
