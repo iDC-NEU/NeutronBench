@@ -54,9 +54,9 @@ def create_dir(path):
 def plot_line(plot_params, X, Y, labels, xlabel, ylabel, xticks, yticks, xlim, ylim, figpath=None):
 
   # https://tonysyu.github.io/raw_content/matplotlib-style-gallery/gallery.html
-  # plt.style.use("seaborn-deep")
   # plt.style.use("grayscale")
-  plt.style.use("classic")
+  # plt.style.use("classic")
+  plt.style.use("seaborn-paper")
   # plt.style.use("bmh")
   # plt.style.use("ggplot")
   pylab.rcParams.update(plot_params)  #更新自己的设置
@@ -67,13 +67,14 @@ def plot_line(plot_params, X, Y, labels, xlabel, ylabel, xticks, yticks, xlim, y
 #   marker_every = [[10,8],[5,12],[5,14],50,70,180,60]
   marker_every = [5,5,5,5,5,5,10,10,10,10,10,10,10,10]
   # fig1 = plt.figure(1)
-  color_list = ['b', 'g', 'k', 'c', 'm', 'y', 'r'] 
-  color_list = ['#2a6ca6', '#419136', '#f47a2d', '#c4342b', '#7c4e44', ] 
+  # color_list = ['b', 'g', 'k', 'c', 'm', 'y', 'r'] 
+  # color_list = ['#2a6ca6', '#419136', '#f47a2d', '#c4342b', '#7c4e44', ] 
+  color_list = ['C0', 'C1', 'C2'] 
 
   axes1 = plt.subplot(111)#figure1的子图1为axes1
   for i, (x, y) in enumerate(zip(X, Y)):
     # plt.plot(x, y, label = labels[i], color=color_list[i], marker=makrer_list[i], markersize=5,markevery=marker_every[i])
-    plt.plot(x, y, label = labels[i], color=color_list[i])
+    plt.plot(x, y, label = labels[i], color=color_list[i], linewidth=myparams['lines.linewidth']+1)
     # plt.plot(x, y, label = labels[i], markersize=5)
   axes1.set_yticks(yticks)
   axes1.set_xticks(xticks)
@@ -99,7 +100,12 @@ def plot_line(plot_params, X, Y, labels, xlabel, ylabel, xticks, yticks, xlim, y
   # axes.yaxis.set_major_formatter(ticks_fmt) # set % format to ystick.
   # axes.xaxis.set_major_formatter(ticks_fmt) # set % format to ystick.
   # axes1.grid(axis='y', linestyle='-', )
-  axes1.grid(axis='y', linestyle='', )
+  # axes1.grid(axis='y', linestyle='', )
+
+  axes1.spines['bottom'].set_linewidth(myparams['lines.linewidth']);###设置底部坐标轴的粗细
+  axes1.spines['left'].set_linewidth(myparams['lines.linewidth']);####设置左边坐标轴的粗细
+  axes1.spines['right'].set_linewidth(myparams['lines.linewidth']);###设置右边坐标轴的粗细
+  axes1.spines['top'].set_linewidth(myparams['lines.linewidth']);####设置上部坐标轴的粗细
   
   figpath = './line.pdf' if not figpath else figpath
   plt.savefig(figpath, dpi=1000, bbox_inches='tight', format='pdf')#bbox_inches='tight'会裁掉多余的白边
@@ -142,18 +148,22 @@ def print_diff_cache_ratio(datasets, log_path):
 
 if __name__ == '__main__':
 
-  myparams = {
-        'axes.labelsize': '12',
-        'xtick.labelsize': '12',
-        'ytick.labelsize': '12',
-        # 'font.family': 'Times New Roman',
-        'figure.figsize': '5, 4',  #图片尺寸
-        'lines.linewidth': 4,
-        'legend.fontsize': '12',
-        'legend.loc': 'best', #[]"upper right", "upper left"]
-        'legend.numpoints': 1,
-        # 'lines.ncol': 2,
-    }
+  myparams={
+    'axes.labelsize': '11',
+    'xtick.labelsize':'11',
+    'ytick.labelsize':'11',
+    'lines.linewidth': 1,
+    # 'legend.fontsize': '14.7',
+    'legend.fontsize': '11',
+    'figure.figsize' : '3, 2.5',
+    # 'legend.loc': 'upper center', #[]"upper right", "upper left"]
+    'legend.loc': 'best', #[]"upper right", "upper left"]
+    'legend.frameon': False,
+    # 'font.family': 'Arial'
+    # 'font.family': 'Times New Roman',
+    'font.family': 'Arial',
+    'font.serif': 'Arial',
+  }
 
   datasets = ['hollywood-2011', 'lj-links', 'reddit', 'lj-links', 'enwiki-links','ogbn-arxiv', 'livejournal', 'ogbn-products']
   datasets = ['reddit', 'livejournal', 'lj-links', 'lj-large', 'enwiki-links', 'ogbn-arxiv', 'ogbn-products']
@@ -164,8 +174,8 @@ if __name__ == '__main__':
   datasets = ['hollywood-2011']
   datasets = ['rmat']
   datasets = ['ogbn-arxiv', 'ogbn-papers100M']
-  datasets = ['reddit', 'lj-links', 'enwiki-links', 'ogbn-arxiv', 'ogbn-products', 'hollywood-2011', 'ogbn-papers100M']
   datasets = ['amazon', 'ogbn-papers100M']
+  datasets = ['reddit','lj-large', 'livejournal', 'lj-links', 'enwiki-links', 'ogbn-arxiv', 'ogbn-products', 'hollywood-2011', 'ogbn-papers100M']
 
 
   ret = print_diff_cache_ratio(datasets, './log')
@@ -178,6 +188,10 @@ if __name__ == '__main__':
     for cache_policy in labels:
       cache_rate = ret[ds+cache_policy+'rate']
       cache_hit_rate = ret[ds+cache_policy+'hit']
+      # print(ds, cache_policy)
+      # print(cache_rate)
+      # print(cache_hit_rate)
+      # print()
       X.append(cache_rate)
       Y.append(cache_hit_rate)
        
@@ -195,7 +209,8 @@ if __name__ == '__main__':
     y_ticks = np.linspace(0, 100, 6)
     y_lim = (0, 100)
     # y_name = [f'{x*100:.0f}' for x in y_ticks]
-    pdf_file = f'./cache_pdf/{ds}.pdf'
+    create_dir('./pdf')
+    pdf_file = f'./pdf/{ds}.pdf'
 
     xlabel = 'Cache Ratio (%)'
     ylabel = 'Cache Hit Ratio (%)'
