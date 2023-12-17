@@ -124,12 +124,26 @@ def parse_num(filename, mode):
 
 
 
-def print_diff_cache_ratio(datasets, log_path):
+# def print_diff_cache_ratio(datasets, log_path):
+#   # datasets = ['ogbn-arxiv', 'reddit', 'ogbn-products', 'enwiki-links', 'livejournal', 'lj-large', 'lj-links']
+#   ret = {}
+#   for ds in datasets:
+#     for cache_policy in ['degree', 'sample', 'random']:
+#       log_file = f'{log_path}/vary-rate-{cache_policy}/{ds}.log'
+#       print(log_file)
+#       cache_hit_rate = parse_num(log_file, 'gcn_cache_hit_rate')
+#       cache_rate = parse_num(log_file, 'gcn_cache_rate')
+#       ret[ds+cache_policy+'rate'] = cache_rate
+#       ret[ds+cache_policy+'hit'] = cache_hit_rate
+#   return ret
+
+
+def print_diff_cache_ratio(datasets, log_path, bs, fanout):
   # datasets = ['ogbn-arxiv', 'reddit', 'ogbn-products', 'enwiki-links', 'livejournal', 'lj-large', 'lj-links']
   ret = {}
   for ds in datasets:
     for cache_policy in ['degree', 'sample', 'random']:
-      log_file = f'{log_path}/vary-rate-{cache_policy}/{ds}.log'
+      log_file = f'{log_path}/vary-rate-{cache_policy}/{bs}-{fanout}/{ds}.log'
       print(log_file)
       cache_hit_rate = parse_num(log_file, 'gcn_cache_hit_rate')
       cache_rate = parse_num(log_file, 'gcn_cache_rate')
@@ -165,12 +179,21 @@ if __name__ == '__main__':
   datasets = ['rmat']
   datasets = ['reddit', 'lj-links', 'enwiki-links', 'ogbn-arxiv', 'ogbn-products', 'hollywood-2011']
   datasets = ['ogbn-arxiv', 'ogbn-papers100M']
+  datasets = ['ogbn-papers100M']
+  datasets = ['ogbn-products', 'reddit', 'lj-links', 'livejournal', 'lj-large', 'enwiki-links', 'amazon']
 
 
-  ret = print_diff_cache_ratio(datasets, './log')
+
+  bs = 1024
+  fanout = '4,4'
+
+  # ret = print_diff_cache_ratio(datasets, './log')
+  ret = print_diff_cache_ratio(datasets, './log', bs, fanout)
+
   # ret = print_diff_cache_ratio(datasets, '../log/gpu-cache-dgl2')
 
 
+  labels = ['degree', 'sample']
   labels = ['random', 'degree', 'sample']
   for ds in datasets:
     X, Y = [], []
@@ -185,7 +208,7 @@ if __name__ == '__main__':
       Y.append(cache_hit_rate)
        
     # print(Y)
-    print(len(X[0]), len(Y[0]),len(Y[1]),len(Y[2]), min(len(Y[0]),len(Y[1]),len(Y[2])))
+    # print(len(X[0]), len(Y[0]),len(Y[1]),len(Y[2]), min(len(Y[0]),len(Y[1]),len(Y[2])))
     # X = X[:,:min(len(Y[0]),len(Y[1]),len(Y[2]))]
 
     Y = np.array(Y) * 100
@@ -194,10 +217,11 @@ if __name__ == '__main__':
 
     x_ticks = np.linspace(0, 100, 6)
     x_ticks = np.linspace(0, 30, 6)
+    x_ticks = np.linspace(0, 100, 6)
     y_ticks = np.linspace(0, 100, 6)
     y_lim = (0, 100)
     # y_name = [f'{x*100:.0f}' for x in y_ticks]
-    pdf_file = f'./cache_pdf/{ds}.pdf'
+    pdf_file = f'./cache_pdf/{ds}-{bs}-{fanout}.pdf'
 
     xlabel = 'Cache Ratio (%)'
     ylabel = 'Cache Hit Ratio (%)'

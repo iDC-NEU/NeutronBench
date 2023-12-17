@@ -44,6 +44,7 @@ graph_config = {
   'rmat': "VERTICES:992712\nEDGE_FILE:../../data/rmat/rmat.edge\nFEATURE_FILE:random\nLABEL_FILE:random\nMASK_FILE:random\nLAYERS:600-128-60\n",
   'rmat': "VERTICES:1000000\nEDGE_FILE:../../data/rmat/rmat.edge\nFEATURE_FILE:random\nLABEL_FILE:random\nMASK_FILE:random\nLAYERS:600-128-60\n",
   'ogbn-papers100M': "VERTICES:111059956\nEDGE_FILE:../../data/ogbn-papers100M/ogbn-papers100M.edge\nFEATURE_FILE:random\nLABEL_FILE:random\nMASK_FILE:random\nLAYERS:5-4-2\n",
+  # 'ogbn-papers100M': "VERTICES:111059956\nEDGE_FILE:../../data/ogbn-papers100M/ogbn-papers100M.edge\nFEATURE_FILE:random\nLABEL_FILE:random\nMASK_FILE:random\nLAYERS:5-4-2\n",
 }
 
 # vertex: 992712 edges: 199489178
@@ -118,11 +119,11 @@ def run(dataset, cmd, log_path, suffix=''):
 def compare_cache_policy(datasets, bs, fanout, log_path='./log/gpu-cache', algo='GCNNEIGHBORGPUCACHEEXP'):
   for ds in datasets:
     cmd = new_command(ds, batch_size=bs, algo=algo, CACHE_RATE_END=1, CACHE_RATE_NUM=25, cache_type='rate', cache_policy='degree', batch_type='shuffle', fanout=fanout, TIME_SKIP=0, epochs=1, PIPELINES=3, MODE='pipeline')
-    run(ds, cmd, f'{log_path}/vary-rate-degree')
+    run(ds, cmd, f'{log_path}/vary-rate-degree/{bs}-{fanout}')
     cmd = new_command(ds, batch_size=bs, algo=algo, CACHE_RATE_END=1, CACHE_RATE_NUM=25, cache_type='rate', cache_policy='sample', batch_type='shuffle', fanout=fanout, TIME_SKIP=0, epochs=1, PIPELINES=3, MODE='pipeline')
-    run(ds, cmd, f'{log_path}/vary-rate-sample')
+    run(ds, cmd, f'{log_path}/vary-rate-sample/{bs}-{fanout}')
     cmd = new_command(ds, batch_size=bs, algo=algo, CACHE_RATE_END=1, CACHE_RATE_NUM=25, cache_type='rate', cache_policy='random', batch_type='shuffle', fanout=fanout, TIME_SKIP=0, epochs=1, PIPELINES=3, MODE='pipeline')
-    run(ds, cmd, f'{log_path}/vary-rate-random')
+    run(ds, cmd, f'{log_path}/vary-rate-random/{bs}-{fanout}')
 
 
 
@@ -185,6 +186,11 @@ if __name__ == '__main__':
   datasets = ['rmat']
   datasets = ['ogbn-arxiv', 'ogbn-products', 'reddit', 'hollywood-2011', 'lj-links', 'enwiki-links', 'amazon', 'rmat']
   datasets = ['ogbn-arxiv']
+  # datasets = ['lj-large','livejournal']
+  datasets = ['livejournal']
   datasets = ['ogbn-papers100M']
+  datasets = ['ogbn-products', 'reddit', 'lj-links', 'livejournal', 'lj-large', 'enwiki-links', 'amazon']
 
-  compare_cache_policy(datasets, 2048, '10,25', './log', 'GCNNEIGHBORGPUCACHEEXP')
+
+  # compare_cache_policy(datasets, 2048, '10,25', './log', 'GCNNEIGHBORGPUCACHEEXP')
+  compare_cache_policy(datasets, 1024, '4,4', './log', 'GCNNEIGHBORGPUCACHEEXP')
