@@ -11,9 +11,11 @@
 
 
 
-## Quick Start
 
-### Dependencies
+
+## 🔧 Install
+
+> Dependencies
 
 - **cmake** (>=3.14.2).
 - **mpich** (>=3.3.3) for inter-process communication.
@@ -23,7 +25,7 @@
 
 
 
-### Building 
+> Building 
 
 First clone the repository and initialize the submodule:
 
@@ -49,17 +51,14 @@ make -j4
 
 To run:
 
-List all nodes in `./NeutronBench/hostfile` for MPI communication:
+
 ```bash
-ip1
-ip2
-ip3
+# a example
+./run_nts.sh 1 gcn_sample_cache.cfg 
 ```
-copy NeutronBench directory to all your machines (copy_all.sh and make_and_copy.sh) and run the following command in your root DIR.
 
 
-
-### Datasets
+## 📁 Datasets
 
 All datasets we used:
 
@@ -80,12 +79,13 @@ All datasets we used:
 we provide a python script to generate the data files:
 
 ```bash
-python ./data/generate_nts_dataset.py --dataset ogbn-papers100M --self-loop False
+python ./data/generate_nts_dataset.py --dataset ogbn-arxiv
 ```
 
 
 
-### Experiments
+
+## 🚀 Experiments
 
 > Data partitioning experiments
 
@@ -123,3 +123,7 @@ python ./exp/exp-diff-optim/exp-diff-pipe.py
 # gpu cache 
 python ./exp/exp-gpu-cache/exp-gpu-cache.py
 ```
+
+## 📧 Contact
+
+For any questions or feedback, feel free to contract [Hao Yuan](mailto:arrangeman@163.com) or create an issue in this repository.
