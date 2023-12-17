@@ -103,8 +103,6 @@ def exp2(datasets, batch_sizes, run_times, log_path, lr_=0.01):
         file_path = f'{log_path}/{ds}-{lr_}'
         create_dir(file_path)
         for bs in batch_sizes[ds]:
-            # cmd = new_command(ds, batch_type='shuffle', fanout='10,25', valfanout='10,25', epochs=3, batch_size=bs, RUN_TIME=run_times[ds])
-            # cmd = new_command(ds, batch_type='shuffle', fanout='10,25', lr=0.01, epochs=3, batch_size=bs, RUN_TIME=run_times[ds], valfanout='10,25')
             cmd = new_command(
                 ds,
                 batch_type='shuffle',
@@ -123,24 +121,14 @@ def exp2(datasets, batch_sizes, run_times, log_path, lr_=0.01):
             run(ds, cmd, file_path, suffix=f'-{bs}')
 
 
-
 if __name__ == '__main__':
     create_dir('./build')
     os.system('cd build && make -j $(nproc) && cd ..')
 
     batch_sizes = {
-        'AmazonCoBuy_computers': (512, 1024, 2048, 4096, 8250),
-        'AmazonCoBuy_photo': (512, 1024, 2048, 4590),
-        'ogbn-arxiv': (128, 512, 3072, 6144, 12288, 24576, 49152, 90941),
-        'ogbn-arxiv': (128, 512),
-        'ogbn-arxiv': (128, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 90941),
-        'reddit': (512, 2048, 8192, 32768, 131072, 153431),
-        'ogbn-products': (128, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 196615),
-        # 'reddit': (512, 2048, 8192, 32768, 131072),
-        'reddit': (128, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 153431),
-        'reddit': (32, 64),
-        'ogbn-products': (32, 64),
-        'reddit': (32, 64),
+        'ogbn-arxiv': (32, 64, 128, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 90941),
+        'reddit': (32, 64, 512, 2048, 8192, 32768, 131072, 153431),
+        'ogbn-products': (32, 64, 128, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 196615),
     }
 
     run_times = {
@@ -149,12 +137,8 @@ if __name__ == '__main__':
         'ogbn-products': 300,
     }
 
-    datasets = [ 'reddit', 'ogbn-products']
-    datasets = ['ogbn-arxiv']
-    datasets = ['reddit', 'ogbn-arxiv']
-    datasets = ['reddit', 'ogbn-arxiv', 'ogbn-products']
-    datasets = ['ogbn-arxiv']
+    datasets = ['reddit', 'ogbn-products']
 
-    # datasets = ['ogbn-arxiv']
-    exp2(datasets, batch_sizes, run_times, '../log/batch-size-nts-old-adam', 0.001)
+    # exp2(datasets, batch_sizes, run_times, '../log/batch-size-nts-old-adam', 0.001)
+    exp2(datasets, batch_sizes, run_times, './log', 0.001)
     
