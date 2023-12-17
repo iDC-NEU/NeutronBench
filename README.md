@@ -111,6 +111,12 @@ python ./exp/exp-sample-rate/sample-rate.py
 > Data Transferring experiments
 
 ```bash
+# data partitioning
+python ./exp/exp-partition/exp-partition.py
+
+# batch size
+python ./exp/exp-batch-size/exp-batch-size.py
+
 # different optimization
 python ./exp/exp-diff-optim/exp-diff-optim.py
 
@@ -124,6 +130,6 @@ python ./exp/exp-diff-optim/exp-diff-pipe.py
 python ./exp/exp-gpu-cache/exp-gpu-cache.py
 ```
 
-## 📧 Contact
+## 📬 Contact
 
 For any questions or feedback, feel free to contract [Hao Yuan](mailto:arrangeman@163.com) or create an issue in this repository.
