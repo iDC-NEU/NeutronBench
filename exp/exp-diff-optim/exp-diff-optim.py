@@ -1,6 +1,8 @@
 import os
 import time
 import copy
+import multiprocessing
+import time
 
 init_command = [
   "WEIGHT_DECAY:0.0001",
@@ -43,7 +45,6 @@ graph_config = {
 
 # vertex: 992712 edges: 199489178
 # 1000000
-
 
 def new_command(dataset, cache_type, cache_policy, fanout='2,2', batch_size='6000', algo='GCNNEIGHBORGPUEXP3',  
             epochs='10', batch_type='random', lr='0.01', run='1', classes='1', cache_rate='0', **kw):
@@ -94,51 +95,52 @@ def run(dataset, cmd, log_path, suffix=''):
 
 def different_optim(datasets):
   for ds in datasets:
-    cmd = new_command(ds, cache_type='none', cache_policy='none', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=1, MODE='explicit')
-    run(ds, cmd, './log/explicit')
-
     # cmd = new_command(ds, cache_type='none', cache_policy='none', batch_type='sequence', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=1, MODE='explicit')
     # run(ds, cmd, './log/explicit-sequence')
+
+    # explicit
+    cmd = new_command(ds, cache_type='none', cache_policy='none', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=1, MODE='explicit')
+    run(ds, cmd, './log/explicit')
 
     # zero_copy (gather)
     cmd = new_command(ds, cache_type='none', cache_policy='none', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=1, MODE='zerocopy')
     run(ds, cmd, './log/zerocopy')
     
-    # zero_copy (gather) pipeline1
-    cmd = new_command(ds, cache_type='none', cache_policy='none', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=1, MODE='pipeline')
-    run(ds, cmd, './log/pipeline1')
+    # # zero_copy (gather) pipeline1
+    # cmd = new_command(ds, cache_type='none', cache_policy='none', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=1, MODE='pipeline')
+    # run(ds, cmd, './log/pipeline1')
   
-    # zero_copy (gather) pipeline2
-    cmd = new_command(ds, cache_type='none', cache_policy='none', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=2, MODE='pipeline')
-    run(ds, cmd, './log/pipeline2')
+    # # zero_copy (gather) pipeline2
+    # cmd = new_command(ds, cache_type='none', cache_policy='none', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=2, MODE='pipeline')
+    # run(ds, cmd, './log/pipeline2')
 
     # zero_copy (gather) pipeline3
     cmd = new_command(ds, cache_type='none', cache_policy='none', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=3, MODE='pipeline')
     run(ds, cmd, './log/pipeline3')
 
     # zero_copy (gather) pipeline1 + sample
-    cmd = new_command(ds, cache_type='gpu_memory', cache_policy='sample', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=1, MODE='pipeline')
-    run(ds, cmd, './log/pipeline1-sample')
+    # cmd = new_command(ds, cache_type='gpu_memory', cache_policy='sample', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=1, MODE='pipeline')
+    # run(ds, cmd, './log/pipeline1-sample')
     
-    # zero_copy (gather) pipeline1 + degree
-    cmd = new_command(ds, cache_type='gpu_memory', cache_policy='degree', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=1, MODE='pipeline')
-    run(ds, cmd, './log/pipeline1-degree')
+    # # zero_copy (gather) pipeline1 + degree
+    # cmd = new_command(ds, cache_type='gpu_memory', cache_policy='degree', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=1, MODE='pipeline')
+    # run(ds, cmd, './log/pipeline1-degree')
 
-    # zero_copy (gather) pipeline2 + sample
-    cmd = new_command(ds, cache_type='gpu_memory', cache_policy='sample', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=2, MODE='pipeline')
-    run(ds, cmd, './log/pipeline2-sample')
+    # # zero_copy (gather) pipeline2 + sample
+    # cmd = new_command(ds, cache_type='gpu_memory', cache_policy='sample', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=2, MODE='pipeline')
+    # run(ds, cmd, './log/pipeline2-sample')
     
-    # zero_copy (gather) pipeline2 + degree
-    cmd = new_command(ds, cache_type='gpu_memory', cache_policy='degree', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=2, MODE='pipeline')
-    run(ds, cmd, './log/pipeline2-degree')
+    # # zero_copy (gather) pipeline2 + degree
+    # cmd = new_command(ds, cache_type='gpu_memory', cache_policy='degree', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=2, MODE='pipeline')
+    # run(ds, cmd, './log/pipeline2-degree')
 
     # zero_copy (gather) pipeline3 + sample
     cmd = new_command(ds, cache_type='gpu_memory', cache_policy='sample', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=3, MODE='pipeline')
     run(ds, cmd, './log/pipeline3-sample')
     
     # zero_copy (gather) pipeline3 + degree
-    cmd = new_command(ds, cache_type='gpu_memory', cache_policy='degree', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=3, MODE='pipeline')
-    run(ds, cmd, './log/pipeline3-degree')
+    # cmd = new_command(ds, cache_type='gpu_memory', cache_policy='degree', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=3, MODE='pipeline')
+    # run(ds, cmd, './log/pipeline3-degree')
 
 
 
@@ -149,30 +151,10 @@ def explicit_breakdown(datasets):
 
 
 
-import multiprocessing
-import time
-
 def unfied_optimization(datasets):
   for ds in datasets:
-    # process = subprocess.Popen(["python", "cpu-gpu-usage.py"], stdout=output_file, stderr=output_file)
-    # print(f'subprocess pid {process.pid} python cpu-gpu-usage.py > {usage_log}')
-    
-    # run_command = f'../build/nts tmp.cfg > {log_path}/{dataset}{suffix}.log'
-    # print('running: ', run_command)
-    # os.system(run_command)
-
-    # run_time = time.time() - run_time
-    # print(f'done! cost {run_time:.2f}s')
-
-    # process.kill()
-    # os.killpg(process.pid, signal.SIGKILL)
-
-    
-    # run(ds, cmd, './log/unifid-memory')
-
-    # zero_copy (gather)
     cmd = new_command(ds, cache_type='none', cache_policy='none', batch_type='shuffle', fanout='10,25', TIME_SKIP=1, epochs=3, PIPELINES=1, MODE='unified')
-    process = multiprocessing.Process(target=run, args=(ds, cmd, '.log/unifid-memory'))
+    process = multiprocessing.Process(target=run, args=(ds, cmd, '.log/unifid'))
     process.start()
 
     process.join(timeout=3600)
@@ -185,23 +167,11 @@ def unfied_optimization(datasets):
 if __name__ == '__main__':
   create_dir('./build')
   os.system('cd ../build && cmake ../.. && make -j $(nproc) && cd -')
-  datasets = ['livejournal', 'lj-large', 'lj-links']
-  datasets = ['enwiki-links', 'livejournal', 'lj-large', 'lj-links']
-  datasets = ['enwiki-links']
-  datasets = ['ogbn-arxiv', 'reddit', 'ogbn-products']
-  datasets = ['livejournal', 'lj-large', 'lj-links']
-  datasets = ['dewiki-2013', 'frwiki-2013', 'itwiki-2013', 'enwiki-2016', 'hollywood-2011', 'dblp-2011']
-  datasets = ['ogbn-arxiv', 'reddit', 'ogbn-products', 'enwiki-links', 'livejournal', 'lj-large', 'lj-links']
-  datasets = ['reddit', 'lj-links', 'enwiki-links']
-  datasets = ['itwiki-2013', 'enwiki-2016', 'hollywood-2011', 'reddit', 'lj-links', 'enwiki-links']
-  datasets = ['itwiki-2013', 'enwiki-2016', 'hollywood-2011', 'reddit', 'lj-links']
-  datasets = ['reddit']
-  datasets = ['hollywood-2011', 'lj-links', 'reddit', 'enwiki-2016', 'enwiki-links']
-  datasets = ['enwiki-2016']
-  datasets = ['hollywood-2011', 'reddit']
-  datasets = ['ogbn-arxiv']
+  datasets = ['dewiki-2013', 'frwiki-2013', 'dblp-2011']
+  datasets = ['itwiki-2013', 'enwiki-2016', 'hollywood-2011', 'enwiki-2016']
   datasets = ['reddit', 'livejournal', 'lj-links', 'lj-large', 'enwiki-links', 'ogbn-arxiv', 'ogbn-products']
+  datasets = ['ogbn-arxiv']
   # explicit_breakdown(datasets)
-  # different_optim(datasets)
+  different_optim(datasets)
   unfied_optimization(datasets)
   
