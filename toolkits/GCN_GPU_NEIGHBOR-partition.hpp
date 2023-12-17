@@ -59,7 +59,7 @@ class GCN_GPU_NEIGHBOR_partition_impl {
   // int batch_size_switch_idx = 0;
 
   std::vector<std::unordered_set<VertexId>> partition_nodes;
-  std::vector<VertexId> belongs;
+  std::vector<int> belongs;
   std::vector<std::vector<VertexId>> train_id;
 
   NtsVar F;
@@ -271,6 +271,7 @@ class GCN_GPU_NEIGHBOR_partition_impl {
         {
           partition_nodes[partition_id].insert(vertex_id);
           belongs[vertex_id] = partition_id;
+          // std::cout << partition_id << " " << vertex_id << std::endl;
           if(gnndatum->local_mask[vertex_id] == 0)
           {
             train_id[partition_id].push_back(vertex_id);
@@ -279,8 +280,11 @@ class GCN_GPU_NEIGHBOR_partition_impl {
         assert(partition_nodes[partition_id].size() == vertices);
     }
     if (graph->config->part_algo != "pagraph") {
-      for (auto part : belongs) {
-        assert(part >= 0 && part < partition_num);
+      for (int i = 0; i < graph->config->vertices; ++i) {
+        if (belongs[i] < 0 || belongs[i] > partition_num) {
+          std::cout << "assert false " << i << " " << belongs[i] << std::endl;
+        }
+        assert(belongs[i] >= 0 && belongs[i] < partition_num);
       }
     }
     std::cout << "read " << part_file << " done." << std::endl;
@@ -361,6 +365,13 @@ class GCN_GPU_NEIGHBOR_partition_impl {
   }
 
 
+  // struct pair_hash {
+  //   inline VertexId operator()( std::pair<VertexId, VertexId> & v)  {
+  //       return v.first*31+v.second;
+  //   }
+  // };
+
+
   void print_partition_info() {
     std::cout << "\n########################" << std::endl;
     std::cout << "partition_nodes: ";
@@ -371,6 +382,55 @@ class GCN_GPU_NEIGHBOR_partition_impl {
     std::cout << "train_nodes: ";
     for (int i = 0; i < partition_num; ++i) {
        std::cout << train_id[i].size() << " ";;
+    } std::cout << std::endl;
+
+    std::vector<int> partition_edge_num;
+    for (int i = 0; i < partition_num; ++i) {
+      // std::unordered_set<std::pair<VertexId, VertexId>, pair_hash> edges;
+      // std::set<std::pair<VertexId, VertexId>, pair_hash> edges;
+      // edges.clear();
+      int edge_num = 0;
+      for (auto u : partition_nodes[i]) {
+        edge_num += fully_rep_graph->column_offset[u + 1] - fully_rep_graph->column_offset[u];
+        // for (int j = fully_rep_graph->column_offset[u]; j < fully_rep_graph->column_offset[u + 1]; ++j) {
+        //   edges.insert({u, fully_rep_graph->row_indices[j]});
+        // }
+      }
+      partition_edge_num.push_back(edge_num);
+    }
+    std::cout << "partition_edges: ";
+    for (int i = 0; i < partition_num; ++i) {
+       std::cout << partition_edge_num[i] << " ";;
+    } std::cout << std::endl;
+   
+    std::vector<int> partition_train_edge_num;
+    for (int i = 0; i < partition_num; ++i) {
+      int edge_num = 0;
+      for (auto u : train_id[i]) {
+        edge_num += fully_rep_graph->column_offset[u + 1] - fully_rep_graph->column_offset[u];
+      }
+      partition_train_edge_num.push_back(edge_num);
+    }
+    std::cout << "partition_train_edges: ";
+    for (int i = 0; i < partition_num; ++i) {
+       std::cout << partition_train_edge_num[i] << " ";;
+    } std::cout << std::endl;
+
+    std::vector<int> partition_train_node_num;
+    for (int i = 0; i < partition_num; ++i) {
+      std::set<VertexId> nodes;
+      int edge_num = 0;
+      for (auto u : train_id[i]) {
+        edge_num += fully_rep_graph->column_offset[u + 1] - fully_rep_graph->column_offset[u];
+        for (int j = fully_rep_graph->column_offset[u]; j < fully_rep_graph->column_offset[u + 1]; ++j) {
+          nodes.insert(fully_rep_graph->row_indices[j]);
+        }
+      }
+      partition_train_node_num.push_back(nodes.size());
+    }
+    std::cout << "partition_train_nodes: ";
+    for (int i = 0; i < partition_num; ++i) {
+       std::cout << partition_train_node_num[i] << " ";;
     } std::cout << std::endl;
     std::cout << "########################\n" << std::endl;
   }
@@ -390,6 +450,7 @@ class GCN_GPU_NEIGHBOR_partition_impl {
     for(int i = 0; i < partition_num; i++)
     {
       train_sampler.push_back(new Sampler(fully_rep_graph, train_id[i], pipelines, false) );
+      printf("part %d batch %d %d\n", i, train_sampler.back()->batch_nums, int(train_id[i].size() + graph->config->batch_size - 1) / graph->config->batch_size);
       shuffle_vec_seed(train_sampler[i]->sample_nids);
     }
 

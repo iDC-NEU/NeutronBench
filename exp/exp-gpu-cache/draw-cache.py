@@ -72,7 +72,8 @@ def plot_line(plot_params, X, Y, labels, xlabel, ylabel, xticks, yticks, xlim, y
 
   axes1 = plt.subplot(111)#figure1的子图1为axes1
   for i, (x, y) in enumerate(zip(X, Y)):
-    plt.plot(x, y, label = labels[i], color=color_list[i], marker=makrer_list[i], markersize=5,markevery=marker_every[i])
+    # plt.plot(x, y, label = labels[i], color=color_list[i], marker=makrer_list[i], markersize=5,markevery=marker_every[i])
+    plt.plot(x, y, label = labels[i], color=color_list[i])
     # plt.plot(x, y, label = labels[i], markersize=5)
   axes1.set_yticks(yticks)
   axes1.set_xticks(xticks)
@@ -124,26 +125,12 @@ def parse_num(filename, mode):
 
 
 
-# def print_diff_cache_ratio(datasets, log_path):
-#   # datasets = ['ogbn-arxiv', 'reddit', 'ogbn-products', 'enwiki-links', 'livejournal', 'lj-large', 'lj-links']
-#   ret = {}
-#   for ds in datasets:
-#     for cache_policy in ['degree', 'sample', 'random']:
-#       log_file = f'{log_path}/vary-rate-{cache_policy}/{ds}.log'
-#       print(log_file)
-#       cache_hit_rate = parse_num(log_file, 'gcn_cache_hit_rate')
-#       cache_rate = parse_num(log_file, 'gcn_cache_rate')
-#       ret[ds+cache_policy+'rate'] = cache_rate
-#       ret[ds+cache_policy+'hit'] = cache_hit_rate
-#   return ret
-
-
-def print_diff_cache_ratio(datasets, log_path, bs, fanout):
+def print_diff_cache_ratio(datasets, log_path):
   # datasets = ['ogbn-arxiv', 'reddit', 'ogbn-products', 'enwiki-links', 'livejournal', 'lj-large', 'lj-links']
   ret = {}
   for ds in datasets:
     for cache_policy in ['degree', 'sample', 'random']:
-      log_file = f'{log_path}/vary-rate-{cache_policy}/{bs}-{fanout}/{ds}.log'
+      log_file = f'{log_path}/vary-rate-{cache_policy}/{ds}.log'
       print(log_file)
       cache_hit_rate = parse_num(log_file, 'gcn_cache_hit_rate')
       cache_rate = parse_num(log_file, 'gcn_cache_rate')
@@ -161,7 +148,7 @@ if __name__ == '__main__':
         'ytick.labelsize': '12',
         # 'font.family': 'Times New Roman',
         'figure.figsize': '5, 4',  #图片尺寸
-        'lines.linewidth': 2,
+        'lines.linewidth': 4,
         'legend.fontsize': '12',
         'legend.loc': 'best', #[]"upper right", "upper left"]
         'legend.numpoints': 1,
@@ -174,60 +161,53 @@ if __name__ == '__main__':
   # datasets = ['reddit', 'hollywood-2011', 'lj-links', 'enwiki-links']
   datasets = ['road-usa']
   datasets = ['ogbn-products', 'reddit', 'ogbn-arxiv']
-  datasets = ['amazon']
   datasets = ['hollywood-2011']
   datasets = ['rmat']
-  datasets = ['reddit', 'lj-links', 'enwiki-links', 'ogbn-arxiv', 'ogbn-products', 'hollywood-2011']
   datasets = ['ogbn-arxiv', 'ogbn-papers100M']
-  datasets = ['ogbn-papers100M']
-  datasets = ['ogbn-products', 'reddit', 'lj-links', 'livejournal', 'lj-large', 'enwiki-links', 'amazon']
+  datasets = ['reddit', 'lj-links', 'enwiki-links', 'ogbn-arxiv', 'ogbn-products', 'hollywood-2011', 'ogbn-papers100M']
+  datasets = ['amazon', 'ogbn-papers100M']
 
 
-
-  bs = 1024
-  fanout = '4,4'
-
-  # ret = print_diff_cache_ratio(datasets, './log')
-  ret = print_diff_cache_ratio(datasets, './log', bs, fanout)
-
+  ret = print_diff_cache_ratio(datasets, './log')
   # ret = print_diff_cache_ratio(datasets, '../log/gpu-cache-dgl2')
 
 
-  labels = ['degree', 'sample']
   labels = ['random', 'degree', 'sample']
   for ds in datasets:
     X, Y = [], []
     for cache_policy in labels:
       cache_rate = ret[ds+cache_policy+'rate']
       cache_hit_rate = ret[ds+cache_policy+'hit']
-      print(ds, cache_policy)
-      print(cache_rate)
-      print(cache_hit_rate)
-      print()
       X.append(cache_rate)
       Y.append(cache_hit_rate)
        
     # print(Y)
-    # print(len(X[0]), len(Y[0]),len(Y[1]),len(Y[2]), min(len(Y[0]),len(Y[1]),len(Y[2])))
+    print(len(X[0]), len(Y[0]),len(Y[1]),len(Y[2]), min(len(Y[0]),len(Y[1]),len(Y[2])))
     # X = X[:,:min(len(Y[0]),len(Y[1]),len(Y[2]))]
 
     Y = np.array(Y) * 100
     X = np.array(X) * 100
-  
 
-    x_ticks = np.linspace(0, 100, 6)
-    x_ticks = np.linspace(0, 30, 6)
-    x_ticks = np.linspace(0, 100, 6)
+    if '100M' in  ds:
+      x_ticks = np.linspace(0, 50, 6)
+    else:
+      x_ticks = np.linspace(0, 100, 6)
     y_ticks = np.linspace(0, 100, 6)
     y_lim = (0, 100)
     # y_name = [f'{x*100:.0f}' for x in y_ticks]
-    pdf_file = f'./cache_pdf/{ds}-{bs}-{fanout}.pdf'
+    pdf_file = f'./cache_pdf/{ds}.pdf'
 
     xlabel = 'Cache Ratio (%)'
     ylabel = 'Cache Hit Ratio (%)'
     # print(X)
     # print(Y)
     plot_line(myparams, X, Y, labels, xlabel, ylabel, x_ticks, y_ticks, (x_ticks[0], x_ticks[-1]), y_lim, pdf_file)
+
+    create_dir('./cache_txt')
+    for i, (x,y) in enumerate(zip(X,Y)):
+      with open (f'./cache_txt/{ds}-{labels[i]}.txt', 'w') as f:
+        for a,b in zip(x, y):
+          f.write(str(a) + ' ' + str(b) + '\n')
 
     # plot_line(tmp, Y, ['random', 'degree', 'sample'], savefile=, x_ticks=x_ticks, x_name=x_name, y_ticks=y_ticks, y_name=y_name, x_label=, y_label='')
 

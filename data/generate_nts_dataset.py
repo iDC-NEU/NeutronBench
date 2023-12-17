@@ -126,6 +126,22 @@ def extract_dataset(args):
         test_mask = np.zeros(graph.number_of_nodes(), dtype=bool)
         test_mask[test_nid] = True
 
+
+        # pre_path = os.getcwd() + '/' + dataset
+        # # mask
+        # mask_list = []
+        # for i in range(len(labels)):
+        #     if train_mask[i] == True:
+        #         mask_list.append('train')
+        #     elif val_mask[i] == True:
+        #         mask_list.append('val')
+        #     elif test_mask[i] == True:
+        #         mask_list.append('test')
+        #     else:
+        #         mask_list.append('unknown')
+        # write_to_mask(pre_path + '.mask', mask_list)
+        # exit(0)
+
         if args.self_loop:
             time_stamp = time.time()
             print('before add self loop has {} edges'.format(len(graph.all_edges()[0])))

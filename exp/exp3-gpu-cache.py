@@ -3,6 +3,7 @@ import os
 import time
 import numpy as np
 import utils
+import copy
 
 # datasets = ['ppi', 'ppi-large', 'reddit', 'flickr', 'yelp', 'amazon']
 # batch_size = {'ppi':4096, 'ppi-large':4096, 'flickr':40960, 'yelp':40960, 'amazon':40960, 'reddit':40960}
@@ -39,14 +40,21 @@ graph_config = {
   'itwiki-2013': "VERTICES:1016179\nEDGE_FILE:../data/itwiki-2013/itwiki-2013.edge\nFEATURE_FILE:random\nLABEL_FILE:random\nMASK_FILE:random\nLAYERS:600-128-60\n",
   'hollywood-2011': "VERTICES:1985306\nEDGE_FILE:../data/hollywood-2011/hollywood-2011.edge\nFEATURE_FILE:random\nLABEL_FILE:random\nMASK_FILE:random\nLAYERS:600-128-60\n",
   'enwiki-2016': "VERTICES:5088560\nEDGE_FILE:../data/enwiki-2016/enwiki-2016.edge\nFEATURE_FILE:random\nLABEL_FILE:random\nMASK_FILE:random\nLAYERS:600-128-60\n",
+  'road-usa': "VERTICES:23947347\nEDGE_FILE:../data/road-usa/road-usa.edge\nFEATURE_FILE:random\nLABEL_FILE:random\nMASK_FILE:random\nLAYERS:600-128-60\n",
+  'amazon': "VERTICES:1569960\nEDGE_FILE:../data/amazon/amazon.edge\nFEATURE_FILE:../data/amazon/amazon.feat\nLABEL_FILE:../data/amazon/amazon.label\nMASK_FILE:../data/amazon/amazon.mask\nLAYERS:200-128-107\n",
+  'rmat': "VERTICES:992712\nEDGE_FILE:../data/rmat/rmat.edge\nFEATURE_FILE:random\nLABEL_FILE:random\nMASK_FILE:random\nLAYERS:600-128-60\n",
+  'rmat': "VERTICES:1000000\nEDGE_FILE:../data/rmat/rmat.edge\nFEATURE_FILE:random\nLABEL_FILE:random\nMASK_FILE:random\nLAYERS:600-128-60\n",
+  'ogbn-papers100M': "VERTICES:111059956\nEDGE_FILE:../data/ogbn-papers100M/ogbn-papers100M.edge\nFEATURE_FILE:random\nLABEL_FILE:random\nMASK_FILE:random\nLAYERS:5-4-2\n",
 }
 
+# vertex: 992712 edges: 199489178
+# 1000000
 
 
 def new_command(dataset, cache_type, cache_policy, fanout='2,2', batch_size='6000', algo='GCNNEIGHBORGPUEXP3',  
             epochs='10', batch_type='random', lr='0.01', run='1', classes='1', cache_rate='0', **kw):
 
-  other_config = init_command
+  other_config = copy.copy(init_command)
   other_config.append(f'ALGORITHM:{algo}')
   other_config.append(f'FANOUT:{fanout}')
   other_config.append(f'BATCH_SIZE:{batch_size}')
@@ -63,7 +71,7 @@ def new_command(dataset, cache_type, cache_policy, fanout='2,2', batch_size='600
     other_config.append(f'{k}:{v}')
     print(k, v)
   # assert False
-  ret = graph_config[dataset] + '\n'.join(init_command)
+  ret = graph_config[dataset] + '\n'.join(other_config)
   return ret
 
 
@@ -218,7 +226,7 @@ def explicit_rate(datasets):
       # run(ds, cmd, './log/gpu-cache/vary-rate-random', suffix=f'-{rate:.2f}')
 
 
-def compare_cache_policy(datasets, log_path='./log/gpu-cache', algo='GCNNEIGHBORGPUCACHEEXP'):
+def compare_cache_policy(datasets, bs, fanout, log_path='./log/gpu-cache', algo='GCNNEIGHBORGPUCACHEEXP'):
   # datasets = ['ogbn-arxiv', 'reddit', 'ogbn-products', 'enwiki-links', 'livejournal', 'lj-large', 'lj-links']
   # datasets = ['livejournal', 'lj-large', 'lj-links']
   # datasets = ['dewiki-2013', 'frwiki-2013']
@@ -226,13 +234,13 @@ def compare_cache_policy(datasets, log_path='./log/gpu-cache', algo='GCNNEIGHBOR
 
   for ds in datasets:
     
-    cmd = new_command(ds, algo=algo, CACHE_RATE_END=1, CACHE_RATE_NUM=25, cache_type='rate', cache_policy='degree', batch_type='shuffle', fanout='10,25', TIME_SKIP=0, epochs=1, PIPELINES=3, MODE='pipeline')
+    cmd = new_command(ds, batch_size=bs, algo=algo, CACHE_RATE_END=1, CACHE_RATE_NUM=25, cache_type='rate', cache_policy='degree', batch_type='shuffle', fanout=fanout, TIME_SKIP=0, epochs=1, PIPELINES=3, MODE='pipeline')
     run(ds, cmd, f'{log_path}/vary-rate-degree')
   
-    cmd = new_command(ds, algo=algo, CACHE_RATE_END=1, CACHE_RATE_NUM=25, cache_type='rate', cache_policy='sample', batch_type='shuffle', fanout='10,25', TIME_SKIP=0, epochs=1, PIPELINES=3, MODE='pipeline')
+    cmd = new_command(ds, batch_size=bs, algo=algo, CACHE_RATE_END=1, CACHE_RATE_NUM=25, cache_type='rate', cache_policy='sample', batch_type='shuffle', fanout=fanout, TIME_SKIP=0, epochs=1, PIPELINES=3, MODE='pipeline')
     run(ds, cmd, f'{log_path}/vary-rate-sample')
 
-    cmd = new_command(ds, algo=algo, CACHE_RATE_END=1, CACHE_RATE_NUM=25, cache_type='rate', cache_policy='random', batch_type='shuffle', fanout='10,25', TIME_SKIP=0, epochs=1, PIPELINES=3, MODE='pipeline')
+    cmd = new_command(ds, batch_size=bs, algo=algo, CACHE_RATE_END=1, CACHE_RATE_NUM=25, cache_type='rate', cache_policy='random', batch_type='shuffle', fanout=fanout, TIME_SKIP=0, epochs=1, PIPELINES=3, MODE='pipeline')
     run(ds, cmd, f'{log_path}/vary-rate-random')
 
 
@@ -493,8 +501,15 @@ if __name__ == '__main__':
   # print_compare_cache_policy(') cache_hit_rate', datasets)
   # print_compare_cache_policy(') cache_hit_rate')
   # vary cache ratio exp
-  datasets = ['ogbn-arxiv', 'ogbn-products', 'reddit', 'hollywood-2011', 'lj-links', 'enwiki-links']
   datasets = ['lj-links','hollywood-2011','enwiki-links']
+  datasets = ['road-usa']
+  datasets = ['ogbn-products', 'reddit', 'ogbn-arxiv']
+  datasets = ['amazon']
+  datasets = ['hollywood-2011']
+  datasets = ['ogbn-arxiv', 'ogbn-products', 'reddit', 'hollywood-2011', 'lj-links', 'enwiki-links']
+  datasets = ['rmat']
+  datasets = ['ogbn-arxiv', 'ogbn-products', 'reddit', 'hollywood-2011', 'lj-links', 'enwiki-links', 'amazon', 'rmat']
+  datasets = ['ogbn-papers100M']
   # datasets = ['reddit', 'hollywood-2011', 'lj-links', 'enwiki-links']
   # datasets = ['hollywood-2011', 'lj-links']
   # datasets = ['ogbn-arxiv']
@@ -504,7 +519,8 @@ if __name__ == '__main__':
   # livejournal-0.48
   # compare_cache_policy(datasets, './log/gpu-cache-dgl')
   # compare_cache_policy(datasets, './log/gpu-cache-nts')
-  compare_cache_policy(datasets, './log/gpu-cache-nts2', 'GCNNEIGHBORGPUCACHEEXP')
+  # compare_cache_policy(datasets, 2048, '10,25', './log/gpu-cache-nts2', 'GCNNEIGHBORGPUCACHEEXP')
+  compare_cache_policy(datasets, 2048, '10,25', './log/gpu-cache-nts2', 'GCNNEIGHBORGPUCACHEEXP')
   # compare_cache_policy(datasets, './log/gpu-cache-dgl2', 'GCNNEIGHBORGPUCACHEDGLEXP')
   
   # datasets = ['reddit', 'hollywood-2011', 'lj-links', 'enwiki-links']

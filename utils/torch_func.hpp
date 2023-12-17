@@ -113,6 +113,7 @@ NtsVar Loss(NtsVar &output, NtsVar &target, bool onelabel = true) {
 
 template <typename T>
 float get_mean(std::vector<T> &arr) {
+  if (arr.empty()) return 0;
   float mean = 0;
   for (auto &it : arr) {
     mean += it;
@@ -140,6 +141,7 @@ std::vector<float> get_mean(std::vector<std::vector<T>> &arr) {
 
 template <typename T>
 float get_var(std::vector<T> &arr) {
+  if (arr.empty()) return 0;
   float mean = get_mean(arr);
   float var = 0;
   for (auto &it : arr) {

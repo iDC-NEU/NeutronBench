@@ -37,6 +37,7 @@ def print_different_optim(mode, datasets, log_path='../log/gpu-cache'):
     time_list = []
     for ds in datasets:
       log_file = f'{log_path}/{optim}/{ds}.log'
+      print(log_file)
       time_list += parse_num(log_file, mode)
     ret[optim] = time_list
   return ret
@@ -113,6 +114,11 @@ def plot_bar(plot_params, Y, labels, xlabel, ylabel, xticks, anchor=None, figpat
 
 
 
+
+def create_dir(path):
+  if path and not os.path.exists(path):
+    os.makedirs(path)
+
 if __name__ == '__main__':
   params={
     'axes.labelsize': '15',
@@ -165,6 +171,13 @@ if __name__ == '__main__':
   labels = list(ret.keys())
   Y = list(ret.values())
   labels = ['base', 'zero', 'zero+P', 'zero+PC']
-  labels = ['Explicit', 'Zerocopy', 'Zerocopy + Pipeline', 'Zerocopy + Pipeline + Cache']
+  labels = ['Baseline', 'Baseline+Z', 'Baseline+Z+P', 'Baseline+Z+P+C']
   plot_bar(params, Y, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.25), figpath='diff-optim.pdf')
+
+  create_dir('./diff-optim_txt')
+  for i, x in enumerate(Y):
+    with open (f'./diff-optim_txt/{labels[i]}.txt', 'w') as f:
+      for j,y in enumerate(x):
+        f.write(str(j) + ' ' + str(y) + '\n')
+
   # plot_bar(params, Y, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.145), figpath='diff-optim.pdf')

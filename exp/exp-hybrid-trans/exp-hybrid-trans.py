@@ -123,10 +123,10 @@ if __name__ == '__main__':
   datasets = ['ogbn-arxiv', 'ogbn-products', 'reddit', 'hollywood-2011', 'lj-links', 'enwiki-links']
   datasets = ['hollywood-2011',  'enwiki-links']
   # , 'lj-links', 'enwiki-links']
-  datasets = ['hollywood-2011']
   datasets = ['ogbn-arxiv', 'ogbn-products', 'reddit']
   datasets = ['ogbn-arxiv', 'ogbn-products', 'reddit', 'livejournal', 'lj-large', 'hollywood-2011']
   datasets = ['ogbn-arxiv']
+  datasets = ['hollywood-2011']
   
   hybrid_trans(datasets, './log', 'GCNNEIGHBORGPUTRANSEXP')
   

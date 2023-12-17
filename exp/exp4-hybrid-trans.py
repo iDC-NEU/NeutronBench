@@ -225,13 +225,14 @@ def compare_cache_policy(datasets, log_path='./log/gpu-cache', algo='GCNNEIGHBOR
   # datasets = ['itwiki-2013', 'enwiki-2016']
 
   for ds in datasets:
-    for b_s in [256, 512, 1024, 2048, 4096]:
+    # for b_s in [256, 512, 1024, 2048, 4096]:
+    for b_s in [256]:
     # for b_s in [512, 1024, 2048, 4096]:
-      cmd = new_command(ds, algo=algo, TRANS_THRESHOLD_END=1, TRANS_THRESHOLD_NUM=25, BLOCK_SIZE=b_s, cache_type='none', cache_policy='degree', batch_type='shuffle', fanout='10,25', TIME_SKIP=0, epochs=1, PIPELINES=3, MODE='pipeline')
+      cmd = new_command(ds, batch_size=6000, algo=algo, TRANS_THRESHOLD_END=1, TRANS_THRESHOLD_NUM=50, BLOCK_SIZE=b_s, cache_type='none', cache_policy='degree', batch_type='shuffle', fanout='10,25', TIME_SKIP=0, epochs=3, PIPELINES=3, MODE='pipeline')
       run(ds, cmd, f'{log_path}/block{b_s}')
       
       
-      cmd = new_command(ds, algo=algo, TRANS_THRESHOLD_END=1, TRANS_THRESHOLD_NUM=25, BLOCK_SIZE=b_s, cache_type='rate', cache_rate='0.5', cache_policy='degree', batch_type='shuffle', fanout='10,25', TIME_SKIP=0, epochs=1, PIPELINES=3, MODE='pipeline')
+      cmd = new_command(ds, batch_size=6000, algo=algo, TRANS_THRESHOLD_END=1, TRANS_THRESHOLD_NUM=50, BLOCK_SIZE=b_s, cache_type='rate', cache_rate='0.5', cache_policy='degree', batch_type='shuffle', fanout='10,25', TIME_SKIP=0, epochs=3, PIPELINES=3, MODE='pipeline')
       run(ds, cmd, f'{log_path}/block{b_s}-degree-cache0.5')
 
   
@@ -397,40 +398,6 @@ def print_diff_cache_ratio(mode, datasets, ratios):
   return ret
 
 
-def draw_diff_cache_ratio(datasets):
-  # datasets = ['itwiki-2013', 'enwiki-2016', 'hollywood-2011', 'reddit', 'lj-links', 'enwiki-links']
-  # ret = print_diff_cache_ratio(') cache_hit_rate', datasets, np.linspace(start=0, stop=0.8, num=41))
-  radio_dict = {'reddit': np.linspace(0, 1, 51), 'hollywood-2011': np.linspace(0, 1, 51),
-                  'lj-links': np.linspace(0, 0.8, 41), 'enwiki-links': np.linspace(0, 0.26, 14)}
-  ret = print_diff_cache_ratio(') cache_hit_rate', datasets, radio_dict)
-  x_ticks_dict = {'reddit': np.linspace(0, 1, 6), 'hollywood-2011': np.linspace(0, 1, 6),
-                  'lj-links': np.linspace(0, 0.6, 5), 'enwiki-links': np.arange(0, 0.26, 0.05)}
-  # for k,v in ret.items():
-    # print(k, v, sep=' ')
-  # x_ticks = np.linspace(0, 0.4, 9)
-  # X = np.linspace(start=0, stop=0.8, num=41).reshape(1, -1)
-  
-  # for ds in ['reddit', 'itwiki-2013', 'enwiki-2016', 'hollywood-2011', 'reddit', 'lj-links', 'enwiki-links']:
-  # for ds in ['reddit', 'hollywood-2011', 'reddit', 'lj-links', 'enwiki-links']:
-  for ds in datasets:
-    X = radio_dict[ds].reshape(1, -1)
-    X = X.repeat(3, axis=0)
-
-    Y = []
-    for mode in ['random', 'degree', 'sample']:
-      Y.append(ret[f'{ds}{mode}'])
-    # print(Y)
-    print(len(X[0]), len(Y[0]),len(Y[1]),len(Y[2]), min(len(Y[0]),len(Y[1]),len(Y[2])))
-    tmp = X[:,:min(len(Y[0]),len(Y[1]),len(Y[2]))]
-  
-
-    x_ticks = x_ticks_dict[ds]
-    x_name = [f'{x*100:.0f}' for x in x_ticks]
-    y_ticks = np.linspace(0, 1, 6)
-    y_name = [f'{x*100:.0f}' for x in y_ticks]
-    utils.plot_line(tmp, Y, ['random', 'degree', 'sample'], savefile=f'{os.getcwd()}/overleaf-gnn-eval/exp3-gpu-cache/vary_cache_ratio_{ds}.pdf', x_ticks=x_ticks, x_name=x_name, y_ticks=y_ticks, y_name=y_name, x_label='Cache Ratio (%)', y_label='Cache Hit Ratio (%)')
-
-
 if __name__ == '__main__':
   create_dir('./build')
   os.system('cd build && make -j $(nproc) && cd ..')
@@ -450,15 +417,19 @@ if __name__ == '__main__':
   datasets = ['enwiki-2016']
   datasets = ['hollywood-2011', 'reddit']
 
-  datasets = ['ogbn-arxiv']
   datasets = ['lj-large']
-  datasets = ['livejournal', 'lj-large', 'ogbn-arxiv', 'ogbn-products', 'reddit', 'hollywood-2011', 'lj-links', 'enwiki-links']
   datasets = ['ogbn-arxiv', 'ogbn-products', 'reddit', 'hollywood-2011', 'lj-links', 'enwiki-links']
+  datasets = ['hollywood-2011',  'enwiki-links']
+  datasets = ['ogbn-arxiv']
+  # , 'lj-links', 'enwiki-links']
+  datasets = ['hollywood-2011']
+  datasets = ['ogbn-arxiv', 'ogbn-products', 'reddit']
+  datasets = ['ogbn-arxiv', 'ogbn-products', 'reddit', 'livejournal', 'lj-large', 'hollywood-2011']
   
   # 6/21
   # datasets = ['ogbn-arxiv', 'reddit', 'ogbn-products', 'enwiki-links', 'livejournal', 'lj-large', 'lj-links']
   # livejournal-0.48
   # compare_cache_policy(datasets, './log/gpu-cache-dgl')
   # compare_cache_policy(datasets, './log/gpu-cache-nts')
-  compare_cache_policy(datasets, './log/hybrid-nts', 'GCNNEIGHBORGPUTRANSEXP')
+  compare_cache_policy(datasets, './log/hybrid-nts2', 'GCNNEIGHBORGPUTRANSEXP')
   

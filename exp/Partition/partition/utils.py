@@ -297,6 +297,8 @@ def extract_dataset(args):
 
     elif dataset in ['flickr', 'yelp', 'ppi', 'ppi-large', 'amazon']:
         # prefix = os.getcwd()
+        curr_dir = os.getcwd()
+        print(os.chdir(f'/home/yuanh/neutron-sanzo/data/{dataset}'))
         adj_full = sp.load_npz('./adj_full.npz').astype(bool)
         # adj_train = sp.load_npz('./adj_train.npz').astype(bool)
         role = json.load(open('./role.json'))
@@ -362,6 +364,8 @@ def extract_dataset(args):
               .format(num_nodes, num_edges, feats.shape, num_classes, '#' if is_multiclass else '',
                       train_mask.sum() + test_mask.sum() + val_mask.sum(),
                       train_mask.sum(), val_mask.sum(), test_mask.sum()))
+        
+        print(os.chdir(curr_dir))
         return edges_list, feats, labels, train_mask, val_mask, test_mask, graph
 
     else:
@@ -391,7 +395,8 @@ def split_graph(graph, n_nodes, n_edges, features, labels, train_mask, val_mask,
 
 def create_mask(idx, l):
     """Create mask."""
-    mask = np.zeros(l, dtype=bool)
+    # mask = np.zeros(l, dtype=bool)
+    mask = torch.zeros(l, dtype=torch.bool)
     mask[idx] = True
     return mask
 

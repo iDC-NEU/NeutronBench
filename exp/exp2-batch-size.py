@@ -94,9 +94,9 @@ def run(dataset, cmd, log_path, suffix=''):
     print(f'done! cost {run_time:.2f}s')
 
 
-def exp2(datasets, batch_sizes, run_times):
+def exp2(datasets, batch_sizes, run_times, lr_=0.01):
     for ds in datasets:
-        file_path = f'./log/batch-size/{ds}'
+        file_path = f'./log/batch-size-nts-dgl-sdl/{ds}-{lr_}'
         utils.create_dir(file_path)
         for bs in batch_sizes[ds]:
             # cmd = new_command(ds, batch_type='shuffle', fanout='10,25', valfanout='10,25', epochs=3, batch_size=bs, RUN_TIME=run_times[ds])
@@ -105,11 +105,14 @@ def exp2(datasets, batch_sizes, run_times):
                 ds,
                 batch_type='shuffle',
                 fanout='10,25',
-                lr=0.001,
+                lr=lr_,
                 epochs=3,
                 batch_size=bs,
                 RUN_TIME=run_times[ds],
                 valfanout='10,25',
+                MODE='zerocopy',
+                CACHE_TYPE='gpu_memory',
+                CACHE_POLICY='degree',
             )
             # if ds == 'reddit':
             #   cmd = new_command(ds, batch_type='shuffle', fanout='10,25', lr=0.001, epochs=3, batch_size=bs, RUN_TIME=run_times[ds], valfanout='10,25')
@@ -532,16 +535,18 @@ if __name__ == '__main__':
         'AmazonCoBuy_computers': (512, 1024, 2048, 4096, 8250),
         'AmazonCoBuy_photo': (512, 1024, 2048, 4590),
         'ogbn-arxiv': (128, 512, 3072, 6144, 12288, 24576, 49152, 90941),
+        'ogbn-arxiv': (128, 512),
         'ogbn-arxiv': (128, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 90941),
         'reddit': (512, 2048, 8192, 32768, 131072, 153431),
         'ogbn-products': (128, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 196615),
         # 'reddit': (512, 2048, 8192, 32768, 131072),
         'reddit': (128, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 153431),
     }
+
     run_times = {
-        'reddit': 600,
+        'reddit': 300,
         'ogbn-arxiv': 300,
-        'ogbn-products': 600,
+        'ogbn-products': 300,
         'AmazonCoBuy_computers': 50,
         'AmazonCoBuy_photo': 25,
     }
@@ -549,9 +554,22 @@ if __name__ == '__main__':
     datasets = ['ogbn-arxiv', 'AmazonCoBuy_computers', 'AmazonCoBuy_photo']
     datasets = ['reddit', 'ogbn-arxiv', 'AmazonCoBuy_computers', 'AmazonCoBuy_photo']
     datasets = ['reddit']
+    datasets = [ 'reddit', 'ogbn-products']
+    datasets = [ 'reddit', 'ogbn-products']
     datasets = ['ogbn-arxiv', 'ogbn-products', 'reddit']
     datasets = ['ogbn-arxiv']
-    exp2(datasets, batch_sizes, run_times)
+
+    # datasets = ['ogbn-arxiv']
+    exp2(datasets, batch_sizes, run_times, 0.001)
+    # exp2(datasets, batch_sizes, run_times, 0.01)
+    # datasets = ['ogbn-products']
+    # exp2(datasets, batch_sizes, run_times, 0.001)
+    # exp2(datasets, batch_sizes, run_times, 0.01)
+
+
+    # datasets = ['reddit']
+    # exp2(datasets, batch_sizes, run_times, 0.001)
+    # exp2(datasets, batch_sizes, run_times, 0.01)
     exit(1)
 
     y_lims = {

@@ -3,7 +3,7 @@
 #include "utils/torch_func.hpp"
 #include <c10/cuda/CUDACachingAllocator.h>
 
-class GCN_GPU_NEIGHBOR_impl {
+class GCN_GPU_NEIGHBOR_SAMPLE_RATE_impl {
  public:
   int iterations;
   ValueType learn_rate;
@@ -117,7 +117,7 @@ class GCN_GPU_NEIGHBOR_impl {
   int cache_node_num = 0;
 
 
-  GCN_GPU_NEIGHBOR_impl(Graph<Empty>* graph_, int iterations_, bool process_local = false,
+  GCN_GPU_NEIGHBOR_SAMPLE_RATE_impl(Graph<Empty>* graph_, int iterations_, bool process_local = false,
                         bool process_overlap = false) {
     graph = graph_;
     iterations = iterations_;
@@ -895,7 +895,7 @@ class GCN_GPU_NEIGHBOR_impl {
     }
   }
 
-  void loadW(std::string suffix = "") {
+  void loadW(std::string suffix="") {
     for (int i = 0; i < layers; ++i) {
       P[i]->load_W("/home/yuanh/neutron-sanzo/saved_modules", graph->config->dataset_name + suffix, i);
     }
@@ -1401,9 +1401,6 @@ void count_sample_hop_nodes(Sampler* sampler) {
     eval_sampler->show_fanout("val sampler");
     eval_sampler->subgraph->show_fanout("val subgraph sampler");
     test_sampler = new Sampler(fully_rep_graph, test_nids, true);  // true mean full batch
-    test_sampler->update_fanout(graph->gnnctx->val_fanout);  // val not sample
-    test_sampler->show_fanout("test sampler");
-    test_sampler->subgraph->show_fanout("test subgraph sampler");
 
     // count_sample_hop_nodes(train_sampler);
     // assert(false);
@@ -1484,14 +1481,6 @@ void count_sample_hop_nodes(Sampler* sampler) {
 
         // load best parameter
         if (ret && graph->config->best_parameter > 0) {
-          std::string suffix = "";
-          if (graph->config->sample_rate > 0) { // fanout
-            std::string tmp = std::to_string(graph->config->sample_rate);
-            tmp.substr(0, tmp.find(".") + 2 + 1);
-            suffix = "-" + std::to_string(graph->config->batch_size) + "sample-rate-" + tmp + ".pt";
-          } else {
-            suffix = "-" + std::to_string(graph->config->batch_size) + "fanout-" + graph->config->fanout_string + ".pt";
-          }
           loadW();
           // double tmp_val_acc = EvalForward(eval_sampler, 1);
           // LOG_DEBUG("after loadW val_acc %.3f best_val_acc %.3f", tmp_val_acc, best_val_acc);
@@ -1508,51 +1497,28 @@ void count_sample_hop_nodes(Sampler* sampler) {
       float val_acc = EvalForward(eval_sampler, 1);
       val_train_cost += get_time();
       float val_loss = loss_epoch;
-
-      float test_acc = EvalForward(test_sampler, 1);
       
       
       if (graph->partition_id == 0) {
         LOG_INFO(
-            "Epoch %03d train_loss %.3f train_acc %.3f val_loss %.3f val_acc %.3f test_acc %.3f train_time %.3f(sample %.3f trans %.3f graph %.3f nn %.3f) val_time %.3f, "
+            "Epoch %03d train_loss %.3f train_acc %.3f val_loss %.3f val_acc %.3f train_time %.3f(sample %.3f trans %.3f graph %.3f nn %.3f) val_time %.3f, "
             "gcn_run_time %.3f) batch_size (%d, %d)",
-            i_i, train_loss, train_acc, val_loss, val_acc, test_acc, epoch_train_time, epoch_sample_time, epoch_trans_time, epoch_train_graph_time, epoch_train_nn_time, val_train_cost, gcn_run_time, train_sampler->batch_size, eval_sampler->batch_size);
+            i_i, train_loss, train_acc, val_loss, val_acc, epoch_train_time, epoch_sample_time, epoch_trans_time, epoch_train_graph_time, epoch_train_nn_time, val_train_cost, gcn_run_time, train_sampler->batch_size, eval_sampler->batch_size);
       }
 
       if (val_acc > best_val_acc) {
         best_val_acc = val_acc;
 
         // save best parameter
-        if (graph->config->best_parameter > 0) {
-          std::string suffix = "";
-          if (graph->config->sample_rate > 0) { // fanout
-            std::string tmp = std::to_string(graph->config->sample_rate);
-            tmp = tmp.substr(0, tmp.find(".") + 2 + 1);
-            suffix = "-" + std::to_string(graph->config->batch_size) + "sample-rate-" + tmp + ".pt";
-          } else {
-            suffix = "-" + std::to_string(graph->config->batch_size) + "fanout-" + graph->config->fanout_string + ".pt";
-          }
-          saveW(suffix);
-          LOG_DEBUG("saveW %s best_val_acc %.3f", suffix.c_str(), best_val_acc);
-
-          // loadW(suffix);
-          // double tmp_val_acc = EvalForward(eval_sampler, 1);
-          // LOG_DEBUG("after loadW val_acc %.3f best_val_acc %.3f", tmp_val_acc, best_val_acc);
-          // exit(-1);
-        }
+        // if (graph->config->best_parameter > 0) {
+        std::cout << graph->config->sample_rate << std::endl;
+        std::cout << graph->config->batch_size << std::endl;
+        std::cout << std::to_string(graph->config->batch_size) + std::to_string(graph->config->sample_rate) << std::endl;
+        saveW(std::to_string(graph->config->batch_size) + std::to_string(graph->config->sample_rate));
+        LOG_DEBUG("saveW: best_val_acc %.3f", best_val_acc);
+        exit(0);
+        // }
       }
-
-      // std::string suffix = "";
-      // if (graph->config->sample_rate > 0) { // fanout
-      //   std::string tmp = std::to_string(graph->config->sample_rate);
-      //   tmp = tmp.substr(0, tmp.find(".") + 2 + 1);
-      //   suffix = "-" + std::to_string(graph->config->batch_size) + "sample-rate-" + tmp + ".pt";
-      // } else {
-      //   suffix = "-" + std::to_string(graph->config->batch_size) + "fanout-" + graph->config->fanout_string + ".pt";
-      // }
-      // loadW(suffix);
-      // double tmp_val_acc = EvalForward(eval_sampler, 1);
-      // LOG_DEBUG("after loadW %s val_acc %.3f best_val_acc %.3f", suffix.c_str(), tmp_val_acc, best_val_acc);
 
       if (graph->config->sample_switch_time > 0) {
         bool ret = train_sampler->update_sample_rate_from_time(gcn_run_time);

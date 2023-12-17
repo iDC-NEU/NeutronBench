@@ -22,6 +22,8 @@ Copyright (c) 2021-2022 Qiange Wang, Northeastern University
 #include "GCN_CPU_LAYER.hpp"
 #include "GCN_CPU_NEIGHBOR.hpp"
 #include "GCN_GPU_NEIGHBOR-exp3.hpp"
+#include "GCN_GPU_NEIGHBOR-test.hpp"
+#include "GCN_GPU_NEIGHBOR-sample-rate.hpp"
 #include "GCN_GPU_NEIGHBOR-cache-exp.hpp"
 #include "GCN_GPU_NEIGHBOR-cache-dgl-exp.hpp"
 #include "GCN_GPU_NEIGHBOR-trans-exp.hpp"
@@ -115,6 +117,38 @@ int main(int argc, char **argv) {
     graph->load_directed(graph->config->edge_file, graph->config->vertices);
     graph->generate_backward_structure();
     GCN_GPU_NEIGHBOR_impl *ntsGCN = new GCN_GPU_NEIGHBOR_impl(graph, iterations);
+    ntsGCN->init_graph();
+    ntsGCN->init_nn();
+
+    vector<float> best_val_accs;
+    for (int i = 0; i < graph->config->runs; ++i) {
+      if (i > 0) ntsGCN->init_active();
+      float acc = ntsGCN->run();
+      best_val_accs.push_back(acc);
+    }
+    std::cout << "\nmain(): Best-val-acc: ";
+    for (auto &it : best_val_accs) {
+      std::cout << it << " ";
+    }
+    std::cout << std::endl;
+    float mean, var;
+    tie(mean, var) = get_mean_var(best_val_accs);
+    printf("Val-mean-var %d runs: %.4f(%.4f)\n", graph->config->runs, mean, var);
+    std::cout << "edge_file: " << graph->config->edge_file << std::endl;
+
+    // ntsGCN->run();
+  } else if (graph->config->algorithm == std::string("GCNNEIGHBORGPUTEST")) {
+    graph->load_directed(graph->config->edge_file, graph->config->vertices);
+    graph->generate_backward_structure();
+    GCN_GPU_NEIGHBOR_TEST_impl *ntsGCN = new GCN_GPU_NEIGHBOR_TEST_impl(graph, iterations);
+    ntsGCN->init_graph();
+    ntsGCN->init_nn();
+    float acc = ntsGCN->run();
+    // ntsGCN->run();
+  } else if (graph->config->algorithm == std::string("GCNNEIGHBORGPUSAMPLE")) {
+    graph->load_directed(graph->config->edge_file, graph->config->vertices);
+    graph->generate_backward_structure();
+    GCN_GPU_NEIGHBOR_SAMPLE_RATE_impl *ntsGCN = new GCN_GPU_NEIGHBOR_SAMPLE_RATE_impl(graph, iterations);
     ntsGCN->init_graph();
     ntsGCN->init_nn();
 

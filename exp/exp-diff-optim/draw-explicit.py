@@ -102,7 +102,7 @@ def plot_stack_bar(plot_params, Y, labels, xlabel, ylabel, xticks, anchor=None, 
   # plt.yticks(np.arange(5), ('0%','20%','40%','60%','80%','100%'))
 
   if anchor:
-    plt.legend(ncol=len(labels), bbox_to_anchor=anchor)
+    plt.legend(ncol=2, bbox_to_anchor=anchor)
   else:
     plt.legend(ncol=len(labels))
 
@@ -130,7 +130,8 @@ def plot_stack_bar(plot_params, Y, labels, xlabel, ylabel, xticks, anchor=None, 
 
 if __name__ == '__main__':
   datasets = ['ogbn-arxiv']
-  datasets = ['reddit', 'livejournal', 'lj-links', 'lj-large', 'enwiki-links']
+  datasets = ['reddit', 'livejournal', 'lj-links', 'lj-large', 'enwiki-links', 'ogbn-products']
+  datasets = ['ogbn-products', 'livejournal', 'lj-links', 'lj-large', 'enwiki-links']
   ret = get_explicit_time(datasets)
   for k, v in ret.items():
     print(k, v)
@@ -166,17 +167,32 @@ if __name__ == '__main__':
     'ytick.labelsize':'15',
     'lines.linewidth': 2,
     # 'legend.fontsize': '14.7',
-    'legend.fontsize': '14',
+    'legend.fontsize': '15',
     'figure.figsize' : '8, 4',
     'legend.loc': 'upper center', #[]"upper right", "upper left"]
     'legend.frameon': False,
+    # 'font.family': 'Arial'
+    'font.family': 'Times New Roman',
+    'font.serif': 'Times New Roman',
   }
+
+  # print(pylab.rcParams.keys())
 
 
   labels = ['sample', 'gather', 'transfer', 'train']
-  xticks = ['reddit', 'livejournal', 'lj-links', 'lj-large', 'enwiki']
+  # xticks = ['reddit', 'livejournal', 'lj-links', 'lj-large', 'enwiki', 'ogbn-products']
+  xticks = datasets
   xlabel = ''
   ylabel = 'Norm. Execute Time (%)'
   # labels = list(ret.keys())
-  plot_stack_bar(params, diff_stage_time, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.15), figpath='explicit-breakdown.pdf')
+  plot_stack_bar(params, diff_stage_time, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.25), figpath='explicit-breakdown.pdf')
+
+  tmp = np.ones(5)
+  create_dir('./explicit_txt')
+  for i, x in enumerate(diff_stage_time):
+    tmp += x
+    with open (f'./explicit_txt/{labels[i]}.txt', 'w') as f:
+      for j,y in enumerate(tmp):
+        f.write(str(j) + ' ' + str(y) + '\n')
+
   exit(0)

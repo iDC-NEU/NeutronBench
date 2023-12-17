@@ -141,7 +141,7 @@ def plot_bar(plot_params, Y, labels, xlabel, ylabel, xticks, color_list, anchor=
   pylab.rcParams.update(plot_params)  #更新自己的设置
   
   
-  width = 0.15
+  width = 0.13
   # color_list = ['b', 'g', 'c', 'r', 'm']
   # color_list = ['b', 'g', 'c', 'r', 'm', 'y'] 
   # Green	#40a02b
@@ -161,6 +161,7 @@ def plot_bar(plot_params, Y, labels, xlabel, ylabel, xticks, color_list, anchor=
 
   for i, y in enumerate(Y):
     # plt.bar(ind+(offset[i]*width),y,width, label=labels[i])  
+    print(i, y)
     plt.bar(ind+(offset[i]*width),y,width,color=color_list[i], label=labels[i])  
   
   # plt.xticks(np.arange(n) + (len(labels)/2-0.5)*width, xticks)
@@ -177,7 +178,7 @@ def plot_bar(plot_params, Y, labels, xlabel, ylabel, xticks, color_list, anchor=
   # fmt = '%.0f%%' # Format you want the ticks, e.g. '40%'
   # ticks_fmt = mtick.FormatStrFormatter(fmt)   
   # axes.yaxis.set_major_formatter(ticks_fmt) # set % format to ystick.
-  axes.grid(axis='y')
+  # axes.grid(axis='y')
   # axes.grid(axis='x')
 
 
@@ -390,16 +391,20 @@ def get_depcomm_result(dataset, mode, log_file):
   return local_edges, cross_edges, all_sample_edges, receive_sample_edges
 
 
+
 def get_depcache_result(dataset, mode, log_file):
+  local_node_num = parse_line_num(log_file, f'{mode}_local_node_num')
+  remote_node_num = parse_line_num(log_file, f'{mode}_reomte_node_num')
   local_sample_edges = parse_line_num(log_file, f'{mode}_local_sample_edges')
   remote_sample_edges = parse_line_num(log_file, f'{mode}_remote_sample_edges')
   recv_sample_edges = parse_line_num(log_file, f'{mode}_recv_sample_edges')
   send_edges = parse_line_num(log_file, f'{mode}_send_edges')
   send_features = parse_line_num(log_file, f'{mode}_send_features')
+  remote_features = parse_line_num(log_file, f'{mode}_remote_features')
   send_edges_bytes = parse_line_num(log_file, f'{mode}_sen_edges_bytes')
   send_features_bytes = parse_line_num(log_file, f'{mode}_sen_features_bytes')
+  return local_node_num, remote_node_num, local_sample_edges, remote_sample_edges, recv_sample_edges, send_edges, send_features, remote_features, send_edges_bytes, send_features_bytes
 
-  return local_sample_edges, recv_sample_edges, send_edges, send_features, send_edges_bytes, send_features_bytes, remote_sample_edges
 
 
 if __name__ == '__main__':
@@ -416,105 +421,6 @@ if __name__ == '__main__':
       'legend.frameon': False,
     }
 
-    datasets = ['reddit', 'ogbn-products']
-    datasets = ['computer', 'ogbn-arxiv']
-    datasets = ['ogbn-products']
-    datasets = ['ogbn-arxiv']
-    datasets = ['reddit']
-    datasets = ['computer']
-    datasets = ['reddit', 'computer']
-    datasets = ['ogbn-arxiv', 'ogbn-products', 'reddit', 'computer']
-    
-    batch_sizes = {
-        # 'AmazonCoBuy_computers': (512, 1024, 2048, 4096, 8250),
-        'computer': 600,
-        'ogbn-arxiv': 5000,
-        'reddit': 8000,
-        'ogbn-products': 8000,
-    }
-
-    num_parts = 4
-    fanout = '10 25'
-    # batch_size = 1024
-
-    # for ds in datasets:
-      # for dim in [1, 2, 4]:
-      #   log_file = f'./log/{ds}/{ds}-{dim}.log'
-      #   get_partition_statistic(ds, num_parts, fanout, batch_sizes[ds], dim, log_file, 'metis')
-      
-      # log_file = f'./log/{ds}/{ds}-hash.log'
-      # get_partition_statistic(ds, num_parts, fanout, batch_sizes[ds], 1, log_file, 'hash')
-
-      # log_file = f'./log/{ds}/{ds}-dgl.log'
-      # get_partition_statistic(ds, num_parts, fanout, batch_sizes[ds], 1, log_file, 'dgl')
-      
-      # log_file = f'./log/{ds}/{ds}-pagraph.log'
-      # get_partition_statistic(ds, num_parts, fanout, batch_sizes[ds], 1, log_file, 'pagraph')
-      
-      # log_file = f'./log/{ds}/{ds}-bytegnn.log'
-      # get_partition_statistic(ds, num_parts, fanout, batch_sizes[ds], 1, log_file, 'bytegnn')
-    # exit(0)
-
-
-    modes = ['1', 'dgl', '4', 'pagraph', 'bytegnn', 'hash']
-    labels = ['metis1', 'metis2', 'metis4', 'pagraph', 'bytegnn', 'hash']
-
-    # modes = ['1', '4', 'hash', 'bytegnn']
-    # labels = ['metis1', 'metis4', 'hash', 'bytegnn']
-    # partition graph result
-    for ds in datasets:
-      node_dist = []
-      edge_dist = []
-      # modes = ['metis1', 'metis2', 'metis4', 'hash', 'pagraph']
-      # modes = ['1', '4', 'pagraph', 'hash', 'bytegnn']
-      # modes = ['1', '4', 'hash', 'bytegnn']
-      for mode in modes:
-        log_file = f'./log/{ds}/{ds}-{mode}.log'
-
-        node, edge, train = get_partition_result(ds, log_file, node=True, edge=True, train=True)
-        node_dist.append(node)
-        edge_dist.append(edge)
-
-      print(modes, 'node number', [sum(x) for x in node_dist])
-      print(modes, 'edge number', [sum(x) for x in edge_dist])
-      xticks = [f'part {x}' for x in range(num_parts)]
-      xlabel = ''
-      ylabel = ''
-      # ./log/{ds}/{ds}-node.pdf
-      # plot_bar(params, node_dist, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.15), figpath=f'./overleaf/{ds}-node.pdf')
-      # plot_bar(params, edge_dist, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.15), figpath=f'./overleaf/{ds}-edge.pdf')
-    
-  
-    # dep cache statistics
-    for ds in datasets:
-      # if ds == 'reddit': # reddit pagraph msissed
-      #    continue
-      
-      compute_Y = []
-      comm_Y = []
-      # modes = ['metis1', 'metis2', 'metis4', 'hash', 'pagraph']
-      for mode in modes:
-        log_file = f'./log/{ds}/{ds}-{mode}.log'
-        # draw_partition_statistic(ds, log_file, f'./log/{ds}', f'dim{dim}')
-        local_sample_edges, recv_sample_edges, send_edges, send_features, send_edges_bytes, send_features_bytes, remote_sample_edges = get_depcache_result(ds, 'sum', log_file)
-        compute_Y.append(np.array(local_sample_edges) + np.array(recv_sample_edges))
-        comm_Y.append((np.array(send_edges_bytes) + np.array(send_features_bytes)) / 1024/ 1024)
-    
-      print(modes, 'compute load', [sum(x) for x in compute_Y])
-      print(modes, 'comm load', [sum(x) for x in comm_Y])
-
-      color_list = ['#d73027','#fc8d59','#fee090','#e0f3f8','#91bfdb','#4575b4']
-      xlabel = 'communication load'
-      ylabel = 'MB'
-      xticks = [f'part {x}' for x in range(num_parts)]
-      plot_bar(params, comm_Y, labels, xlabel, ylabel, xticks, color_list, anchor=(0.5, 1.25), figpath=f'./partition-exp/{ds}-comm.pdf')
-
-      ylabel = ''
-      xlabel = 'compute load'
-      plot_bar(params, compute_Y, labels, xlabel, ylabel, xticks, color_list, anchor=(0.5, 1.25), figpath=f'./partition-exp/{ds}-compute.pdf')
-      # plot_bar(params, compute_Y, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.15), figpath=f'./partition-exp/{ds}-compute.pdf')
-
-
     params={
       'axes.labelsize': '14',
       'xtick.labelsize':'14',
@@ -525,15 +431,138 @@ if __name__ == '__main__':
       'legend.loc': 'upper center', #[]"upper right", "upper left"]
       # 'legend.loc': 'best', #[]"upper right", "upper left"]
     }
+
+    datasets = ['reddit', 'ogbn-products']
+    datasets = ['computer', 'ogbn-arxiv']
+    datasets = ['reddit']
+    datasets = ['reddit', 'computer']
+    datasets = ['computer', 'cora']
+    datasets = ['ogbn-products']
+    datasets = ['ogbn-arxiv']
+    datasets = ['reddit']
+    datasets = ['amazon']
+    datasets = ['ogbn-arxiv', 'ogbn-products', 'reddit', 'computer']
+    
+    
+    batch_sizes = {
+        # 'AmazonCoBuy_computers': (512, 1024, 2048, 4096, 8250),
+        'cora': 10,
+        'computer': 600,
+        'ogbn-arxiv': 2048,
+        'reddit': 6000,
+        'ogbn-products': 2048,
+        'amazon': 6000,
+        'amazon': 3000,
+        'flickr': 3000,
+    }
+
+    num_parts = 8
+    num_parts = 4
+    fanout = '15 10 5'
+    fanout = '10 25'
+    # batch_size = 1024
+
+    # for ds in datasets:
+    #   for dim in [1, 2, 4]:
+    #     log_file = f'./log/{ds}/{ds}-{dim}.log'
+    #     get_partition_statistic(ds, num_parts, fanout, batch_sizes[ds], dim, log_file, 'metis')
+      
+    #   log_file = f'./log/{ds}/{ds}-hash.log'
+    #   get_partition_statistic(ds, num_parts, fanout, batch_sizes[ds], 1, log_file, 'hash')
+
+    #   log_file = f'./log/{ds}/{ds}-dgl.log'
+    #   get_partition_statistic(ds, num_parts, fanout, batch_sizes[ds], 1, log_file, 'dgl')
+      
+    #   # log_file = f'./log/{ds}/{ds}-pagraph.log'
+    #   # get_partition_statistic(ds, num_parts, fanout, batch_sizes[ds], 1, log_file, 'pagraph')
+      
+    #   log_file = f'./log/{ds}/{ds}-bytegnn.log'
+    #   get_partition_statistic(ds, num_parts, fanout, batch_sizes[ds], 1, log_file, 'bytegnn')
+    # exit(0)
+
+
+    modes = ['1', 'dgl', '4', 'pagraph', 'bytegnn', 'hash']
+    labels = ['metis1', 'metis2', 'metis4', 'pagraph', 'bytegnn', 'hash']
+
+    # # modes = ['1', 'dgl', '4', 'bytegnn', 'hash']
+    # # labels = ['metis1', 'metis2', 'metis4', 'bytegnn', 'hash']
+
+    # # modes = ['1', '4', 'hash', 'bytegnn']
+    # # labels = ['metis1', 'metis4', 'hash', 'bytegnn']
+    # # partition graph result
+    # for ds in datasets:
+    #   node_dist = []
+    #   edge_dist = []
+    #   # modes = ['metis1', 'metis2', 'metis4', 'hash', 'pagraph']
+    #   # modes = ['1', '4', 'pagraph', 'hash', 'bytegnn']
+    #   # modes = ['1', '4', 'hash', 'bytegnn']
+    #   for mode in modes:
+    #     log_file = f'./log/{ds}/{ds}-{mode}.log'
+    #     node, edge, train = get_partition_result(ds, log_file, node=True, edge=True, train=True)
+    #     node_dist.append(node)
+    #     edge_dist.append(edge)
+
+    #   print(modes, 'node number', [sum(x) for x in node_dist])
+    #   print(modes, 'edge number', [sum(x) for x in edge_dist])
+    #   xticks = [f'part {x}' for x in range(num_parts)]
+    #   xlabel = ''
+    #   ylabel = ''
+    #   # ./log/{ds}/{ds}-node.pdf
+    #   # plot_bar(params, node_dist, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.15), figpath=f'./overleaf/{ds}-node.pdf')
+    #   # plot_bar(params, edge_dist, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.15), figpath=f'./overleaf/{ds}-edge.pdf')
+    
+  
+    # dep cache statistics
+    for ds in datasets:
+      compute_Y = []
+      comm_Y = []
+      # modes = ['metis1', 'metis2', 'metis4', 'hash', 'pagraph']
+      for mode in modes:
+        log_file = f'./log/{ds}/{ds}-{mode}.log'
+        # draw_partition_statistic(ds, log_file, f'./log/{ds}', f'dim{dim}')
+        local_node_num, remote_node_num, local_sample_edges, remote_sample_edges, recv_sample_edges, send_edges, send_features, remote_features, send_edges_bytes, send_features_bytes = get_depcache_result(ds, 'sum', log_file)
+        sample_load = np.array(local_sample_edges) + np.array(recv_sample_edges)
+        compute_load = np.array(local_sample_edges) + np.array(remote_sample_edges)
+        compute_Y.append(sample_load + compute_load)
+        comm_Y.append((np.array(send_edges_bytes) + np.array(send_features_bytes)) / 1024 / 1024)
+    
+      print(modes, 'compute load', [sum(x) for x in compute_Y])
+      print(modes, 'comm load', [sum(x) for x in comm_Y])
+
+      # color_list = ['#d73027','#fc8d59','#fee090','#e0f3f8','#91bfdb','#4575b4']
+      # color_list = ['#1b9e77','#d95f02','#7570b3','#e7298a','#66a61e','#e6ab02']
+      # color_list = ['#e41a1c','#377eb8','#4daf4a','#984ea3','#ff7f00','#ffff33']
+      # color_list = ['#afab97','#3b6a6d','#3a2735','#cf4335','#d95f42','#e17a52','#ecd0af']
+      # color_list = ['#44a185','#83ae93','#ead8ba','#ebb561','#d4452c','#783923','',]
+      # color_list = ['#223d4a','#236863','#259386','#80a870','#e4bd5f','#e36347']
+      color_list = ['#99093d','#f0633a','#fdd37a','#e6f397','#73c49a','#415aa4',]
+      
+      
+      xlabel = 'communication load'
+      ylabel = 'MB'
+      xticks = [f'part {x}' for x in range(num_parts)]
+      plot_bar(params, comm_Y, labels, xlabel, ylabel, xticks, color_list, anchor=(0.5, 1.25), figpath=f'./partition-exp2/{ds}-comm.pdf')
+
+      ylabel = ''
+      xlabel = 'compute load'
+      plot_bar(params, compute_Y, labels, xlabel, ylabel, xticks, color_list, anchor=(0.5, 1.25), figpath=f'./partition-exp2/{ds}-compute.pdf')
+      # plot_bar(params, compute_Y, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.15), figpath=f'./partition-exp/{ds}-compute.pdf')
+      exit(0)
+
     
     # dep cache statistics (stack bar)
 
     modes = ['1', '2', 'dgl', '4', 'pagraph', 'bytegnn', 'hash']
     partiton_algo = ['metis1', 'metis2','dgl', 'metis4', 'pagraph', 'bytegnn', 'hash']
 
+    modes = ['1', '2', 'dgl', '4', 'bytegnn', 'hash']
+    partiton_algo = ['metis1', 'metis2','dgl', 'metis4', 'bytegnn', 'hash']
+
     for ds in datasets:
       local_edges = []
       remote_edges = []
+      local_nodes = []
+      remote_nodes = []
       # modes = ['metis1', 'metis2', 'metis4', 'hash', 'pagraph']
       # modes = ['1', '4', 'pagraph', 'hash', 'bytegnn']
       # modes = ['1', '4', 'hash', 'bytegnn']
@@ -541,24 +570,34 @@ if __name__ == '__main__':
 
         log_file = f'./log/{ds}/{ds}-{mode}.log'
         # draw_partition_statistic(ds, log_file, f'./log/{ds}', f'dim{dim}')
-        local_sample_edges, recv_sample_edges, send_edges, send_features, send_edges_bytes, send_features_bytes, remote_sample_edges  = get_depcache_result(ds, 'sum', log_file)
+        local_node_num, remote_node_num, local_sample_edges, remote_sample_edges, recv_sample_edges, send_edges, send_features, remote_features, send_edges_bytes, send_features_bytes  = get_depcache_result(ds, 'sum', log_file)
         local_edges.append(np.array(local_sample_edges))
         remote_edges.append(np.array(remote_sample_edges))
+        local_nodes.append(np.array(local_node_num))
+        remote_nodes.append(np.array(remote_node_num))
     
       print(modes, 'local edges', [sum(x) for x in local_edges])
       print(modes, 'remote edges', [sum(x) for x in remote_edges])
+      print(modes, 'local nodes', [sum(x) for x in local_nodes])
+      print(modes, 'remote nodes', [sum(x) for x in remote_nodes])
 
-      xlabel = '#partition ID'
-      # partiton_algo = ['metis1', 'metis4', 'pagraph', 'bytegnn', 'hash']
-
-      # partiton_algo = ['metis1', 'metis4', 'hash', 'bytegnn']
       color_list = ['#f0f0f0','#bdbdbd','#636363']
+
+      xlabel = '#partition ID (edges)'
       labels = ['Local', 'Remote']
       for i, algo in enumerate(partiton_algo):
         Y = np.array([local_edges[i], remote_edges[i]])
         Y /= 1e6
         print(algo, 'all data request', Y.sum())
         ylabel = '#Reqeust Number 1e6'
-        plot_stack_bar(params, Y, labels, xlabel, ylabel, xticks, color_list, anchor=(0.5, 1.22), figpath=f'./partition-exp/{ds}-datarequire-{algo}.pdf')
-        # plot_stack_bar(params, Y, labels, xlabel, ylabel, xticks, anchor=(0.5, 1.185), figpath=f'./partition-exp/{ds}-datarequire-{algo}.pdf')
+        plot_stack_bar(params, Y, labels, xlabel, ylabel, xticks, color_list, anchor=(0.5, 1.22), figpath=f'./partition-exp2/{ds}-datarequire-edges-{algo}.pdf')
+        
+      xlabel = '#partition ID (nodes)'
+      labels = ['Local', 'Remote']
+      for i, algo in enumerate(partiton_algo):
+        Y = np.array([local_nodes[i], remote_nodes[i]])
+        Y /= 1e6
+        print(algo, 'all data request', Y.sum())
+        ylabel = '#Reqeust Number 1e6'
+        plot_stack_bar(params, Y, labels, xlabel, ylabel, xticks, color_list, anchor=(0.5, 1.22), figpath=f'./partition-exp2/{ds}-datarequire-nodes-{algo}.pdf')
 

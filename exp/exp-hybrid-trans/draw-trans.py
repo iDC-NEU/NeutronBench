@@ -51,7 +51,7 @@ def create_dir(path):
     os.makedirs(path)
 
 # https://blog.csdn.net/ddpiccolo/article/details/89892449
-def plot_line(plot_params, X, Y, labels, xlabel, ylabel, xticks, yticks, xlim, ylim, ds, markevery, figpath=None):
+def plot_line(plot_params, X, Y, labels, xlabel, ylabel, xticks, yticks, xlim, ylim, ds, markevery, anchor=None, figpath=None):
 
   # https://tonysyu.github.io/raw_content/matplotlib-style-gallery/gallery.html
   # plt.style.use("seaborn-deep")
@@ -73,9 +73,8 @@ def plot_line(plot_params, X, Y, labels, xlabel, ylabel, xticks, yticks, xlim, y
   
   axes1 = plt.subplot(111)#figure1的子图1为axes1
   for i, (x, y) in enumerate(zip(X, Y)):
-    
-    plt.plot(x, y, label = labels[i], color=color_list[i], marker=makrer_list[i], markersize=8,markevery=markevery[ds])
-    # plt.plot(x, y, label = labels[i], color=color_list[i])
+    # plt.plot(x, y, label = labels[i], color=color_list[i], marker=makrer_list[i], markersize=8,markevery=markevery[ds])
+    plt.plot(x, y, label = labels[i], color=color_list[i])
     # plt.plot(x, y, label = labels[i], markersize=5)
   axes1.set_yticks(yticks)
   axes1.set_xticks(xticks)
@@ -85,7 +84,8 @@ def plot_line(plot_params, X, Y, labels, xlabel, ylabel, xticks, yticks, xlim, y
   # axes1.set_xlim(0, 500)
   axes1.set_ylim(ylim)
   axes1.set_xlim(xlim)
-  plt.legend(ncol=1, frameon=False)
+  plt.legend(ncol=2, bbox_to_anchor=anchor)
+  # plt.legend(ncol=2, frameon=False)
   ############################
 
   # axes1 = plt.gca()
@@ -157,15 +157,16 @@ def print_diff_cache_ratio(datasets, log_path):
 if __name__ == '__main__':
 
   myparams = {
-        'axes.labelsize': '18',
-        'xtick.labelsize': '18',
-        'ytick.labelsize': '18',
+        'axes.labelsize': '15',
+        'xtick.labelsize': '15',
+        'ytick.labelsize': '15',
         # 'font.family': 'Times New Roman',
         'figure.figsize': '5, 4',  #图片尺寸
         'lines.linewidth': 4,
-        'legend.fontsize': '13',
-        'legend.loc': 'best', #[]"upper right", "upper left"]
+        'legend.fontsize': '15',
+        'legend.loc': 'upper center', #[]"upper right", "upper left"]
         'legend.numpoints': 1,
+        'legend.frameon': False,
         # 'lines.ncol': 2,
     }
 
@@ -180,8 +181,8 @@ if __name__ == '__main__':
   datasets = ['lj-links', 'ogbn-arxiv']
   datasets = ['lj-large']
   datasets = ['ogbn-arxiv', 'ogbn-products', 'reddit', 'livejournal', 'lj-large', 'hollywood-2011', 'lj-links', 'enwiki-links']
-  datasets = ['ogbn-arxiv','ogbn-products', 'reddit', 'livejournal', 'lj-large', 'hollywood-2011']
   datasets = ['ogbn-arxiv']
+  datasets = ['ogbn-arxiv','ogbn-products', 'reddit', 'livejournal', 'lj-large', 'hollywood-2011']
 
   x_lims = {
       'reddit': (0, 100),
@@ -216,46 +217,36 @@ if __name__ == '__main__':
   blcoks_list = ['256']
   labels = []
   for ds in datasets:
-    X, Y = [], []
     for block_size in blcoks_list:
+      X, Y = [], []
       threshold_rate = ret[ds+block_size+'rate']
       suit_explicit_rate = ret[ds+block_size+'explicit']
       threshold_rate_cache = ret[ds+block_size+'rate_cache']
       suit_explicit_rate_cache = ret[ds+block_size+'explicit_cache']
-      # print(ds, block_size)
-      # print(threshold_rate)
-      # print(suit_explicit_rate)
-      # print(threshold_rate_cache)
-      # print(suit_explicit_rate_cache)
-      # print()
+
       X.append(threshold_rate)
       Y.append(suit_explicit_rate)
-      labels.append(block_size)
+      labels.append('w/o cache')
       X.append(threshold_rate_cache)
       Y.append(suit_explicit_rate_cache)
-      labels.append(block_size + ' w/cache')
+      labels.append('w/ cache')
        
-    # print(Y)
-    # print(len(X[0]), len(Y[0]),len(Y[1]),len(Y[2]), min(len(Y[0]),len(Y[1]),len(Y[2])))
-    # X = X[:,:min(len(Y[0]),len(Y[1]),len(Y[2]))]
 
-    Y = np.array(Y) * 100
-    X = np.array(X) * 100
+      Y = np.array(Y) * 100
+      X = np.array(X) * 100
 
-    x_ticks = np.linspace(0, 100, 6)
-    x_ticks = np.linspace(*x_lims[ds], 6)
-    y_ticks = np.linspace(0, 100, 6)
-    y_lim = (0, 100)
+      x_ticks = np.linspace(0, 100, 6)
+      x_ticks = np.linspace(*x_lims[ds], 6)
+      y_ticks = np.linspace(0, 100, 6)
+      y_lim = (0, 100)
 
-    pdf_file = f'./trans_pdf/{ds}.pdf'
+      pdf_file = f'./trans_pdf/{ds}-{block_size}.pdf'
 
-    xlabel = 'Threshold Ratio (%)'
-    ylabel = 'Suit Explicit Block Ratio (%)'
-    # print(X)
-    # print(Y)
-    plot_line(myparams, X, Y, labels, xlabel, ylabel, x_ticks, y_ticks, (x_ticks[0], x_ticks[-1]), y_lim, ds, mark_list, pdf_file)
-
-    # plot_line(tmp, Y, ['random', 'degree', 'sample'], savefile=, x_ticks=x_ticks, x_name=x_name, y_ticks=y_ticks, y_name=y_name, x_label=, y_label='')
+      xlabel = 'Threshold Ratio (%)'
+      ylabel = 'Suit Explicit Block Ratio (%)'
+      # print(X)
+      # print(Y)
+      plot_line(myparams, X, Y, labels, xlabel, ylabel, x_ticks, y_ticks, (x_ticks[0], x_ticks[-1]), y_lim, ds, mark_list, (0.5, 1.15), pdf_file)
 
   
 
