@@ -67,7 +67,7 @@ All datasets we used:
 | Reddit  | 232.96K | 114.85M | 602 | 41 | 128  |
 | OGB-Arxiv  | 169.34K | 2.48M | 128 | 40 | 128  |
 | OGB-Products  | 2.45M | 126.17M | 100 | 47 | 128  |
-| OGB-Papers  | 111.06M | 1.6B | 128 | 173 | 128 |
+| OGB-Papers  | 111.06M | 1.6B | 128 | 172 | 128 |
 | Amazon  | 1.57M | 264,34M | 200 | 107 | 128  |
 | LiveJournal  | 4.85M | 90.55M | 600 | 60 | 128 |
 | Lj-large  | 7.49M | 232.1M | 600 | 60 | 128 |
