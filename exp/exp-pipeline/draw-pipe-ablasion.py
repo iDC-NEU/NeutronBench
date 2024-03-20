@@ -33,11 +33,10 @@ def plot_bar(plot_params, Y, labels, xlabel, ylabel, xticks, yticks, color_list,
   # plt.style.use("seaborn-notebook")
   # plt.style.use("seaborn-poster")
   pylab.rcParams.update(plot_params)  #更新自己的设置
-  
+  plt.rcParams['pdf.fonttype'] = 42
+
   
   width = 0.13
-  # color_list = ['#2a6ca6', '#419136', '#7c4e44', '#c4342b', '#f47a2d', '#EA6632', '#f47a2d', ]
-  # color_list = ['#b35806','#f1a340','#fee0b6','#d8daeb','#998ec3','#542788']
 
   n = len(Y[0])
   ind = np.arange(n)                # the x locations for the groups
@@ -48,7 +47,7 @@ def plot_bar(plot_params, Y, labels, xlabel, ylabel, xticks, yticks, color_list,
 
   for i, y in enumerate(Y):
     # plt.bar(ind+(offset[i]*width),y,width, label=labels[i])  
-    plt.bar(ind+(offset[i]*width),y,width,color=color_list[i], label=labels[i], linewidth=params['lines.linewidth'], edgecolor='black')  
+    plt.bar(ind+(offset[i]*width),y,width,color=color_list[i], label=labels[i], linewidth=plot_params['lines.linewidth'], edgecolor='black')  
   
   # plt.xticks(np.arange(n) + (len(labels)/2-0.5)*width, xticks)
   plt.xticks(ind, xticks)
@@ -67,25 +66,18 @@ def plot_bar(plot_params, Y, labels, xlabel, ylabel, xticks, yticks, color_list,
 
   # Set the formatter
   axes = plt.gca()   # get current axes
-  # fmt = '%.0f%%' # Format you want the ticks, e.g. '40%'
-  # ticks_fmt = mtick.FormatStrFormatter(fmt)   
-  # axes.yaxis.set_major_formatter(ticks_fmt) # set % format to ystick.
-  # axes.grid(axis='y', linestyle='-.')
-  # axes.grid(axis='x')
 
-  axes.spines['bottom'].set_linewidth(params['lines.linewidth']);###设置底部坐标轴的粗细
-  axes.spines['left'].set_linewidth(params['lines.linewidth']);####设置左边坐标轴的粗细
-  axes.spines['right'].set_linewidth(params['lines.linewidth']);###设置右边坐标轴的粗细
-  axes.spines['top'].set_linewidth(params['lines.linewidth']);####设置上部坐标轴的粗细
+  axes.spines['bottom'].set_linewidth(plot_params['lines.linewidth'])
+  axes.spines['left'].set_linewidth(plot_params['lines.linewidth'])
+  axes.spines['right'].set_linewidth(plot_params['lines.linewidth'])
+  axes.spines['top'].set_linewidth(plot_params['lines.linewidth'])
 
   
 
-
   figpath = 'plot.pdf' if not figpath else figpath
-  plt.savefig(figpath, dpi=1000, bbox_inches='tight', format='pdf')#bbox_inches='tight'会裁掉多余的白边
+  plt.savefig(figpath, dpi=1000, bbox_inches='tight', format='pdf')
   print(figpath, 'is plot.')
   plt.close()
-
 
 
 def plot_bar_balance1(plot_params, Y, labels, xlabel, ylabel, xticks, yticks, color_list, anchor=None, figpath=None):
@@ -104,6 +96,7 @@ def plot_bar_balance1(plot_params, Y, labels, xlabel, ylabel, xticks, yticks, co
   # plt.style.use("seaborn-notebook")
   # plt.style.use("seaborn-poster")
   pylab.rcParams.update(plot_params)  #更新自己的设置
+  plt.rcParams['pdf.fonttype'] = 42
   
   
   width = 0.2
@@ -145,20 +138,11 @@ def plot_bar_balance1(plot_params, Y, labels, xlabel, ylabel, xticks, yticks, co
 
 
 
-  # Set the formatter
-  axes = plt.gca()   # get current axes
-  # fmt = '%.0f%%' # Format you want the ticks, e.g. '40%'
-  # ticks_fmt = mtick.FormatStrFormatter(fmt)   
-  # axes.yaxis.set_major_formatter(ticks_fmt) # set % format to ystick.
-  # axes.grid(axis='y', linestyle='-.')
-  # axes.grid(axis='x')
-
-  axes.spines['bottom'].set_linewidth(params['lines.linewidth']);###设置底部坐标轴的粗细
-  axes.spines['left'].set_linewidth(params['lines.linewidth']);####设置左边坐标轴的粗细
-  axes.spines['right'].set_linewidth(params['lines.linewidth']);###设置右边坐标轴的粗细
-  axes.spines['top'].set_linewidth(params['lines.linewidth']);####设置上部坐标轴的粗细
-
-  
+  axes = plt.gca()
+  axes.spines['bottom'].set_linewidth(plot_params['lines.linewidth'])
+  axes.spines['left'].set_linewidth(plot_params['lines.linewidth'])
+  axes.spines['right'].set_linewidth(plot_params['lines.linewidth'])
+  axes.spines['top'].set_linewidth(plot_params['lines.linewidth'])
 
 
   figpath = 'plot.pdf' if not figpath else figpath
@@ -170,50 +154,10 @@ def plot_bar_balance1(plot_params, Y, labels, xlabel, ylabel, xticks, yticks, co
 
 def plot_bar_balance3(plot_params, labels, anchor=None, figpath=None):
   plt.rcParams.update(plt.rcParamsDefault)
-  # print(plt.rcParams.keys())
-  # https://tonysyu.github.io/raw_content/matplotlib-style-gallery/gallery.html
-  # print(plt.style.available)
-  # plt.style.use('classic')
-  # plt.style.use('bmh')
-  # plt.style.use('ggplot')
-  # plt.style.use('grayscale')
-  # plt.style.use("seaborn-deep")
-  # plt.style.use("seaborn-paper")
-  # plt.style.use("seaborn-notebook")
-  # plt.style.use("seaborn-poster")
   pylab.rcParams.update(plot_params)  #更新自己的设置
+  plt.rcParams['pdf.fonttype'] = 42
 
-
-
-
-  # if ds == 'reddit':
-  #   yticks = [[0, 3, 6, 9],[0, 1, 2, 3]]
-  #   ylim = [(0, 8),(0, 3)]
-  #   all_comm_load = [[4.146, 3.535, 3.190]]
-  # elif ds == 'ogbn-products':
-  #   yticks = [[0, 3, 6],[0, 12, 24, 36]]
-  #   ylim = [(0, 8),(0, 43)]
-  #   all_comm_load = [[5.1903,2.7366,2.8637,2.8210,3.9445]]
-  # elif ds == 'ogbn-arxiv':
-  #   yticks = [[0, .1, .2, .3],[0, .1, .2, .3]]
-  #   ylim = [(0, .3),(0, .3)]
-  #   all_comm_load = [[0.374, 0.252, 0.222]]
-  # elif ds == 'livejournal':
-  #   yticks = [[0, .1, .2, .3],[0, .1, .2, .3]]
-  #   ylim = [(0, .3),(0, .3)]
-  #   all_comm_load = [[95.019, 84.459, 70.798]]
-  # elif ds == 'lj-links':
-  #   yticks = [[0, .1, .2, .3],[0, .1, .2, .3]]
-  #   ylim = [(0, .3),(0, .3)]
-  #   all_comm_load = [[107.779, 96.550, 80.333]]
-  # elif ds == 'lj-large':
-  #   yticks = [[0, .1, .2, .3],[0, .1, .2, .3]]
-  #   ylim = [(0, .3),(0, .3)]
-  #   all_comm_load = [[91.653, 79.619, 74.445]]
-  # elif ds == 'enwiki-links':
-  #   yticks = [[0, .1, .2, .3],[0, .1, .2, .3]]
-  #   ylim = [(0, .3),(0, .3)]
-  #   all_comm_load = [[321.128, 278.740, 279.014]]
+  
 
   width = 0.25
   color_list = ['C3','C1','C2','C0','C4']
@@ -244,107 +188,21 @@ def plot_bar_balance3(plot_params, labels, anchor=None, figpath=None):
   plot_one(132, [95.019, 84.459, 70.798], [0, 50, 100], (0, 120), '(b) Livejournal')
   h_legs, e_legs = plot_one(133, [107.779, 96.550, 80.333], [0, 50, 100], (0, 120), '(c) Lj-links')
 
-  # plot_one(334, [95.019, 84.459, 70.798], [0, 50, 100], (0, 120), '(b) Livejournal')
-  # plot_one(335, [91.653, 79.619, 74.445], [0, 50, 100], (0, 100), '(b) Lj-large')
-  # plot_one(336, [4.146, 3.535, 3.190], [0, 2, 4], (0, 5), '(b) Reddit')
-  # plot_one(337, [321.128, 278.740, 279.014], [0, 150, 300], (0, 300), '(a) Enwiki-links')
-
-
-  # # 'lj-large'
-  # ax1 = plt.subplot(131)#figure1的子图1为ax1
-  # Y = [91.653, 79.619, 74.445]
-  # yticks = [0, 50, 100]
-  # ax1.set_ylim(0, 100)
-  # ax1.set_title('(b) Lj-large', x=.5, y=-.3)
-
-  # Y = [4.146, 3.535, 3.190] # reddit
-  # yticks = [0, 2, 4]
-  # ax1.set_ylim(0, 5)
-  # ax1.set_title('(b) Reddit', x=.5, y=-.3)
-
-
-  # Y = [3.902, 2.378, 2.259] # reddit
-  # yticks = [0, 2, 4]
-  # ax1.set_ylim(0, 5)
-  # ax1.set_title('(b) Products', x=.5, y=-.3)
-
-
-  # # producrts [3.902, 2.378, 2.259]
-
-  # ax1.set_xticks([])
-  # ax1.set_yticks(yticks)
-  # ax1.set_ylabel('Epoch time (s)', labelpad=1)
-  # for i, y in enumerate(Y):
-  #   leg1 = ax1.bar(i,y,width,color=color_list[i], hatch=hatch_list[i], label=labels[i], edgecolor='white')
-  #   leg2 = ax1.bar(i,y,width,color='none', lw=plot_params['lines.linewidth'], edgecolor='black')
-  #   ax1.text(i, y, round(y,1), horizontalalignment='center', verticalalignment='bottom', fontsize=8)
-
-
-
-
-  # # 'enwiki-links'
-  # ax1 = plt.subplot(132)#figure1的子图1为ax1
-  # Y = [321.128, 278.740, 279.014]
-  # yticks = [0, 150, 300]
-  # ax1.set_ylim(0, 300)
-  # ax1.set_title('(a) Enwiki-links', x=.5, y=-.3)
-
-
-  # Y = [95.019, 84.459, 70.798] # livejournal
-  # yticks = [0, 50, 100]
-  # ax1.set_ylim(0, 120)
-  # ax1.set_title('(a) Livejournal', x=.5, y=-.3)
-  
-  # ax1.set_xticks([])
-  # ax1.set_yticks(yticks)
-  # ax1.set_ylabel('Epoch time (s)', labelpad=1)
-
-  # for i, y in enumerate(Y):
-  #   leg1 = ax1.bar(i,y,width,color=color_list[i], hatch=hatch_list[i], label=labels[i], edgecolor='white')
-  #   leg2 = ax1.bar(i,y,width,color='none', lw=plot_params['lines.linewidth'], edgecolor='black')
-  #   ax1.text(i, y, round(y,1), horizontalalignment='center', verticalalignment='bottom', fontsize=8)
-
-
-  
-  # # 'lj-links'
-  # ax1 = plt.subplot(133)#figure1的子图1为ax1
-  # Y = [107.779, 96.550, 80.333]
-  # yticks = [0, 50, 100]
-  # ax1.set_ylim(0, 120)
-  # ax1.set_title('(c) Lj-links', x=.5, y=-.3)
-  # ax1.set_xticks([])
-  # ax1.set_yticks(yticks)
-  # ax1.set_ylabel('Epoch time (s)', labelpad=1)
-
-  # h_legs, e_legs = [], []
-  # for i, y in enumerate(Y):
-  #   leg1 = ax1.bar(i,y,width,color=color_list[i], hatch=hatch_list[i], label=labels[i], edgecolor='white')
-  #   leg2 = ax1.bar(i,y,width,color='none', lw=plot_params['lines.linewidth'], edgecolor='black')
-  #   ax1.text(i, y, round(y,1), horizontalalignment='center', verticalalignment='bottom', fontsize=8)
-  #   h_legs.append(leg1)
-  #   e_legs.append(leg2)
-
   legs = [(x,y) for x,y in zip(h_legs, e_legs)]
   plt.legend(legs, labels , ncol=3, bbox_to_anchor=(-.8, 1.2), columnspacing=3, handletextpad=.2, labelspacing=.1, handlelength=1)
   plt.subplots_adjust(wspace=.35, hspace =0)#调整子图间距
-  # order = [0,2,1]
-  #add legend to plot
-  # plt.legend([lines[idx] for idx in order], [labels[idx] for idx in order] , ncol=3, bbox_to_anchor=anchor, columnspacing=.5, handletextpad=.2, labelspacing=.1, handlelength=1)
 
 
-  # plt.xlabel(xlabel)
   axes = plt.gca()   # get current axes
-  axes.spines['bottom'].set_linewidth(plot_params['lines.linewidth']);###设置底部坐标轴的粗细
-  axes.spines['left'].set_linewidth(plot_params['lines.linewidth']);####设置左边坐标轴的粗细
-  axes.spines['right'].set_linewidth(plot_params['lines.linewidth']);###设置右边坐标轴的粗细
-  axes.spines['top'].set_linewidth(plot_params['lines.linewidth']);####设置上部坐标轴的粗细
-
+  axes.spines['bottom'].set_linewidth(plot_params['lines.linewidth'])
+  axes.spines['left'].set_linewidth(plot_params['lines.linewidth'])
+  axes.spines['right'].set_linewidth(plot_params['lines.linewidth'])
+  axes.spines['top'].set_linewidth(plot_params['lines.linewidth'])
 
   figpath = 'plot.pdf' if not figpath else figpath
-  plt.savefig(figpath, dpi=1000, bbox_inches='tight', format='pdf')#bbox_inches='tight'会裁掉多余的白边
+  plt.savefig(figpath, dpi=1000, bbox_inches='tight', format='pdf')
   print(figpath, 'is plot.\n')
   plt.close()
-
 
 
 
@@ -362,6 +220,9 @@ def plot_bar_balance5(plot_params, labels, anchor=None, figpath=None):
   # plt.style.use("seaborn-notebook")
   # plt.style.use("seaborn-poster")
   pylab.rcParams.update(plot_params)  #更新自己的设置
+  plt.rcParams['pdf.fonttype'] = 42
+
+  
 
 
   width = 0.25
@@ -448,6 +309,9 @@ def plot_bar_balance3blue(plot_params, labels, anchor=None, figpath=None):
   # plt.style.use("seaborn-notebook")
   # plt.style.use("seaborn-poster")
   pylab.rcParams.update(plot_params)  #更新自己的设置
+  plt.rcParams['pdf.fonttype'] = 42
+
+  
 
 
   width = 0.25
@@ -488,9 +352,9 @@ def plot_bar_balance3blue(plot_params, labels, anchor=None, figpath=None):
 
 
 
-  plot_one(131, [3.902, 2.378, 2.259], [0, 2, 4], (0, 5), '(a) Products\n(low feature dimension)', 'blue', (.5,-.42))
-  plot_one(132, [95.019, 84.459, 70.798], [0, 50, 100], (0, 120), '(b) Livejournal\n(high feature dimension)', 'blue', (.5,-.42))
-  h_legs, e_legs = plot_one(133, [107.779, 96.550, 80.333], [0, 50, 100], (0, 120), '(c) Lj-links\n(high feature dimension)', 'blue', (.5,-.42))
+  plot_one(131, [3.902, 2.378, 2.259], [0, 2, 4], (0, 5), '(a) Products\n(low feature dimension)', 'black', (.5,-.42))
+  plot_one(132, [95.019, 84.459, 70.798], [0, 50, 100], (0, 120), '(b) Livejournal\n(high feature dimension)', 'black', (.5,-.42))
+  h_legs, e_legs = plot_one(133, [107.779, 96.550, 80.333], [0, 50, 100], (0, 120), '(c) Lj-links\n(high feature dimension)', 'black', (.5,-.42))
   # plot_one(234, [4.146, 3.535, 3.190], [0, 2, 4], (0, 5), '(d) Reddit\n(high feature dimension)')
   # plot_one(235, [91.653, 79.619, 74.445], [0, 50, 100], (0, 110), '(e) Lj-large\n(high feature dimension)')
   # # plot_one(236, [321.128, 278.740, 279.014], [0, 150, 300], (0, 370), '(f) Enwiki-links\n(high feature dimension)')
@@ -626,7 +490,7 @@ def plot_comp_comm(dataset, num_parts):
     'font.family': 'Arial',
     'font.serif': 'Arial',
   }
-  plot_bar_balance3blue(params, labels, anchor=(-0.9, 1.1), figpath=f'./pipeline/ablation3b.pdf')
+  plot_bar_balance3blue(params, labels, anchor=(-0.9, 1.1), figpath=f'./pipeline/pipeline-ablation.pdf')
 
 
 

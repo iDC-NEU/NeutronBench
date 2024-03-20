@@ -35,6 +35,8 @@ def parse_num(filename, mode):
 # https://blog.csdn.net/ddpiccolo/article/details/89892449
 def plot_line(plot_params, X, Y, labels, xlabel, ylabel, xticks, yticks, xlim, ylim, figpath=None):
   pylab.rcParams.update(plot_params)  #更新自己的设置
+  plt.rcParams['pdf.fonttype'] = 42
+
   makrer_list = ['o', 'v', 'v', 'p', '*', 'd', 'X', 'D',    'o', 's', 'v', 'p', '*', 'd', 'X', 'D']
   marker_every = [10,10,10,10,10,10,10,10,10,10,10,10,10,10]
   color_list = ['C1','C0',]
@@ -76,6 +78,7 @@ def print_val_acc(mode, datasets, batch_sizes, suffix=None):
                 log_file = f'./log/{ds}-{suffix}/{ds}-{bs}.log'
             else:
                 log_file = f'./log/{ds}/{ds}-{bs}.log'
+            print(log_file)
             val_acc = parse_num(log_file, mode)
             # print('parsing:', log_file)
             val_acc_list += val_acc
@@ -164,9 +167,9 @@ def draw_all(myparams, datasets, batch_sizes, pdf_dir, suffix=None):
         
         create_dir(pdf_dir)
         if suffix:
-            pdf_file = f'{pdf_dir}/{ds}-bs-exp-{suffix}.pdf'
+            pdf_file = f'{pdf_dir}/batchsize-acc-{ds}-{suffix}.pdf'
         else:
-            pdf_file = f'{pdf_dir}/{ds}-bs-exp.pdf'
+            pdf_file = f'{pdf_dir}/batchsize-acc-{ds}.pdf'
 
         x_ticks = [round(x, 1) for x in X]
         x_lim = (x_ticks[0] - 1, x_ticks[-1] + 1)

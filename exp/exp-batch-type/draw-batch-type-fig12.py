@@ -15,6 +15,8 @@ def create_dir(path=None):
 def plot_line(plot_params, X, Y, labels, xlabel, ylabel, xticks, yticks, xlim, ylim, figpath=None):
   # plt.style.use("seaborn-deep")
   pylab.rcParams.update(plot_params)  #更新自己的设置
+  plt.rcParams['pdf.fonttype'] = 42
+
   makrer_list = [ 'o', 's', 'v', 'p', '*', 'd', 'X', 'D']
   color_list = ['C0','C1','C0','C2','C4','C3',]
   # fig1 = plt.figure(1)
@@ -38,7 +40,7 @@ def plot_line(plot_params, X, Y, labels, xlabel, ylabel, xticks, yticks, xlim, y
 
   # plt.legend(ncol=2)
   # plt.legend(ncol=3, bbox_to_anchor=(1.08, 1.28), columnspacing=0.5, handletextpad=.1, labelspacing=.1, handlelength=1.5)
-  plt.legend(ncol=4, columnspacing=1, handletextpad=.3, labelspacing=.1, handlelength=.7, bbox_to_anchor=(0.5, 1.20))
+  plt.legend(ncol=4, columnspacing=1, handletextpad=.3, labelspacing=.1, handlelength=.7, bbox_to_anchor=(0.5, 1.26))
 
 
   plt.ylabel(ylabel,labelpad=2)
@@ -46,7 +48,7 @@ def plot_line(plot_params, X, Y, labels, xlabel, ylabel, xticks, yticks, xlim, y
 
   figpath = './log/batch-size/reddit-exp5/plot.pdf' if not figpath else figpath
   # plt.savefig(figpath, dpi=1000,  bbox_inches='tight', pad_inches=0, format='pdf')#bbox_inches='tight'会裁掉多余的白边
-  plt.savefig(figpath, dpi=1000,  bbox_inches='tight', format='pdf')#bbox_inches='tight'会裁掉多余的白边
+  plt.savefig(figpath, dpi=1000,  bbox_inches='tight', pad_inches=0, format='pdf')#bbox_inches='tight'会裁掉多余的白边
   print(figpath, 'is plot.')
   plt.close()
 
@@ -165,7 +167,7 @@ if __name__ == '__main__':
         # 'axes.linewidth': 10,
         # 'bars.linewidth': 100,
         'legend.fontsize': '10',
-        'figure.figsize' : '2.5, 2',
+        'figure.figsize' : '2.3, 1.3',
         'legend.loc': 'upper center', #[]"upper right", "upper left"]
         # 'legend.loc': 'best', #[]"upper right", "upper left"]
         'legend.frameon': False,
@@ -251,5 +253,5 @@ if __name__ == '__main__':
       assert False
     
 
-    plot_line(myparams, run_time, val_acc, labels, xlabel, ylabel, xticks, yticks, x_lim, y_lim, f'./pdf/{ds}-0.001.pdf')
+    plot_line(myparams, run_time, val_acc, labels, xlabel, ylabel, xticks, yticks, x_lim, y_lim, f'./pdf/batchtype-{ds}-0.001.pdf')
     # plot_line(myparams, run_time_skip, val_acc_skip, labels, xlabel, ylabel, xticks, yticks, (0,300), y_lim, f'./nts-old-sample/mix-{ds}.pdf')

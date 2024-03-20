@@ -188,4 +188,5 @@ if __name__ == '__main__':
   datasets = ['ogbn-arxiv', 'ogbn-products', 'reddit', 'hollywood-2011', 'lj-links', 'enwiki-links', 'amazon', 'rmat']
   datasets = ['ogbn-arxiv']
   datasets = ['amazon']
+  exit(-1)
   compare_cache_policy(datasets, 6000, '10,25', './log', 'GCNNEIGHBORGPUCACHEEXP')

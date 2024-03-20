@@ -138,6 +138,8 @@ def plot_multi_stack_bar(plot_params, Y, labels, xlabel, ylabel, xticks, anchor=
   # plt.style.use("seaborn-notebook")
   # plt.style.use("seaborn-poster")
   pylab.rcParams.update(plot_params)  #更新自己的设置
+  plt.rcParams['pdf.fonttype'] = 42
+  plt.rcParams['ps.fonttype'] = 42
   
   # Systems = ['P3', 'Metis*', 'DistDGL', 'SALIENT++', 'ByteGNN']
 

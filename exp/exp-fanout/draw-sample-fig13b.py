@@ -42,6 +42,8 @@ def plot_line(plot_params, X, Y, labels, xlabel, ylabel, xticks, yticks, xlim, y
   # plt.style.use("bmh")
   # plt.style.use("ggplot")
   pylab.rcParams.update(plot_params)  #更新自己的设置
+  plt.rcParams['pdf.fonttype'] = 42
+
   
   # line_styles=['ro-','b^-','gs-','ro--','b^--','gs--']  #线型设置
   # https://matplotlib.org/stable/api/markers_api.html  'o', 's', 'v', 'p', '*', 'd', 'X', 'D',
@@ -77,7 +79,7 @@ def plot_line(plot_params, X, Y, labels, xlabel, ylabel, xticks, yticks, xlim, y
 
   lines, labels = ax1.get_legend_handles_labels()
   lines2, labels2 = ax2.get_legend_handles_labels()
-  plt.legend(lines + lines2, labels + labels2, ncol=2, bbox_to_anchor=(0.5, 1.2), handlelength=1, columnspacing=0.5, handletextpad=.2, labelspacing=.2)
+  plt.legend(lines + lines2, labels + labels2, ncol=2, bbox_to_anchor=(0.48, 1.3), handlelength=1, columnspacing=0.5, handletextpad=.2, labelspacing=.2)
 
 
   figpath = './line.pdf' if not figpath else figpath
@@ -239,12 +241,13 @@ if __name__ == '__main__':
     datasets = ['ogbn-arxiv']
 
     params={
-        'axes.labelsize': '9',
-        'xtick.labelsize':'9',
-        'ytick.labelsize':'9',
+        'axes.labelsize': '11',
+        'xtick.labelsize':'11',
+        'ytick.labelsize':'11',
         'lines.linewidth': 1,
-        'legend.fontsize': '9',
-        'figure.figsize' : '2.5, 2',
+        'legend.fontsize': '11',
+        # 'figure.figsize' : '2.5, 2',
+        'figure.figsize' : '3, 1.5',
         'legend.loc': 'upper center', #[]"upper right", "upper left"]
         'legend.frameon': False,
         # 'font.family': 'Arial'

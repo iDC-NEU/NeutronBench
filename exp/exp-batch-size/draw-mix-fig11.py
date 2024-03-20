@@ -15,6 +15,8 @@ def create_dir(path=None):
 def plot_line(plot_params, X, Y, labels, xlabel, ylabel, xticks, yticks, xlim, ylim, figpath=None):
 
   pylab.rcParams.update(plot_params)  #更新自己的设置
+  plt.rcParams['pdf.fonttype'] = 42
+
   makrer_list = [ 'o', 's', 'v', 'p', '*', 'd', 'X', 'D']
   marker_every = [10,10,10,10,10,10,10]
   color_list = ['C7','C8','C2','C5','C4','C3',]
@@ -170,7 +172,8 @@ if __name__ == '__main__':
     run_time = []
     for bs in batch_sizes[ds]:
         log_file = f'./log/{ds}-0.001/{ds}-{bs}.log'
-        # print(ds, log_file)
+        print(ds, log_file)
+
         val_acc.append(parse_num(log_file, 'val_acc'))
         run_time.append(parse_num(log_file, 'gcn_run_time'))
     if ds == 'reddit':
@@ -203,4 +206,4 @@ if __name__ == '__main__':
     # run_time_skip,val_acc_skip = split_list_best(run_time_skip,val_acc_skip, max_rate)
   #   run_time_skip,val_acc_skip = run_time,val_acc
     create_dir('./pdf')
-    plot_line(myparams, run_time_skip, val_acc_skip, labels, xlabel, ylabel, xticks, yticks, (0,300), y_lim, f'./pdf/mix-{ds}.pdf')
+    plot_line(myparams, run_time_skip, val_acc_skip, labels, xlabel, ylabel, xticks, yticks, (0,300), y_lim, f'./pdf/adaptive-batchsize-{ds}.pdf')

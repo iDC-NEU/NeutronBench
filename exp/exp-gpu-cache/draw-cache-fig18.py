@@ -51,15 +51,17 @@ def create_dir(path):
     os.makedirs(path)
 
 # https://blog.csdn.net/ddpiccolo/article/details/89892449
-def plot_line(plot_params, X, Y, labels, xlabel, ylabel, xticks, yticks, xlim, ylim, figpath=None):
+def plot_line(plot_params, X, Y, ds, labels, xlabel, ylabel, xticks, yticks, xlim, ylim, figpath=None):
 
   # https://tonysyu.github.io/raw_content/matplotlib-style-gallery/gallery.html
   # plt.style.use("grayscale")
   # plt.style.use("classic")
-  plt.style.use("seaborn-paper")
+  # plt.style.use("seaborn-paper")
   # plt.style.use("bmh")
   # plt.style.use("ggplot")
   pylab.rcParams.update(plot_params)  #更新自己的设置
+  plt.rcParams['pdf.fonttype'] = 42
+
   
   # line_styles=['ro-','b^-','gs-','ro--','b^--','gs--']  #线型设置
   # https://matplotlib.org/stable/api/markers_api.html  'o', 's', 'v', 'p', '*', 'd', 'X', 'D',
@@ -84,14 +86,31 @@ def plot_line(plot_params, X, Y, labels, xlabel, ylabel, xticks, yticks, xlim, y
   # axes1.set_xlim(0, 500)
   axes1.set_ylim(ylim)
   axes1.set_xlim(xlim)
-  plt.legend(ncol=1, frameon=False)
+  axes1.set_ylabel(ylabel, labelpad=1)
+  # plt.legend(ncol=1, frameon=False)
+  # plt.legend(ncol=3, columnspacing=1.2, handletextpad=.3, labelspacing=.1, handlelength=.8, bbox_to_anchor=(0.5, 1.3))
+
+  if ds == 'amazon':
+    legend_pos = (.55, .5)
+    title_pos = (.4, -.55)
+    title_name = '(a) Amazon (power-law graph)'
+  elif ds == 'ogbn-papers100M':
+    legend_pos = (.35, .6)
+    title_pos = (.38, -.55)
+    title_name = '(b) OGB-Paper (non-power-law graph)'
+  plt.title(title_name, x=title_pos[0], y=title_pos[1], fontsize=9.5)
+  # ax1.set_title(title, x=.5, y=-.3, color=color, fontsize=14)
+  plt.legend(ncol=1, columnspacing=1.2, bbox_to_anchor=legend_pos, handletextpad=.3, labelspacing=.1, handlelength=.8)
+
   ############################
 
   # axes1 = plt.gca()
   # axes1.grid(True)  # add grid
 
-  plt.ylabel(ylabel) 
+  # plt.ylabel(ylabel) 
   plt.xlabel(xlabel) 
+
+  axes1 = plt.subplot(111) #figure1的子图1为ax1
 
   # Set the formatter
   # axes = plt.gca()   # get current axes
@@ -108,7 +127,7 @@ def plot_line(plot_params, X, Y, labels, xlabel, ylabel, xticks, yticks, xlim, y
   axes1.spines['top'].set_linewidth(myparams['lines.linewidth']);####设置上部坐标轴的粗细
   
   figpath = './line.pdf' if not figpath else figpath
-  plt.savefig(figpath, dpi=1000, bbox_inches='tight', format='pdf')#bbox_inches='tight'会裁掉多余的白边
+  plt.savefig(figpath, dpi=1000, bbox_inches='tight', pad_inches=0, format='pdf')#bbox_inches='tight'会裁掉多余的白边
   print(figpath, 'is plot.')
   plt.close()
 
@@ -149,13 +168,14 @@ def print_diff_cache_ratio(datasets, log_path):
 if __name__ == '__main__':
 
   myparams={
-    'axes.labelsize': '11',
-    'xtick.labelsize':'11',
-    'ytick.labelsize':'11',
+    'axes.labelsize': '9',
+    'xtick.labelsize':'9',
+    'ytick.labelsize':'9',
     'lines.linewidth': 1,
     # 'legend.fontsize': '14.7',
-    'legend.fontsize': '11',
-    'figure.figsize' : '3, 2.5',
+    'legend.fontsize': '9',
+    # 'figure.figsize' : '3, 2.5',
+    'figure.figsize' : '2.1, 1.35',
     # 'legend.loc': 'upper center', #[]"upper right", "upper left"]
     'legend.loc': 'best', #[]"upper right", "upper left"]
     'legend.frameon': False,
@@ -174,8 +194,8 @@ if __name__ == '__main__':
   datasets = ['hollywood-2011']
   datasets = ['rmat']
   datasets = ['ogbn-arxiv', 'ogbn-papers100M']
+  datasets = ['reddit','lj-large', 'livejournal', 'lj-links', 'enwiki-links', 'ogbn-arxiv', 'ogbn-products', 'hollywood-2011', 'ogbn-papers100M', 'amazon']
   datasets = ['amazon', 'ogbn-papers100M']
-  datasets = ['reddit','lj-large', 'livejournal', 'lj-links', 'enwiki-links', 'ogbn-arxiv', 'ogbn-products', 'hollywood-2011', 'ogbn-papers100M']
 
 
   ret = print_diff_cache_ratio(datasets, './log')
@@ -210,13 +230,13 @@ if __name__ == '__main__':
     y_lim = (0, 100)
     # y_name = [f'{x*100:.0f}' for x in y_ticks]
     create_dir('./pdf')
-    pdf_file = f'./pdf/{ds}.pdf'
+    pdf_file = f'./pdf/cache-{ds}.pdf'
 
     xlabel = 'Cache Ratio (%)'
     ylabel = 'Cache Hit Ratio (%)'
     # print(X)
     # print(Y)
-    plot_line(myparams, X, Y, labels, xlabel, ylabel, x_ticks, y_ticks, (x_ticks[0], x_ticks[-1]), y_lim, pdf_file)
+    plot_line(myparams, X, Y, ds, labels, xlabel, ylabel, x_ticks, y_ticks, (x_ticks[0], x_ticks[-1]), y_lim, pdf_file)
 
     create_dir('./cache_txt')
     for i, (x,y) in enumerate(zip(X,Y)):

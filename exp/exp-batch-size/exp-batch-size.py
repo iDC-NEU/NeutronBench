@@ -137,8 +137,8 @@ if __name__ == '__main__':
         'ogbn-products': 300,
     }
 
-    datasets = ['reddit', 'ogbn-products']
-
+    # datasets = ['reddit', 'ogbn-products']
+    datasets = []
     # exp2(datasets, batch_sizes, run_times, '../log/batch-size-nts-old-adam', 0.001)
     exp2(datasets, batch_sizes, run_times, './log', 0.001)
     
