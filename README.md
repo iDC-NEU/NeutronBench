@@ -1,15 +1,4 @@
-<div align=center><img src="./logo/NeutronBench.png" width="500" height=“200”></div>
-
-<p align="center">
-    A GNN system evaluation framework.
-</p>
-
-
-
-
 **[NeutronBench](https://github.com/iDC-NEU/NeutronBench)** is a `GNN system evaluation framework` built on [NeutronStar](https://github.com/iDC-NEU/NeutronStarLite). 
-
-
 
 
 
@@ -45,7 +34,7 @@ To build:
 ```shell
 mkdir build && cd build
 cmake ..
-make -j4
+make -j 10
 ```
 
 
@@ -53,8 +42,8 @@ To run:
 
 
 ```bash
-# a example
-./run_nts.sh 1 gcn_sample_cache.cfg 
+# This is an example (you need to prepare a data, refer to the dataset section below).
+./run_nts.sh 1 gcn_sample_demo.cfg 
 ```
 
 
@@ -79,9 +68,16 @@ All datasets we used:
 we provide a python script to generate the data files:
 
 ```bash
+# craete a python enviroments
+conda create -n neutronbench python=3.9 -y
+conda activate neutronbench
+
+# instll python dependencies
+pip install -r ./data/requirements.txt
+
+# process the dataset
 python ./data/generate_nts_dataset.py --dataset ogbn-arxiv
 ```
-
 
 
 

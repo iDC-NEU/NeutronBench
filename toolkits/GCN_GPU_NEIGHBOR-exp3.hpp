@@ -517,6 +517,9 @@ class GCN_GPU_NEIGHBOR_EXP3_impl {
     } else if (graph->config->cache_policy == "random") {  // default cache high degree
       LOG_DEBUG("cache_random_node");
       cache_random_node(cache_node_idx_seq);
+    } else{
+      LOG_INFO("not support cache_policy!");
+      exit(-1);
     }
     gater_cpu_cache_feature_and_trans_to_gpu();
   }
