@@ -43,7 +43,7 @@ To run:
 
 ```bash
 # This is an example (you need to prepare a data, refer to the dataset section below).
-./run_nts.sh 1 gcn_sample_demo.cfg 
+./run_nts.sh 1 ./cfgs/gcn_sample_demo.cfg 
 ```
 
 
