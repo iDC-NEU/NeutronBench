@@ -84,13 +84,14 @@ def metis_partition(rowptr, col, node_weights, edge_weights, nodew_dim=1, num_pa
 # metis partition
 # TODO(sanzo): 1d,2d,3d,4d
 @show_time
-def metis_partition_graph(dataset, num_parts, rowptr, col, train_mask, val_mask, test_mask, node_weight_dim=1):
+def metis_partition_graph(dataset, num_parts, rowptr, col, train_mask, val_mask, test_mask, node_weight_dim=1, save_dir='./partition_result'):
+    assert os.path.exists(save_dir), f'save_dir: {save_dir} not exist!'
     print("\n######## metis_partition_graph #########")
+    save_path = f'{save_dir}/metis-{dataset}-dim{node_weight_dim}-part{num_parts}.pt'
 
-    save_metis_partition_result = f'/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/metis-{dataset}-dim{node_weight_dim}-part{num_parts}.pt'
-    if os.path.exists(save_metis_partition_result):
-        print(f'read from partition result {save_metis_partition_result}.')
-        parts = torch.load(save_metis_partition_result)
+    if os.path.exists(save_path):
+        print(f'read from partition result {save_path}.')
+        parts = torch.load(save_path)
     else:
         edge_weights = torch.ones_like(col, dtype=torch.long, memory_format=torch.legacy_contiguous_format).share_memory_()
         if node_weight_dim == 4:
@@ -112,6 +113,6 @@ def metis_partition_graph(dataset, num_parts, rowptr, col, train_mask, val_mask,
         node_weight_dim = len(node_weights) // len(train_mask)
         print('node_weight_dim', node_weight_dim)
         parts = metis_partition(rowptr, col, node_weights, edge_weights, nodew_dim=node_weight_dim, num_parts=num_parts)
-        torch.save(parts, save_metis_partition_result)
-        print(f'save partition result to {save_metis_partition_result}.')
+        torch.save(parts, save_path)
+        print(f'save partition result to {save_path}.')
     return parts

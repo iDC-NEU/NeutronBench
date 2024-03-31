@@ -1,18 +1,11 @@
 #!/bin/bash  
-
 g++ -std=c++14 -pthread  bytegnn_partition.cpp  -o bytegnn
 
+dataset_list=('ogbn-arxiv' 'ogbn-products' 'reddit' 'amazon')
 
-dataset_list=('cora' 'ogbn-arxiv' 'ogbn-products' 'reddit')
+data_dir=~/NeutronBench/data
 
 for dataset in ${dataset_list[*]}
 do  
-  ./bytegnn ~/neutron-sanzo/data/$dataset $dataset  4 2 ./partition_result/bytegnn
+  ./bytegnn $data_dir/$dataset $dataset  4 2 ./partition_result
 done
-
-
-
-# ./bytegnn ~/neutron-sanzo/data/cora cora  4 2 ./partition_result/bytegnn
-# ./bytegnn ~/neutron-sanzo/data/ogbn-arxiv ogbn-arxiv  4 2 ./partition_result/bytegnn
-# ./bytegnn ~/neutron-sanzo/data/cora cora  4 2 ./partition_result/bytegnn
-# ./bytegnn ~/neutron-sanzo/data/cora cora  4 2 ./partition_result/bytegnn

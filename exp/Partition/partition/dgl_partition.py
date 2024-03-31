@@ -56,11 +56,12 @@ def get_homogeneous(g, balance_ntypes):
 
 
 @show_time
-def dgl_partition_graph(dataset, num_parts, graph, train_mask, val_mask, test_mask):
-    save_dgl_parts = f'/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/dgl-{dataset}-part{num_parts}.pt'
-    if os.path.exists(save_dgl_parts):
-        print(f'read from partition result {save_dgl_parts}.')
-        parts = torch.load(save_dgl_parts)
+def dgl_partition_graph(dataset, num_parts, graph, train_mask, val_mask, test_mask, save_dir='./partition_result'):
+    assert os.path.exists(save_dir), f'save_dir {save_dir} not exist!'
+    save_path = f'{save_dir}/dgl-{dataset}-part{num_parts}.pt'
+    if os.path.exists(save_path):
+        print(f'read from partition result {save_path}.')
+        parts = torch.load(save_path)
     else:
         sim_g, balance_ntypes = get_homogeneous(graph, train_mask)
         parts = dgl.metis_partition_assignment(
@@ -70,10 +71,9 @@ def dgl_partition_graph(dataset, num_parts, graph, train_mask, val_mask, test_ma
             balance_edges=True,
             objtype="cut",
         )
-        torch.save(parts, save_dgl_parts)
-        print(f'save partition result to {save_dgl_parts}.')
+        torch.save(parts, save_path)
+        print(f'save partition result to {save_path}.')
     return parts
-
 
 
 if __name__ == '__main__':

@@ -126,25 +126,25 @@ def pagraph_partition(num_parts, hops, rowptr, col, train_mask):
 
 
 @show_time
-def pagraph_partition_graph(dataset, num_parts, num_hops, graph, rowptr, col, train_mask, val_mask, test_mask):
+def pagraph_partition_graph(dataset, num_parts, num_hops, graph, rowptr, col, train_mask, val_mask, test_mask, save_dir='./partition_result'):
     print("\n######## pagraph_partition_graph #########")
+    assert os.path.exists(save_dir), f'save_dir: {save_dir} not exist!'
     print("num_parts {} num_hops {} ".format(num_parts, num_hops))
-
-    save_partition_nodes = f'/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/pagraph-{dataset}-part{num_parts}.pt'
-    save_partition_train_nodes = f'/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result/pagraph-{dataset}-train-part{num_parts}.pt'
-    # if False and os.path.exists(save_partition_nodes) and os.path.exists(save_partition_train_nodes):
-    if os.path.exists(save_partition_nodes) and os.path.exists(save_partition_train_nodes):
-        print(f'read from partition result {save_partition_nodes} and {save_partition_train_nodes}.')
-        partition_nodes = torch.load(save_partition_nodes)
-        partition_train_nodes = torch.load(save_partition_train_nodes)
+    save_node_path = f'{save_dir}/pagraph-{dataset}-part{num_parts}.pt'
+    save_train_node_path = f'{save_dir}/pagraph-{dataset}-train-part{num_parts}.pt'
+    # if False and os.path.exists(save_node_path) and os.path.exists(save_train_node_path):
+    if os.path.exists(save_node_path) and os.path.exists(save_train_node_path):
+        print(f'read from partition result {save_node_path} and {save_train_node_path}.')
+        partition_nodes = torch.load(save_node_path)
+        partition_train_nodes = torch.load(save_train_node_path)
     else:
         partition_nodes, partition_train_nodes = pagraph_partition(num_parts, num_hops, rowptr, col, train_mask)
         # print(partition_nodes, len(partition_nodes))
         partition_nodes = [torch.from_numpy(_) for _ in partition_nodes]
         partition_train_nodes = [torch.from_numpy(_) for _ in partition_train_nodes]
-        torch.save(partition_nodes, save_partition_nodes)
-        torch.save(partition_train_nodes, save_partition_train_nodes)
-        print(f'save partition result to {save_partition_nodes} and {save_partition_train_nodes}.')
+        torch.save(partition_nodes, save_node_path)
+        torch.save(partition_train_nodes, save_train_node_path)
+        print(f'save partition result to {save_node_path} and {save_train_node_path}.')
 
     return partition_nodes, partition_train_nodes
 

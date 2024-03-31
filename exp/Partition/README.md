@@ -32,12 +32,3 @@ cd torch-metis
 python setup.py install
 cd ..
 ```
-
-
-## run
-
-```bash
-cd partition
-python main.py --dataset ogbn-arxiv --num_parts 4 --fanout 10 25 --batch_size 6000
-
-```

@@ -37,7 +37,7 @@ int read_edgelist(std::string input_dir, std::string dataname, std::vector<std::
   }
   inFile.close();
   assert(min_node_id == 0);
-  std::cout << "read " << count << " edges " << max_node_id + 1 << " nodes" << std::endl;
+  std::cout << "read " << max_node_id + 1 << " nodes, " << count << " edges." << std::endl;
   return max_node_id + 1;
 }
 
@@ -68,7 +68,7 @@ void read_mask(std::string input_dir, std::string dataname, std::vector<int> &no
   }
 
   inFile.close();
-  std::cout << "read " << count << " line " << std::endl;;
+  std::cout << "read " << count << " line from mask file." << std::endl;;
   return;
 }
 
@@ -130,43 +130,39 @@ void do_bfs(int start_offset, int end_offset, std::vector<int>& all_nids, std::v
 }
 
 
-void do_bfs1(int start_offset, int end_offset) {
-  for (int i = start_offset; i < end_offset; ++i) {
-  }
-}
 
-auto bfs(int start_node, std::vector<std::vector<int>>& inG, int hop) {
-  std::vector<std::pair<int,uint64_t>> timestamp;
-  timestamp.push_back({start_node, 0});
-  std::vector<int> layer_nodes;
-  layer_nodes.push_back(start_node);
-  // std::unorder_set<int> visit;
-  uint64_t start_time = time(nullptr);
+// auto bfs(int start_node, std::vector<std::vector<int>>& inG, int hop) {
+//   std::vector<std::pair<int,uint64_t>> timestamp;
+//   timestamp.push_back({start_node, 0});
+//   std::vector<int> layer_nodes;
+//   layer_nodes.push_back(start_node);
+//   // std::unorder_set<int> visit;
+//   uint64_t start_time = time(nullptr);
 
 
-  int max_node_id = start_node;
-  for (int i = 0; i < hop; ++i) {
-    std::unordered_set<int> curr_layer;
-    for (auto &u : layer_nodes) {
-      curr_layer.insert(inG[u].begin(), inG[u].end());
-      for (auto &v : inG[u]) {
-        max_node_id = std::max(max_node_id, v);
-        timestamp.push_back({v, time(nullptr) - start_time});
-        // if (timestamp.back().second == 0) {
-        //   std::cout << "zero" << std::endl;
-        // }
-      }
-    }
-    layer_nodes.clear();
-    std::copy(curr_layer.begin(), curr_layer.end(), std::back_inserter(layer_nodes));
-  }
+//   int max_node_id = start_node;
+//   for (int i = 0; i < hop; ++i) {
+//     std::unordered_set<int> curr_layer;
+//     for (auto &u : layer_nodes) {
+//       curr_layer.insert(inG[u].begin(), inG[u].end());
+//       for (auto &v : inG[u]) {
+//         max_node_id = std::max(max_node_id, v);
+//         timestamp.push_back({v, time(nullptr) - start_time});
+//         // if (timestamp.back().second == 0) {
+//         //   std::cout << "zero" << std::endl;
+//         // }
+//       }
+//     }
+//     layer_nodes.clear();
+//     std::copy(curr_layer.begin(), curr_layer.end(), std::back_inserter(layer_nodes));
+//   }
 
-  // std::vector<uint64_t> unique_timestamp(max_node_id, UINT_MAX);
-  // for (auto& p : timestamp) {
-  //   unique_timestamp[p->first] = std::min(unique_timestamp[p->first], p->second);
-  // }
-  return std::move(timestamp);
-}  
+//   // std::vector<uint64_t> unique_timestamp(max_node_id, UINT_MAX);
+//   // for (auto& p : timestamp) {
+//   //   unique_timestamp[p->first] = std::min(unique_timestamp[p->first], p->second);
+//   // }
+//   return std::move(timestamp);
+// }  
 
 
 
@@ -204,7 +200,6 @@ std::vector<int> mark_nodes(std::vector<int>& all_nids, int num_nodes, int num_m
     int end_offset = i == num_thread - 1 ? num_mask : num_mask / num_thread * (i + 1);
     // do_bfs(start_offset, end_offset, all_nids, inG, 2, all_pair);
     thread_vec.push_back(std::thread(do_bfs, start_offset, end_offset, std::ref(all_nids), std::ref(inG), num_hops, std::ref(all_pair)));
-    // thread_vec.push_back(std::thread(do_bfs1, start_offset, end_offset));
   }
   std::cout << "thread create done!" << std::endl;
 
@@ -446,9 +441,7 @@ int main(int argc, char **argv) {
   assert(test_assign_nodes == all_active_nodes);
   ////////////////////
 
-
   // save partiton result
-  // std::string save_partition_result = "~/neutron-sanzo/exp/Partition/partition/partition_result/bytegnn/" + dataname + "-parts.txt";
   std::string save_partition_result = out_dir + "/bytegnn-" + dataname + "-part" + std::to_string(num_parts) + ".txt";
   std::ofstream outFile(save_partition_result, std::ios::out);
   if (!outFile.is_open()) {
