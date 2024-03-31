@@ -115,7 +115,7 @@ class GCN_GPU_NEIGHBOR_CACHE_DGL_EXP_impl {
   ~GCN_GPU_NEIGHBOR_CACHE_DGL_EXP_impl() { delete active; }
 
   GCN_GPU_NEIGHBOR_CACHE_DGL_EXP_impl(Graph<Empty>* graph_, int iterations_, bool process_local = false,
-                             bool process_overlap = false) {
+                                      bool process_overlap = false) {
     graph = graph_;
     iterations = iterations_;
 
@@ -220,12 +220,12 @@ class GCN_GPU_NEIGHBOR_CACHE_DGL_EXP_impl {
   }
 
   void mark_cache_node(const std::vector<int>& cache_nodes) {
-    #pragma omp parallel for num_threads(threads)
+#pragma omp parallel for num_threads(threads)
     for (int i = 0; i < graph->vertices; ++i) {
       cache_node_hashmap[i] = -1;
     }
 
-    #pragma omp parallel for num_threads(threads)
+#pragma omp parallel for num_threads(threads)
     for (int i = 0; i < graph->vertices; ++i) {
       assert(cache_node_hashmap[i] == -1);
     }
@@ -248,8 +248,6 @@ class GCN_GPU_NEIGHBOR_CACHE_DGL_EXP_impl {
       assert(graph->out_degree_for_backward[node_idx[i]] <= graph->out_degree_for_backward[node_idx[i - 1]]);
     }
     // mark_cache_node(node_idx);
-
-    
   }
 
   void cache_random_node(std::vector<int>& node_idx) {
@@ -283,12 +281,6 @@ class GCN_GPU_NEIGHBOR_CACHE_DGL_EXP_impl {
     // }
     // mark_cache_node(node_idx);
   }
-
-  
-
-
-
-
 
   // pre train some epochs to get idle memory of GPU when training
   double get_gpu_idle_mem() {
@@ -511,10 +503,6 @@ class GCN_GPU_NEIGHBOR_CACHE_DGL_EXP_impl {
     }
   }
 
-    
-
-
-  
   void init_active() {
     active = graph->alloc_vertex_subset();
     active->fill();
@@ -547,7 +535,6 @@ class GCN_GPU_NEIGHBOR_CACHE_DGL_EXP_impl {
   }
 
   void init_nn() {
-
     learn_rate = graph->config->learn_rate;
     weight_decay = graph->config->weight_decay;
     drop_rate = graph->config->drop_rate;
@@ -985,11 +972,11 @@ class GCN_GPU_NEIGHBOR_CACHE_DGL_EXP_impl {
     printf("dataset_name %s", graph->config->dataset_name.c_str());
     for (auto x : ret) {
       printf(" %.3f", x);
-    } printf("\n");
+    }
+    printf("\n");
     assert(sampler->work_offset == sampler->work_range[1]);
     sampler->restart();
   }
-
 
   // std::pair<int,int>
   float cnt_suit_explicit_block(SampledSubgraph* ssg, VertexId* cache_node_hashmap = nullptr) {
@@ -1049,8 +1036,8 @@ class GCN_GPU_NEIGHBOR_CACHE_DGL_EXP_impl {
       if (v.first > 0) rate_all += v.second;
     }
     float rate_trans = rate_cnt > 0 ? rate_cnt * 1.0 / rate_all : 0;
-    LOG_DEBUG("nodes_in_one_block %d threshold %d (%.2f), suit_explicit_trans_rate %.2f (%d/%d)", node_num_block, threshold_node_num_block, graph->config->threshold_trans,rate_trans,
-              rate_cnt, rate_all);
+    LOG_DEBUG("nodes_in_one_block %d threshold %d (%.2f), suit_explicit_trans_rate %.2f (%d/%d)", node_num_block,
+              threshold_node_num_block, graph->config->threshold_trans, rate_trans, rate_cnt, rate_all);
     // return {rate_cnt, rate_all};
     return rate_trans;
   }
@@ -1074,9 +1061,8 @@ class GCN_GPU_NEIGHBOR_CACHE_DGL_EXP_impl {
       gcn_cache_hit_rate += epoch_cache_hit_rate;
     }
     epoch_run_time += get_time();
-    LOG_INFO(
-        "Epoch %03d epoch_time %.3lf cache_rate %.3f cache_hit_rate %.3f",
-        graph->rtminfo->epoch, epoch_run_time, graph->config->cache_rate, epoch_cache_hit_rate);
+    LOG_INFO("Epoch %03d epoch_time %.3lf cache_rate %.3f cache_hit_rate %.3f", graph->rtminfo->epoch, epoch_run_time,
+             graph->config->cache_rate, epoch_cache_hit_rate);
     return acc;
   }
 
@@ -1139,12 +1125,14 @@ class GCN_GPU_NEIGHBOR_CACHE_DGL_EXP_impl {
         float train_loss = loss_epoch;
       }
 
-
       gcn_cache_hit_rate /= (graph->config->epochs - graph->config->time_skip);
       get_gpu_mem(used_gpu_mem, total_gpu_mem);
-      LOG_DEBUG("dataset %s gcn_cache_num %d gcn_cache_rate %.3f gcn_cache_type %s batch_size %u gcn_cache_hit_rate %.3f gpu_used_memory %.3f",
-          graph->config->dataset_name.c_str(), cache_node_num, curr_cache_rate, graph->config->cache_type.c_str(), graph->config->batch_size, gcn_cache_hit_rate, used_gpu_mem);
+      LOG_DEBUG(
+          "dataset %s gcn_cache_num %d gcn_cache_rate %.3f gcn_cache_type %s batch_size %u gcn_cache_hit_rate %.3f "
+          "gpu_used_memory %.3f",
+          graph->config->dataset_name.c_str(), cache_node_num, curr_cache_rate, graph->config->cache_type.c_str(),
+          graph->config->batch_size, gcn_cache_hit_rate, used_gpu_mem);
     }
     return 0;
   }
-}; 
+};

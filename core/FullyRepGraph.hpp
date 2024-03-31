@@ -39,9 +39,9 @@ class SampledSubgraph {
     // LOG_DEBUG("SamplerSubgraph thraeds %d", threads);
     seeds = new unsigned[threads];
   }
-  
+
   void update_fanout(const std::vector<int> fanout_) {
-    assert (fanout.size() == fanout_.size());
+    assert(fanout.size() == fanout_.size());
     for (int i = 0; i < fanout.size(); ++i) {
       fanout[i] = fanout_[i];
     }
@@ -49,18 +49,18 @@ class SampledSubgraph {
 
   void show_fanout(std::string info) {
     std::cout << info << " ";
-    for (auto& it : fanout) {
+    for (auto &it : fanout) {
       printf("%d, ", it);
     }
     printf("\n");
   }
 
   void update_fanout(int nums) {
-    for (auto& it : fanout) {
+    for (auto &it : fanout) {
       it = nums;
     }
   }
-  
+
   SampledSubgraph(int layers_, int batch_size_, const std::vector<int> &fanout_) {
     layers = layers_;
     batch_size = batch_size_;
@@ -126,7 +126,7 @@ class SampledSubgraph {
   }
 
   void compute_weight(Graph<Empty> *graph) {
-  // std::pair<double, double> compute_weight(Graph<Empty> *graph) {
+    // std::pair<double, double> compute_weight(Graph<Empty> *graph) {
     // double update_degree_time = 0;
     // double compute_weight_time = 0;
     for (size_t i = 0; i < layers; ++i) {
@@ -227,8 +227,8 @@ class SampledSubgraph {
     // omp_set_num_threads(threads);f
     // LOG_DEBUG("thrads %d", threads);
     // LOG_DEBUG("processing %d %d layer %d, fanout %d", 0, curr_dst_size, curr_layer, fanout[curr_layer]);
-// #pragma omp parallel for num_threads(threads)
-omp_set_num_threads(threads);
+    // #pragma omp parallel for num_threads(threads)
+    omp_set_num_threads(threads);
 #pragma omp parallel for num_threads(threads)
     for (VertexId begin_v_i = 0; begin_v_i < curr_dst_size; begin_v_i += 1) {
       // for every vertex, apply the sparse_slot at the partition
@@ -250,12 +250,11 @@ omp_set_num_threads(threads);
   //     curr_layer++;
   // }
 
-  void sample_postprocessing(Bitmap *bits, int layer, VertexId* node_idx) {
+  void sample_postprocessing(Bitmap *bits, int layer, VertexId *node_idx) {
     sampled_sgs[layer]->postprocessing(bits, node_idx);
     curr_dst_size = sampled_sgs[layer]->src_size;
     // curr_layer++;
   }
-
 
   // void add_pre_layer_edges() {
   //   std::cout << "layers " << layers << std::endl;
@@ -290,25 +289,24 @@ omp_set_num_threads(threads);
   //     for (int i = 0; i < curr_src_size; ++i) {
   //       src_idx[curr_source[i]] - i;
   //     }
-      
 
   //     std::vector<VertexId> curr_row_offset(curr_dst_size + 1, 0);
   //     std::vector<VertexId> curr_row_indices;  // local id
 
-      
   //     std::unordered_map<VertexId, std::unordered_set<VertexId>> count_offset;
   //     // add pre layer edges
   //     for (int i = 0; i < pre_layer->dst().size(); ++i) {
   //       // std::cout << i << " " << pre_layer->c_o(i) <<  " " << pre_layer->c_o(i + 1) << std::endl;
   //       for (int j = pre_layer->c_o(i); j < pre_layer->c_o(i + 1); ++j) {
   //         // if (j >= pre_layer->src_size) {
-  //         //   std::cout << pre_layer->src_size << " " << i << " " << pre_layer->dst(i) << " " << j << " " << pre_layer->c_o(i) << " " << pre_layer->c_o(i + 1) << std::endl;
+  //         //   std::cout << pre_layer->src_size << " " << i << " " << pre_layer->dst(i) << " " << j << " " <<
+  //         pre_layer->c_o(i) << " " << pre_layer->c_o(i + 1) << std::endl;
   //         // }
   //         count_offset[pre_layer->dst(i)].insert(pre_layer->src(pre_layer->r_i(j)));
   //       }
   //     }
   //     std::cout << "add pre done" << std::endl;
-      
+
   //     // add curr layer edges
   //     for (int i = 0; i < curr_layer->dst().size(); ++i) {
   //       for (int j = curr_layer->c_o(i); j < curr_layer->c_o(i + 1); ++j) {
@@ -354,7 +352,6 @@ omp_set_num_threads(threads);
   //   }
   //   // exit(0);
 
-
   //   for (int i = 0; i < layers; ++i) {
   //     std::cout << "layer " << i << std::endl;
   //     auto one_layer = sampled_sgs[i];
@@ -363,7 +360,7 @@ omp_set_num_threads(threads);
   //     std::cout << dst_size << " " << src_size << std::endl;
   //     std::cout << one_layer->c_o().size() << " " << one_layer->r_i().size() << std::endl;
   //   }
-    
+
   // }
 
   void compute_one_layer(
@@ -373,8 +370,8 @@ omp_set_num_threads(threads);
     //                 VertexId* column_offset, VertexId* row_indices)>sparse_slot,VertexId layer){
 
     // omp_set_num_threads(threads);
-// #pragma omp parallel for num_threads(threads)
-omp_set_num_threads(threads);
+    // #pragma omp parallel for num_threads(threads)
+    omp_set_num_threads(threads);
 #pragma omp parallel for num_threads(threads)
     for (VertexId begin_v_i = 0; begin_v_i < sampled_sgs[layer]->v_size; begin_v_i += 1) {
       sparse_slot(begin_v_i, sampled_sgs[layer]->c_o().data(), sampled_sgs[layer]->r_i().data());
@@ -388,8 +385,8 @@ omp_set_num_threads(threads);
     //                     VertexId* column_offset, VertexId* row_indices)>sparse_slot,VertexId layer){
     // LOG_DEBUG("start backward");
     // omp_set_num_threads(threads);
-// #pragma omp parallel for num_threads(threads)
-omp_set_num_threads(threads);
+    // #pragma omp parallel for num_threads(threads)
+    omp_set_num_threads(threads);
 #pragma omp parallel for num_threads(threads)
     for (VertexId begin_v_i = 0; begin_v_i < sampled_sgs[layer]->src_size; begin_v_i += 1) {
       sparse_slot(begin_v_i, sampled_sgs[layer]->r_o().data(), sampled_sgs[layer]->c_i().data());
@@ -467,9 +464,9 @@ class FullyRepGraph {
       int dst = sample_nids[i];
       int edges = column_offset_bak[dst + 1] - column_offset_bak[dst];
       column_offset[i + 1] = column_offset[i] + edges;
-// omp_set_num_threads(threads);
-// omp_set_num_threads(threads);
-//     #pragma omp parallel for num_threads(threads)
+      // omp_set_num_threads(threads);
+      // omp_set_num_threads(threads);
+      //     #pragma omp parallel for num_threads(threads)
 
       for (int j = column_offset[i]; j < column_offset[i + 1]; ++j) {
         row_indices[j] = row_indices_bak[column_offset_bak[dst] + j - column_offset[i]];

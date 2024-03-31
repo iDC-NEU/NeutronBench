@@ -302,22 +302,22 @@ void InputInfo::readFromCfgFile(std::string config_file) {
     } else if (0 == cfg_k.compare("CACHE_RATE_START")) {
       this->cache_rate_start = std::atof(cfg_v.c_str());
       assert(cache_rate_start >= 0);
-    }else if (0 == cfg_k.compare("CACHE_RATE_NUM")) {
+    } else if (0 == cfg_k.compare("CACHE_RATE_NUM")) {
       this->cache_rate_num = std::atof(cfg_v.c_str());
       assert(this->cache_rate_num > 0);
     } else if (0 == cfg_k.compare("TRANS_THRESHOLD_NUM")) {
       this->trans_threshold_num = std::atoi(cfg_v.c_str());
       assert(this->trans_threshold_num > 0);
-    }else if (0 == cfg_k.compare("TRANS_THRESHOLD_START")) {
+    } else if (0 == cfg_k.compare("TRANS_THRESHOLD_START")) {
       this->trans_threshold_start = std::atof(cfg_v.c_str());
       assert(this->trans_threshold_start >= 0);
-    }else if (0 == cfg_k.compare("BLOCK_SIZE")) {
+    } else if (0 == cfg_k.compare("BLOCK_SIZE")) {
       this->block_size = std::atoi(cfg_v.c_str());
       assert(this->block_size > 0);
-    }else if (0 == cfg_k.compare("TRANS_THRESHOLD_END")) {
+    } else if (0 == cfg_k.compare("TRANS_THRESHOLD_END")) {
       this->trans_threshold_end = std::atof(cfg_v.c_str());
       assert(trans_threshold_end >= 0 && trans_threshold_end <= 1 && trans_threshold_start < trans_threshold_end);
-    }else if (0 == cfg_k.compare("CACHE_EXP")) {
+    } else if (0 == cfg_k.compare("CACHE_EXP")) {
       this->cache_exp = std::atoi(cfg_v.c_str());
     } else if (0 == cfg_k.compare("BATCH_SWITCH_TIME")) {
       this->batch_switch_time = std::atof(cfg_v.c_str());
@@ -325,10 +325,10 @@ void InputInfo::readFromCfgFile(std::string config_file) {
     } else if (0 == cfg_k.compare("THREADS")) {
       this->threads = std::atoi(cfg_v.c_str());
       // printf("batch_switch_time %.3f\n", batch_switch_time);
-    }  else if (0 == cfg_k.compare("PART_NUM")) {
+    } else if (0 == cfg_k.compare("PART_NUM")) {
       this->part_num = std::atoi(cfg_v.c_str());
       assert(part_num > 0);
-    }  else if (0 == cfg_k.compare("PART_DIM")) {
+    } else if (0 == cfg_k.compare("PART_DIM")) {
       this->part_dim = std::atoi(cfg_v.c_str());
       assert(part_dim > 0);
     } else if (0 == cfg_k.compare("PART_ALGO")) {
@@ -480,8 +480,6 @@ void InputInfo::print() {
   std::cout << "part_algo\t:\t" << part_algo << std::endl;
   std::cout << "part_dim\t:\t" << part_dim << std::endl;
   std::cout << "target_degree\t:\t" << target_degree << std::endl;
-  
-  
 
   std::cout << "------------------input info--------------" << std::endl;
 }

@@ -172,7 +172,7 @@ class sampCSC {
     //   outs[i] = 0;
     //   ins[i] = 0;
     // }
-    
+
     // int dst_size = v_size;
     // for (int i = 0; i < dst_size; ++i) {
     //   ins[destination[i]] += column_offset[i + 1] - column_offset[i];
@@ -251,25 +251,24 @@ class sampCSC {
     row_offset = std::vector<VertexId>(src_size + 1, 0);
     // assert(dst_size + 1 == column_offset.size());
 
-// omp_set_num_threads(threads);
-// #pragma omp parallel for num_threads(threads)
-//     for (int i = 0; i < src_size + 1; ++i) {
-//       assert(row_offset[i] == 0);
-//     }
+    // omp_set_num_threads(threads);
+    // #pragma omp parallel for num_threads(threads)
+    //     for (int i = 0; i < src_size + 1; ++i) {
+    //       assert(row_offset[i] == 0);
+    //     }
 
-//     for (int i = 0; i < dst_size; ++i) {
-//       // #pragma omp parallel for
-// // #pragma omp parallel for num_threads(4)
-//       for (int j = column_offset[i]; j < column_offset[i + 1]; ++j) {
-//         int local_src = row_indices[j];
-//         row_offset[local_src + 1]++;
-//       }
-//     }
+    //     for (int i = 0; i < dst_size; ++i) {
+    //       // #pragma omp parallel for
+    // // #pragma omp parallel for num_threads(4)
+    //       for (int j = column_offset[i]; j < column_offset[i + 1]; ++j) {
+    //         int local_src = row_indices[j];
+    //         row_offset[local_src + 1]++;
+    //       }
+    //     }
 
-
-// #pragma omp parallel for num_threads(threads)
-    for(VertexId i = 0; i < edge_size; i++){
-        row_offset[row_indices[i] + 1]++;
+    // #pragma omp parallel for num_threads(threads)
+    for (VertexId i = 0; i < edge_size; i++) {
+      row_offset[row_indices[i] + 1]++;
     }
 
     for (int i = 1; i <= src_size; ++i) {
@@ -291,7 +290,6 @@ class sampCSC {
     //   }
     // }
 
-
     for (int i = 0; i < dst_size; ++i) {
       for (int j = column_offset[i]; j < column_offset[i + 1]; ++j) {
         int local_src = row_indices[j];
@@ -303,7 +301,6 @@ class sampCSC {
       row_offset[i] = row_offset[i - 1];
     }
     row_offset[0] = 0;
-
 
     // LOG_DEBUG("afrt dome");
     // for (int i= 0; i < src_size; ++i) {
@@ -338,7 +335,6 @@ class sampCSC {
   //   }
   // }
 
-  
   void postprocessing(Bitmap* bits, VertexId* node_idx) {
     // std::unordered_set<int> st;
     // for (VertexId i = 0; i < e_size; ++i) {
@@ -354,8 +350,8 @@ class sampCSC {
     // if (!node_idx) {
     //   node_idx = new VertexId[all_node_num]{};
     // }
-// omp_set_num_threads(threads);
-// #pragma omp parallel for num_threads(threads)
+    // omp_set_num_threads(threads);
+    // #pragma omp parallel for num_threads(threads)
     // for (int i = 0; i < all_node_num; ++i) {
     //   node_idx[i] = -1;
     // }
@@ -374,50 +370,50 @@ class sampCSC {
     // }
 
     int length = WORD_OFFSET(all_node_num) + 1;
-    for(VertexId i_src=0;i_src<all_node_num;i_src+=64){
-        unsigned long word= bits->data[WORD_OFFSET(i_src)];
-        VertexId vtx=i_src;
-        VertexId offset=0;
-        while(word != 0){
-            if(word & 1){
-                // printf("#dst %d %d\n",vtx+offset, src_size);
-                //ssg->sampled_sgs[i]->src_index.insert(std::make_pair(vtx+offset, src_size));
-                // src_index_array[vtx+offset]=ssg->sampled_sgs[i]->src_size;
-                // ssg->sampled_sgs[i]->source.push_back(vtx+offset);
-                // ssg->sampled_sgs[i]->src_size++;
-                // source[src_size] = vtx + offset;
-                source.push_back(vtx + offset);
-                node_idx[vtx + offset] = src_size++;
-            }
-            offset++;
-            word = word >> 1;
+    for (VertexId i_src = 0; i_src < all_node_num; i_src += 64) {
+      unsigned long word = bits->data[WORD_OFFSET(i_src)];
+      VertexId vtx = i_src;
+      VertexId offset = 0;
+      while (word != 0) {
+        if (word & 1) {
+          // printf("#dst %d %d\n",vtx+offset, src_size);
+          // ssg->sampled_sgs[i]->src_index.insert(std::make_pair(vtx+offset, src_size));
+          // src_index_array[vtx+offset]=ssg->sampled_sgs[i]->src_size;
+          // ssg->sampled_sgs[i]->source.push_back(vtx+offset);
+          // ssg->sampled_sgs[i]->src_size++;
+          // source[src_size] = vtx + offset;
+          source.push_back(vtx + offset);
+          node_idx[vtx + offset] = src_size++;
         }
+        offset++;
+        word = word >> 1;
+      }
     }
     assert(src_size == source.size());
     /////////// check
-//     VertexId *temp = new VertexId[e_size];
-// #pragma omp parallel for
-//   for (int i = 0; i < e_size; ++i) {
-//     temp[i] = row_indices[i];
-//   }
+    //     VertexId *temp = new VertexId[e_size];
+    // #pragma omp parallel for
+    //   for (int i = 0; i < e_size; ++i) {
+    //     temp[i] = row_indices[i];
+    //   }
 
-//     method1 -= get_time();
-// #pragma omp parallel for
-//     // for (size_t i = 0; i < row_indices.size(); ++i) {
-//     for (VertexId i = 0; i < e_size; ++i) {
-//       int src = row_indices[i];
-//       assert(node_idx[src] != -1);
-//       row_indices[i] = node_idx[src];
-//       // row_indices[i] = node_idx[row_indices[i]];
-//     }
-//     method1 += get_time();
+    //     method1 -= get_time();
+    // #pragma omp parallel for
+    //     // for (size_t i = 0; i < row_indices.size(); ++i) {
+    //     for (VertexId i = 0; i < e_size; ++i) {
+    //       int src = row_indices[i];
+    //       assert(node_idx[src] != -1);
+    //       row_indices[i] = node_idx[src];
+    //       // row_indices[i] = node_idx[row_indices[i]];
+    //     }
+    //     method1 += get_time();
 
-// #pragma omp parallel for
-//   for (int i = 0; i < e_size; ++i) {
-//     row_indices[i] = temp[i];
-//   }
-// method2-= get_time();
-// for (size_t i = 0; i < row_indices.size(); ++i) {
+    // #pragma omp parallel for
+    //   for (int i = 0; i < e_size; ++i) {
+    //     row_indices[i] = temp[i];
+    //   }
+    // method2-= get_time();
+    // for (size_t i = 0; i < row_indices.size(); ++i) {
     omp_set_num_threads(threads);
 #pragma omp parallel for
     for (VertexId i = 0; i < e_size; ++i) {
@@ -821,7 +817,6 @@ class sampCSC {
   VertexId size_dev_ci, size_dev_ro, size_dev_ewb;
   VertexId size_dev_edge, size_dev_edge_max = 0;
   double method1, method2, method3;
-
 
   void copy_to(sampCSC* csc) {
     csc->threads = threads;

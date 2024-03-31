@@ -7,7 +7,7 @@ python exp-partition.py
 
 ## Accuracy and Convergence speed
 
-As described in Section 4, `Evaluating the System``, we use DistDGL as the experimental system for the accuracy and convergence speed experiments.
+As described in Section 4, `Evaluation System`, we use DistDGL as the experimental system for the accuracy and convergence speed experiments.
 
 
 first you need to partition the graph to prepare the distdgl training, for the detail reference to 

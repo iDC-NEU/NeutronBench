@@ -70,7 +70,6 @@ class GCN_GPU_NEIGHBOR_TRANS_EXP_impl {
   int epoch_cache_hit = 0;
   int epoch_all_node = 0;
   double debug_time = 0;
-  
 
   int threads;
   float* dev_cache_feature;
@@ -115,7 +114,7 @@ class GCN_GPU_NEIGHBOR_TRANS_EXP_impl {
   ~GCN_GPU_NEIGHBOR_TRANS_EXP_impl() { delete active; }
 
   GCN_GPU_NEIGHBOR_TRANS_EXP_impl(Graph<Empty>* graph_, int iterations_, bool process_local = false,
-                             bool process_overlap = false) {
+                                  bool process_overlap = false) {
     graph = graph_;
     iterations = iterations_;
 
@@ -220,12 +219,12 @@ class GCN_GPU_NEIGHBOR_TRANS_EXP_impl {
   }
 
   void mark_cache_node(const std::vector<int>& cache_nodes) {
-    #pragma omp parallel for num_threads(threads)
+#pragma omp parallel for num_threads(threads)
     for (int i = 0; i < graph->vertices; ++i) {
       cache_node_hashmap[i] = -1;
     }
 
-    #pragma omp parallel for num_threads(threads)
+#pragma omp parallel for num_threads(threads)
     for (int i = 0; i < graph->vertices; ++i) {
       assert(cache_node_hashmap[i] == -1);
     }
@@ -249,8 +248,6 @@ class GCN_GPU_NEIGHBOR_TRANS_EXP_impl {
       assert(graph->out_degree_for_backward[node_idx[i]] <= graph->out_degree_for_backward[node_idx[i - 1]]);
     }
     // mark_cache_node(node_idx);
-
-    
   }
 
   void cache_random_node(std::vector<int>& node_idx) {
@@ -284,12 +281,6 @@ class GCN_GPU_NEIGHBOR_TRANS_EXP_impl {
     // }
     // mark_cache_node(node_idx);
   }
-
-  
-
-
-
-
 
   // pre train some epochs to get idle memory of GPU when training
   double get_gpu_idle_mem() {
@@ -512,10 +503,6 @@ class GCN_GPU_NEIGHBOR_TRANS_EXP_impl {
     }
   }
 
-    
-
-
-  
   void init_active() {
     active = graph->alloc_vertex_subset();
     active->fill();
@@ -548,7 +535,6 @@ class GCN_GPU_NEIGHBOR_TRANS_EXP_impl {
   }
 
   void init_nn() {
-
     learn_rate = graph->config->learn_rate;
     weight_decay = graph->config->weight_decay;
     drop_rate = graph->config->drop_rate;
@@ -942,42 +928,42 @@ class GCN_GPU_NEIGHBOR_TRANS_EXP_impl {
       auto ssg = sampler->subgraph;
       sampler->sample_one(ssg, graph->config->batch_type, ctx->is_train());
       // sampler->sample_one_with_dst(ssg, graph->config->batch_type, ctx->is_train());
-       if (graph->config->cache_type != "none") {
-          epoch_all_node += ssg->sampled_sgs[0]->src().size();
-          for (auto& it : ssg->sampled_sgs[0]->src()) {
-            if (cache_node_hashmap[it] != -1) {
-              epoch_cache_hit++;
-            }
+      if (graph->config->cache_type != "none") {
+        epoch_all_node += ssg->sampled_sgs[0]->src().size();
+        for (auto& it : ssg->sampled_sgs[0]->src()) {
+          if (cache_node_hashmap[it] != -1) {
+            epoch_cache_hit++;
           }
         }
+      }
 
-        float trans_threshold_start = graph->config->trans_threshold_start;
-        float trans_threshold_end = graph->config->trans_threshold_end;
-        float trans_threshold_num = graph->config->trans_threshold_num;
-        float trans_threshold_step = (trans_threshold_end - trans_threshold_start) / trans_threshold_num;
+      float trans_threshold_start = graph->config->trans_threshold_start;
+      float trans_threshold_end = graph->config->trans_threshold_end;
+      float trans_threshold_num = graph->config->trans_threshold_num;
+      float trans_threshold_step = (trans_threshold_end - trans_threshold_start) / trans_threshold_num;
 
-        std::unordered_map<int, int> freq;
-        freq.clear();
+      std::unordered_map<int, int> freq;
+      freq.clear();
+      if (graph->config->cache_type == "none") {
+        count_fre_hashmap(ssg, freq);
+      } else {
+        count_fre_hashmap(ssg, freq, cache_node_hashmap);
+      }
+
+      std::vector<std::pair<int, int>> all(freq.begin(), freq.end());
+      sort(all.begin(), all.end(), [&](auto& x, auto& y) { return x.first > y.first; });
+
+      for (int i = 0; i < trans_threshold_num + 1; ++i) {
+        float curr_threshold = trans_threshold_start + i * trans_threshold_step;
+        graph->config->threshold_trans = curr_threshold;
+        assert(curr_threshold >= 0 && curr_threshold <= 1);
+        assert(iterations == graph->config->epochs);
         if (graph->config->cache_type == "none") {
-          count_fre_hashmap(ssg, freq);
+          explicit_rate[i].push_back(count_trans_rate(all));
         } else {
-          count_fre_hashmap(ssg, freq, cache_node_hashmap);
+          explicit_rate[i].push_back(count_trans_rate(all));
         }
-
-        std::vector<std::pair<int, int>> all(freq.begin(), freq.end());
-        sort(all.begin(), all.end(), [&](auto& x, auto& y) { return x.first > y.first; });
-
-        for (int i = 0; i < trans_threshold_num + 1; ++i) {
-          float curr_threshold = trans_threshold_start + i * trans_threshold_step;
-          graph->config->threshold_trans = curr_threshold;
-          assert(curr_threshold >= 0 && curr_threshold <= 1);
-          assert(iterations == graph->config->epochs);
-          if (graph->config->cache_type == "none") {
-            explicit_rate[i].push_back(count_trans_rate(all));
-          } else {
-            explicit_rate[i].push_back(count_trans_rate(all));
-          }
-        }
+      }
     }
     assert(sampler->work_offset == sampler->work_range[1]);
     sampler->restart();
@@ -1001,14 +987,15 @@ class GCN_GPU_NEIGHBOR_TRANS_EXP_impl {
     printf("dataset_name %s", graph->config->dataset_name.c_str());
     for (auto x : ret) {
       printf(" %.3f", x);
-    } printf("\n");
+    }
+    printf("\n");
     assert(sampler->work_offset == sampler->work_range[1]);
     sampler->restart();
   }
 
-
   // std::pair<int,int>
-  void count_fre_hashmap(SampledSubgraph* ssg, std::unordered_map<int, int> &freq, VertexId* cache_node_hashmap = nullptr) {
+  void count_fre_hashmap(SampledSubgraph* ssg, std::unordered_map<int, int>& freq,
+                         VertexId* cache_node_hashmap = nullptr) {
     int node_num_block = graph->config->block_size * 1024 / 4 / graph->gnnctx->layer_size[0];
     // int threshold_node_num_block = node_num_block * graph->config->threshold_trans;
     auto csc_layer = ssg->sampled_sgs[0];
@@ -1049,13 +1036,12 @@ class GCN_GPU_NEIGHBOR_TRANS_EXP_impl {
     //////////////////////////////
   }
 
+  // // check sort is correct
+  // for (int i = 1; i < all.size(); ++i) {
+  //   assert(all[i - 1].first > all[i].first);
+  // }
 
-    // // check sort is correct
-    // for (int i = 1; i < all.size(); ++i) {
-    //   assert(all[i - 1].first > all[i].first);
-    // }
-
-float count_trans_rate(std::vector<std::pair<int, int>> &all) {
+  float count_trans_rate(std::vector<std::pair<int, int>>& all) {
     int node_num_block = graph->config->block_size * 1024 / 4 / graph->gnnctx->layer_size[0];
     int threshold_node_num_block = node_num_block * graph->config->threshold_trans;
     int rate_cnt = 0;
@@ -1068,7 +1054,8 @@ float count_trans_rate(std::vector<std::pair<int, int>> &all) {
       if (v.first > 0) rate_all += v.second;
     }
     float rate_trans = rate_cnt > 0 ? rate_cnt * 1.0 / rate_all : 0;
-    // LOG_DEBUG("nodes_in_one_block %d threshold %d (%.2f), suit_explicit_trans_rate %.2f (%d/%d)", node_num_block, threshold_node_num_block, graph->config->threshold_trans,rate_trans,
+    // LOG_DEBUG("nodes_in_one_block %d threshold %d (%.2f), suit_explicit_trans_rate %.2f (%d/%d)", node_num_block,
+    // threshold_node_num_block, graph->config->threshold_trans,rate_trans,
     //           rate_cnt, rate_all);
     // return {rate_cnt, rate_all};
     return rate_trans;
@@ -1089,7 +1076,8 @@ float count_trans_rate(std::vector<std::pair<int, int>> &all) {
       gcn_cache_hit_rate += epoch_cache_hit_rate;
     }
     epoch_run_time += get_time();
-    LOG_INFO("Epoch %03d epoch_time %.3lf cache_rate %.3f cache_hit_rate %.3f", graph->rtminfo->epoch, epoch_run_time, graph->config->cache_rate, epoch_cache_hit_rate);
+    LOG_INFO("Epoch %03d epoch_time %.3lf cache_rate %.3f cache_hit_rate %.3f", graph->rtminfo->epoch, epoch_run_time,
+             graph->config->cache_rate, epoch_cache_hit_rate);
     return acc;
   }
 
@@ -1135,27 +1123,25 @@ float count_trans_rate(std::vector<std::pair<int, int>> &all) {
     int trans_threshold_num = graph->config->trans_threshold_num;
     float trans_threshold_step = (trans_threshold_end - trans_threshold_start) / trans_threshold_num;
 
-
     vector<vector<float>> explicit_rate(trans_threshold_num + 1);
-      // std::vector<float> epoch_explicit_rate;
-      for (int i_i = 0; i_i < iterations; i_i++) {
-        graph->rtminfo->epoch = i_i;
-        ctx->train();
-        graph->rtminfo->forward = true;
-        double epoch_time = -get_time();
-        float train_acc = Forward(train_sampler, explicit_rate, 0);
-        epoch_time += get_time();
-      }
+    // std::vector<float> epoch_explicit_rate;
+    for (int i_i = 0; i_i < iterations; i_i++) {
+      graph->rtminfo->epoch = i_i;
+      ctx->train();
+      graph->rtminfo->forward = true;
+      double epoch_time = -get_time();
+      float train_acc = Forward(train_sampler, explicit_rate, 0);
+      epoch_time += get_time();
+    }
 
-      for (int i = 0; i < trans_threshold_num + 1; ++i) {
-        float threshhold_rate = trans_threshold_start  + i * trans_threshold_step;
-        LOG_DEBUG("epoch %03d, thrashold_rate %.3f suit explicit trans block rate %.3f(%.3f) (explicit_rate_num %d)", 
-                    i, threshhold_rate, get_mean(explicit_rate[i]), get_var(explicit_rate[i]), explicit_rate[i].size());
-      }
+    for (int i = 0; i < trans_threshold_num + 1; ++i) {
+      float threshhold_rate = trans_threshold_start + i * trans_threshold_step;
+      LOG_DEBUG("epoch %03d, thrashold_rate %.3f suit explicit trans block rate %.3f(%.3f) (explicit_rate_num %d)", i,
+                threshhold_rate, get_mean(explicit_rate[i]), get_var(explicit_rate[i]), explicit_rate[i].size());
+    }
 
-      gcn_cache_hit_rate /= (graph->config->epochs - graph->config->time_skip);
+    gcn_cache_hit_rate /= (graph->config->epochs - graph->config->time_skip);
 
-      
     return 0;
   }
 };

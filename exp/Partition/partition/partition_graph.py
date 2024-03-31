@@ -1,4 +1,3 @@
-
 import argparse
 import os
 import sys
@@ -23,8 +22,10 @@ from partition.hash_partition import hash_partition_graph
 import torch
 
 
-
-def bytegnn_partition_graph(dataset, num_parts, num_nodes, save_dir='./partition_result'):
+def bytegnn_partition_graph(dataset,
+                            num_parts,
+                            num_nodes,
+                            save_dir='./partition_result'):
     assert os.path.exists(save_dir), f'save_dir: {save_dir} not exist!'
     save_path = f'{save_dir}/bytegnn-{dataset}-part{num_parts}.txt'
 
@@ -42,10 +43,11 @@ def bytegnn_partition_graph(dataset, num_parts, num_nodes, save_dir='./partition
         for i in range(num_parts):
             parts[partition_nodes[i]] = i
     else:
-        print(f"bytegnn partition result not exist, please run ./bytegnn_partition.sh to generate it!")
+        print(
+            f"bytegnn partition result not exist, please run ./bytegnn_partition.sh to generate it!"
+        )
         assert False
     return parts
-
 
 
 if __name__ == "__main__":
@@ -56,23 +58,35 @@ if __name__ == "__main__":
         default="reddit",
         help="datasets: reddit, ogb-product, ogb-paper100M",
     )
-    argparser.add_argument(
-        "--num_parts", type=int, default=4, help="number of partitions"
-    )
+    argparser.add_argument("--num_parts",
+                           type=int,
+                           default=4,
+                           help="number of partitions")
 
-    argparser.add_argument(
-        "--num_hops", type=int, default=1, help="number of hops"
-    )
+    argparser.add_argument("--num_hops",
+                           type=int,
+                           default=1,
+                           help="number of hops")
 
-    argparser.add_argument(
-        "--mode", type=str, default=4, required=True
-    )
-    argparser.add_argument(
-        "--part_method", type=str, default="metis", help="the partition method"
-    )
-    argparser.add_argument("--self-loop", type=bool, default=True, help="insert self-loop (default=True)")
-    argparser.add_argument("--batch_size", help="batch size of gnn train", type=int, default=6000)
-    argparser.add_argument("--fanout", help="Training fanouts", type=int, default=[10, 25], nargs="*", required=False)
+    argparser.add_argument("--mode", type=str, default=4, required=True)
+    argparser.add_argument("--part_method",
+                           type=str,
+                           default="metis",
+                           help="the partition method")
+    argparser.add_argument("--self-loop",
+                           type=bool,
+                           default=True,
+                           help="insert self-loop (default=True)")
+    argparser.add_argument("--batch_size",
+                           help="batch size of gnn train",
+                           type=int,
+                           default=6000)
+    argparser.add_argument("--fanout",
+                           help="Training fanouts",
+                           type=int,
+                           default=[10, 25],
+                           nargs="*",
+                           required=False)
     argparser.add_argument("--dim", help="metis dims", type=int, default=None)
     argparser.add_argument(
         "--output",
@@ -82,7 +96,8 @@ if __name__ == "__main__":
     )
     args = argparser.parse_args()
 
-    edges_list, features, labels, train_mask, val_mask, test_mask, graph = extract_dataset(args)
+    edges_list, features, labels, train_mask, val_mask, test_mask, graph = extract_dataset(
+        args)
     # for key in graph.ndata:
     #     print(key)
     # print(graph.ndata['feature'].shape)
@@ -101,29 +116,39 @@ if __name__ == "__main__":
     indices = th.tensor([src_nodes, dst_nodes])
     rowptr, col, value = dglsp.spmatrix(indices).csc()
 
- 
     # parts = read_bytegnn_partition_result(args.dataset,node_nums)
     if args.mode == 'hash':
-        parts = hash_partition_graph(args.dataset,args.num_parts,node_nums)
+        parts = hash_partition_graph(args.dataset, args.num_parts, node_nums)
     elif args.mode == 'metis':
         assert args.dim, 'you should specify the dim!'
         if args.dim == 2:
-            parts = dgl_partition_graph(args.dataset, args.num_parts, graph, train_mask, val_mask, test_mask)
+            parts = dgl_partition_graph(args.dataset, args.num_parts, graph,
+                                        train_mask, val_mask, test_mask)
         else:
-            parts = metis_partition_graph(args.dataset, args.num_parts, rowptr, col, train_mask, val_mask, test_mask, node_weight_dim=args.dim)
+            parts = metis_partition_graph(args.dataset,
+                                          args.num_parts,
+                                          rowptr,
+                                          col,
+                                          train_mask,
+                                          val_mask,
+                                          test_mask,
+                                          node_weight_dim=args.dim)
     elif args.mode == 'bytegnn':
-        parts = bytegnn_partition_graph(args.dataset, args.num_parts, node_nums)
+        parts = bytegnn_partition_graph(args.dataset, args.num_parts,
+                                        node_nums)
     elif args.mode == 'pagraph':
-        partition_nodes, partition_train_nodes = pagraph_partition_graph(args.dataset,args.num_parts,1,graph,rowptr, col, train_mask, val_mask,test_mask)
+        partition_nodes, partition_train_nodes = pagraph_partition_graph(
+            args.dataset, args.num_parts, 1, graph, rowptr, col, train_mask,
+            val_mask, test_mask)
         parts = th.ones(node_nums, dtype=th.int64) * -1
         for i, nid in enumerate(partition_train_nodes):
             parts[nid] = i
         neg = th.where(parts == -1)[0].tolist()
         random.shuffle(neg)
         neg = th.tensor(neg)
-        step = (len(neg) + args.num_parts - 1) // args.num_parts 
+        step = (len(neg) + args.num_parts - 1) // args.num_parts
         for i in range(args.num_parts):
-            parts[neg[i*step : min((i+1)*step, len(neg))]] = i
+            parts[neg[i * step:min((i + 1) * step, len(neg))]] = i
         # assert False
     else:
         assert False
@@ -132,12 +157,11 @@ if __name__ == "__main__":
     if args.mode == 'pagraph':
         num_hops = 2
 
-
     mypartition_graph(
-            graph,
-            args.dataset,
-            args.num_parts,
-            args.output,
-            parts,
-            num_hops=num_hops,
-        )
+        graph,
+        args.dataset,
+        args.num_parts,
+        args.output,
+        parts,
+        num_hops=num_hops,
+    )

@@ -1,7 +1,8 @@
+#include <c10/cuda/CUDACachingAllocator.h>
+
 #include "core/neutronstar.hpp"
 #include "core/ntsPeerRPC.hpp"
 #include "utils/torch_func.hpp"
-#include <c10/cuda/CUDACachingAllocator.h>
 
 class GCN_GPU_NEIGHBOR_partition_impl {
  public:
@@ -90,7 +91,7 @@ class GCN_GPU_NEIGHBOR_partition_impl {
   int partition_num = 0;
 
   GCN_GPU_NEIGHBOR_partition_impl(Graph<Empty>* graph_, int iterations_, bool process_local = false,
-                        bool process_overlap = false) {
+                                  bool process_overlap = false) {
     graph = graph_;
     iterations = iterations_;
 
@@ -193,7 +194,8 @@ class GCN_GPU_NEIGHBOR_partition_impl {
     for (int i = 0; i < layers; i++) {
       P.push_back(new Parameter(graph->gnnctx->layer_size[i], graph->gnnctx->layer_size[i + 1], alpha, beta1, beta2,
                                 epsilon, weight_decay));
-      // P.push_back(new Parameter(graph->gnnctx->layer_size[i], graph->gnnctx->layer_size[i + 1], learn_rate, weight_decay));
+      // P.push_back(new Parameter(graph->gnnctx->layer_size[i], graph->gnnctx->layer_size[i + 1], learn_rate,
+      // weight_decay));
       if (graph->config->batch_norm && i < layers - 1) {
         bn1d.push_back(torch::nn::BatchNorm1d(graph->gnnctx->layer_size[i]));
         // bn1d.back().to(GPU);
@@ -242,42 +244,37 @@ class GCN_GPU_NEIGHBOR_partition_impl {
     }
   }
 
-  
-  
   void read_partition_result() {
-    assert (partition_num > 0);
+    assert(partition_num > 0);
     partition_nodes.resize(partition_num);
     train_id.resize(partition_num);
 
-    std::string part_file = "/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result_part_info/" + graph->config->part_algo 
-                            + "-" + graph->config->dataset_name + "-part" + to_string(graph->config->part_num) + "-info.txt";
+    std::string part_file = "/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result_part_info/" +
+                            graph->config->part_algo + "-" + graph->config->dataset_name + "-part" +
+                            to_string(graph->config->part_num) + "-info.txt";
     std::ifstream fin;
     std::cout << "read_file " << part_file << std::endl;
     fin.open(part_file.c_str(), std::ios::in);
-    if (!fin)
-    {
-        std::cout << "cannot open file" << std::endl;
-        exit(1);
+    if (!fin) {
+      std::cout << "cannot open file" << std::endl;
+      exit(1);
     }
     int partition_id = 0;
     VertexId vertices = 0;
     VertexId vertex_id;
     std::string line;
-    while(getline(fin, line))
-    {
-        std::stringstream ss(line);
-        ss >> partition_id >> vertices;
-        while(ss >> vertex_id)
-        {
-          partition_nodes[partition_id].insert(vertex_id);
-          belongs[vertex_id] = partition_id;
-          // std::cout << partition_id << " " << vertex_id << std::endl;
-          if(gnndatum->local_mask[vertex_id] == 0)
-          {
-            train_id[partition_id].push_back(vertex_id);
-          }
+    while (getline(fin, line)) {
+      std::stringstream ss(line);
+      ss >> partition_id >> vertices;
+      while (ss >> vertex_id) {
+        partition_nodes[partition_id].insert(vertex_id);
+        belongs[vertex_id] = partition_id;
+        // std::cout << partition_id << " " << vertex_id << std::endl;
+        if (gnndatum->local_mask[vertex_id] == 0) {
+          train_id[partition_id].push_back(vertex_id);
         }
-        assert(partition_nodes[partition_id].size() == vertices);
+      }
+      assert(partition_nodes[partition_id].size() == vertices);
     }
     if (graph->config->part_algo != "pagraph") {
       for (int i = 0; i < graph->config->vertices; ++i) {
@@ -294,8 +291,10 @@ class GCN_GPU_NEIGHBOR_partition_impl {
     //   for (int i = 0; i < partition_num; ++i) {
     //     train_id.clear();
     //   }
-    //   part_file = "/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result_part_info/" + graph->config->part_algo 
-    //                           + "-" + graph->config->dataset_name + "-part" + to_string(graph->config->part_num) + "-traininfo.txt";
+    //   part_file = "/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result_part_info/" +
+    //   graph->config->part_algo
+    //                           + "-" + graph->config->dataset_name + "-part" + to_string(graph->config->part_num) +
+    //                           "-traininfo.txt";
     //   std::cout << "read_file " << part_file << std::endl;
     //   std::ifstream fin2;
     //   fin2.open(part_file.c_str(), std::ios::in);
@@ -322,48 +321,43 @@ class GCN_GPU_NEIGHBOR_partition_impl {
     //   fin2.close();
     //   std::cout << "read " << part_file << " done." << std::endl;
     // }
-  
   }
 
-
   void read_pagraph_train_partition_result() {
-    assert (partition_num > 0);
+    assert(partition_num > 0);
     // partition_nodes.resize(partition_num);
     // train_id.resize(partition_num);
     for (int i = 0; i < partition_num; ++i) {
       train_id[i].clear();
     }
-    std::string part_file2 = "/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result_part_info/" + graph->config->part_algo 
-                            + "-" + graph->config->dataset_name + "-part" + to_string(graph->config->part_num) + "-traininfo.txt";
+    std::string part_file2 = "/home/yuanh/neutron-sanzo/exp/Partition/partition/partition_result_part_info/" +
+                             graph->config->part_algo + "-" + graph->config->dataset_name + "-part" +
+                             to_string(graph->config->part_num) + "-traininfo.txt";
     std::cout << "read_file " << part_file2 << std::endl;
     std::ifstream fin2(part_file2.c_str(), std::ios::in);
-    if (!fin2)
-    {
-        std::cout << "cannot open file" << std::endl;
-        exit(1);
+    if (!fin2) {
+      std::cout << "cannot open file" << std::endl;
+      exit(1);
     }
     int partition_id = 0;
     VertexId vertices = 0;
     VertexId vertex_id;
     std::string line;
-    while(getline(fin2, line))
-    {
-        std::stringstream ss(line);
-        ss >> partition_id >> vertices;
-        // std::cout << "line " << line << std::endl;
-        while(ss >> vertex_id)
-        {
-          assert(vertex_id < graph->config->vertices);
-          assert(gnndatum->local_mask[vertex_id] == 0);
-          train_id[partition_id].push_back(vertex_id);
-        }
-        // std::cout << "read part " << partition_id << ' ' << train_id.size() << " " << vertices << std::endl;
-        assert(train_id[partition_id].size() == vertices);
+    while (getline(fin2, line)) {
+      std::stringstream ss(line);
+      ss >> partition_id >> vertices;
+      // std::cout << "line " << line << std::endl;
+      while (ss >> vertex_id) {
+        assert(vertex_id < graph->config->vertices);
+        assert(gnndatum->local_mask[vertex_id] == 0);
+        train_id[partition_id].push_back(vertex_id);
+      }
+      // std::cout << "read part " << partition_id << ' ' << train_id.size() << " " << vertices << std::endl;
+      assert(train_id[partition_id].size() == vertices);
     }
     fin2.close();
     std::cout << "read " << part_file2 << " done." << std::endl;
   }
-
 
   // struct pair_hash {
   //   inline VertexId operator()( std::pair<VertexId, VertexId> & v)  {
@@ -371,18 +365,21 @@ class GCN_GPU_NEIGHBOR_partition_impl {
   //   }
   // };
 
-
   void print_partition_info() {
     std::cout << "\n########################" << std::endl;
     std::cout << "partition_nodes: ";
     for (int i = 0; i < partition_num; ++i) {
-       std::cout << partition_nodes[i].size() << " ";;
-    } std::cout << std::endl;
+      std::cout << partition_nodes[i].size() << " ";
+      ;
+    }
+    std::cout << std::endl;
 
     std::cout << "train_nodes: ";
     for (int i = 0; i < partition_num; ++i) {
-       std::cout << train_id[i].size() << " ";;
-    } std::cout << std::endl;
+      std::cout << train_id[i].size() << " ";
+      ;
+    }
+    std::cout << std::endl;
 
     std::vector<int> partition_edge_num;
     for (int i = 0; i < partition_num; ++i) {
@@ -400,9 +397,11 @@ class GCN_GPU_NEIGHBOR_partition_impl {
     }
     std::cout << "partition_edges: ";
     for (int i = 0; i < partition_num; ++i) {
-       std::cout << partition_edge_num[i] << " ";;
-    } std::cout << std::endl;
-   
+      std::cout << partition_edge_num[i] << " ";
+      ;
+    }
+    std::cout << std::endl;
+
     std::vector<int> partition_train_edge_num;
     for (int i = 0; i < partition_num; ++i) {
       int edge_num = 0;
@@ -413,8 +412,10 @@ class GCN_GPU_NEIGHBOR_partition_impl {
     }
     std::cout << "partition_train_edges: ";
     for (int i = 0; i < partition_num; ++i) {
-       std::cout << partition_train_edge_num[i] << " ";;
-    } std::cout << std::endl;
+      std::cout << partition_train_edge_num[i] << " ";
+      ;
+    }
+    std::cout << std::endl;
 
     std::vector<int> partition_train_node_num;
     for (int i = 0; i < partition_num; ++i) {
@@ -430,8 +431,10 @@ class GCN_GPU_NEIGHBOR_partition_impl {
     }
     std::cout << "partition_train_nodes: ";
     for (int i = 0; i < partition_num; ++i) {
-       std::cout << partition_train_node_num[i] << " ";;
-    } std::cout << std::endl;
+      std::cout << partition_train_node_num[i] << " ";
+      ;
+    }
+    std::cout << std::endl;
     std::cout << "########################\n" << std::endl;
   }
 
@@ -445,12 +448,11 @@ class GCN_GPU_NEIGHBOR_partition_impl {
 
     print_partition_info();
 
-
     std::vector<Sampler*> train_sampler;
-    for(int i = 0; i < partition_num; i++)
-    {
-      train_sampler.push_back(new Sampler(fully_rep_graph, train_id[i], pipelines, false) );
-      printf("part %d batch %d %d\n", i, train_sampler.back()->batch_nums, int(train_id[i].size() + graph->config->batch_size - 1) / graph->config->batch_size);
+    for (int i = 0; i < partition_num; i++) {
+      train_sampler.push_back(new Sampler(fully_rep_graph, train_id[i], pipelines, false));
+      printf("part %d batch %d %d\n", i, train_sampler.back()->batch_nums,
+             int(train_id[i].size() + graph->config->batch_size - 1) / graph->config->batch_size);
       shuffle_vec_seed(train_sampler[i]->sample_nids);
     }
 
@@ -459,12 +461,12 @@ class GCN_GPU_NEIGHBOR_partition_impl {
     std::vector<std::unordered_set<VertexId>> remote_nodes(partition_num);
     std::vector<std::unordered_map<VertexId, int>> node_sample_num(layers);
     node_sample_num.clear();
-    std::vector<std::vector<std::vector<VertexId>>> partition_sample_nodes(partition_num, std::vector<std::vector<VertexId>>(layers, std::vector<VertexId>()));
-    std::vector<std::vector<std::vector<VertexId>>> recv_sample_nodes(partition_num, std::vector<std::vector<VertexId>>(layers, std::vector<VertexId>()));
-    
+    std::vector<std::vector<std::vector<VertexId>>> partition_sample_nodes(
+        partition_num, std::vector<std::vector<VertexId>>(layers, std::vector<VertexId>()));
+    std::vector<std::vector<std::vector<VertexId>>> recv_sample_nodes(
+        partition_num, std::vector<std::vector<VertexId>>(layers, std::vector<VertexId>()));
 
-    for(int part = 0; part < partition_num; part++)
-    {
+    for (int part = 0; part < partition_num; part++) {
       long local_node_num = 0, remote_node_num = 0;
       long local_edge_num = 0, remote_edge_num = 0;
       int batch_id = 0;
@@ -474,36 +476,37 @@ class GCN_GPU_NEIGHBOR_partition_impl {
         auto ssg = train_sampler[part]->subgraph;
         train_sampler[part]->sample_one(ssg, graph->config->batch_type, ctx->is_train());
         //////// local/remote node_num
-        for(int l = 0; l < layers; l++) {
-        // std::cout << "batch_id: " << batch_id << " " << ssg->sampled_sgs[l]->src().size() << " " << ssg->sampled_sgs[l]->dst().size() << std::endl;
+        for (int l = 0; l < layers; l++) {
+          // std::cout << "batch_id: " << batch_id << " " << ssg->sampled_sgs[l]->src().size() << " " <<
+          // ssg->sampled_sgs[l]->dst().size() << std::endl;
           for (auto read_v : ssg->sampled_sgs[l]->src()) {
-            if(partition_nodes[part].find(read_v) != partition_nodes[part].end()) {
+            if (partition_nodes[part].find(read_v) != partition_nodes[part].end()) {
               local_nodes[part].insert(read_v);
             } else {
               remote_nodes[part].insert(read_v);
             }
           }
         }
-        for (auto read_v : ssg->sampled_sgs[layers-1]->dst()) {
-            if(partition_nodes[part].find(read_v) != partition_nodes[part].end()) {
-              local_nodes[part].insert(read_v);
-            } else {
-              remote_nodes[part].insert(read_v);
-            }
+        for (auto read_v : ssg->sampled_sgs[layers - 1]->dst()) {
+          if (partition_nodes[part].find(read_v) != partition_nodes[part].end()) {
+            local_nodes[part].insert(read_v);
+          } else {
+            remote_nodes[part].insert(read_v);
+          }
         }
         local_node_num += local_nodes[part].size();
         remote_node_num += remote_nodes[part].size();
         ////////////////////////////////
 
-         // 统计每个点的采样的数量
-         for(int l = 0; l < layers; l++) {
+        // 统计每个点的采样的数量
+        for (int l = 0; l < layers; l++) {
           auto one_layer = ssg->sampled_sgs[l];
           long debug_edges = 0;
           for (int i = 0; i < one_layer->dst().size(); ++i) {
             VertexId u = one_layer->dst(i);
             int sample_nums = one_layer->c_o(i + 1) - one_layer->c_o(i);
             debug_edges += sample_nums;
-            if(node_sample_num[l].find(u) == node_sample_num[l].end()) {
+            if (node_sample_num[l].find(u) == node_sample_num[l].end()) {
               node_sample_num[l][u] = sample_nums;
             } else {
               assert(sample_nums == node_sample_num[l][u]);
@@ -512,10 +515,8 @@ class GCN_GPU_NEIGHBOR_partition_impl {
           assert(debug_edges == one_layer->r_i().size());
         }
 
-
- 
         // 统计每个分区需要执行采样的顶点，local+remote on each layer
-         for(int l = 0; l < layers; l++) {
+        for (int l = 0; l < layers; l++) {
           for (auto u : ssg->sampled_sgs[l]->dst()) {
             if (graph->config->part_algo == "pagraph") {
               partition_sample_nodes[part][l].push_back(u);
@@ -529,14 +530,13 @@ class GCN_GPU_NEIGHBOR_partition_impl {
           }
         }
 
-
         //////// local/remote node_num
         // std::cout << "batch " <<  batch_id << " edges " << ssg->sampled_sgs[layers-1]->r_i().size() << std::endl;
         for (int l = 0; l < layers; ++l) {
           for (auto read_v : ssg->sampled_sgs[l]->r_i()) {
             // std::cout << read_v << " " << ssg->sampled_sgs[l]->src(read_v) << std::endl;
             read_v = ssg->sampled_sgs[l]->src(read_v);
-            if(partition_nodes[part].find(read_v) != partition_nodes[part].end()) {
+            if (partition_nodes[part].find(read_v) != partition_nodes[part].end()) {
               local_edge_num++;
             } else {
               remote_edge_num++;
@@ -551,8 +551,10 @@ class GCN_GPU_NEIGHBOR_partition_impl {
       assert(train_sampler[part]->work_offset == train_sampler[part]->work_range[1]);
       train_sampler[part]->restart();
 
-      std::cout << "part[" << part << "] local_node_num: " << local_node_num << " remote_node_num: " << remote_node_num << " local/remote: " << 1.0 * local_node_num / remote_node_num << std::endl;
-      std::cout << "part[" << part << "] local_edge_num: " << local_edge_num << " remote_edge_num: " << remote_edge_num << " local/remote: " << 1.0 * local_edge_num / remote_edge_num << std::endl;
+      std::cout << "part[" << part << "] local_node_num: " << local_node_num << " remote_node_num: " << remote_node_num
+                << " local/remote: " << 1.0 * local_node_num / remote_node_num << std::endl;
+      std::cout << "part[" << part << "] local_edge_num: " << local_edge_num << " remote_edge_num: " << remote_edge_num
+                << " local/remote: " << 1.0 * local_edge_num / remote_edge_num << std::endl;
       std::cout << "part[" << part << "] compute_load: " << local_edge_num + remote_edge_num << std::endl;
       std::cout << std::endl;
     }
@@ -573,9 +575,8 @@ class GCN_GPU_NEIGHBOR_partition_impl {
           send_sample_edges += node_sample_num[l][u];
         }
       }
-      std::cout << "part[" << i << "] sample_load: " << sample_load << " send_sample_edges: " << send_sample_edges << std::endl;
+      std::cout << "part[" << i << "] sample_load: " << sample_load << " send_sample_edges: " << send_sample_edges
+                << std::endl;
     }
-
-    
   }
 };

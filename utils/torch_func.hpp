@@ -130,7 +130,7 @@ std::vector<float> get_mean(std::vector<std::vector<T>> &arr) {
   std::vector<float> ret;
   for (int i = 0; i < len; ++i) {
     float mean = 0;
-    for (auto& vec : arr) {
+    for (auto &vec : arr) {
       mean += vec[i];
     }
     mean /= arr.size();

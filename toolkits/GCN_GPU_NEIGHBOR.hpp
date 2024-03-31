@@ -1,7 +1,8 @@
+#include <c10/cuda/CUDACachingAllocator.h>
+
 #include "core/neutronstar.hpp"
 #include "core/ntsPeerRPC.hpp"
 #include "utils/torch_func.hpp"
-#include <c10/cuda/CUDACachingAllocator.h>
 
 class GCN_GPU_NEIGHBOR_impl {
  public:
@@ -49,7 +50,6 @@ class GCN_GPU_NEIGHBOR_impl {
   // double gcn_start_time = 0;
   double gcn_run_time;
 
-
   double gcn_gather_time;
   double gcn_sample_time;
   double gcn_trans_time;
@@ -85,9 +85,6 @@ class GCN_GPU_NEIGHBOR_impl {
   Cuda_Stream* cuda_stream_list;
   std::vector<at::cuda::CUDAStream> torch_stream;
 
-
-
-
   // int batch_size_switch_idx = 0;
 
   NtsVar F;
@@ -115,7 +112,6 @@ class GCN_GPU_NEIGHBOR_impl {
   VertexId* cache_node_hashmap;
   VertexId* dev_cache_node_hashmap;
   int cache_node_num = 0;
-
 
   GCN_GPU_NEIGHBOR_impl(Graph<Empty>* graph_, int iterations_, bool process_local = false,
                         bool process_overlap = false) {
@@ -239,8 +235,10 @@ class GCN_GPU_NEIGHBOR_impl {
     torch::Device GPU(torch::kCUDA, 0);
 
     for (int i = 0; i < layers; i++) {
-      P.push_back(new Parameter(graph->gnnctx->layer_size[i], graph->gnnctx->layer_size[i + 1], alpha, beta1, beta2,epsilon, weight_decay));
-      // P.push_back(new Parameter(graph->gnnctx->layer_size[i], graph->gnnctx->layer_size[i + 1], learn_rate, weight_decay));
+      P.push_back(new Parameter(graph->gnnctx->layer_size[i], graph->gnnctx->layer_size[i + 1], alpha, beta1, beta2,
+                                epsilon, weight_decay));
+      // P.push_back(new Parameter(graph->gnnctx->layer_size[i], graph->gnnctx->layer_size[i + 1], learn_rate,
+      // weight_decay));
       if (graph->config->batch_norm && i < layers - 1) {
         bn1d.push_back(torch::nn::BatchNorm1d(graph->gnnctx->layer_size[i]));
         // bn1d.back().to(GPU);
@@ -315,7 +313,6 @@ class GCN_GPU_NEIGHBOR_impl {
   }
 
   void old_version(Sampler* sampler) {
-
     X[0] = graph->Nts->NewLeafTensor({1000, F.size(1)}, torch::DeviceType::CUDA);
     NtsVar target_lab;
     if (graph->config->classes > 1) {
@@ -383,7 +380,7 @@ class GCN_GPU_NEIGHBOR_impl {
     }
     assert(sampler->work_offset == sampler->work_range[1]);
     sampler->restart();
-}
+  }
 
   void pipeline_version(Sampler* sampler) {
     NtsVar tmp_X0[pipelines];
@@ -621,7 +618,7 @@ class GCN_GPU_NEIGHBOR_impl {
       sampler->sample_one(ssg, graph->config->batch_type, ctx->is_train());
       // sampler->sample_one_with_dst(ssg, graph->config->batch_type, ctx->is_train());
       epoch_sample_time += get_time();
-      
+
       // std::cout << "sample done" << std::endl;
 
       epoch_transfer_graph_time -= get_time();
@@ -715,7 +712,6 @@ class GCN_GPU_NEIGHBOR_impl {
     }
   }
 
-
   NtsVar vertexForward(NtsVar& n_i) {
     int l = graph->rtminfo->curr_layer;
     if (l == layers - 1) {  // last layer
@@ -763,7 +759,6 @@ class GCN_GPU_NEIGHBOR_impl {
     debug_time = 0;
     epoch_train_graph_time = 0;
     epoch_train_nn_time = 0;
-
 
     int batch_num = sampler->batch_nums;
 
@@ -842,7 +837,7 @@ class GCN_GPU_NEIGHBOR_impl {
 
       // sampler->load_feature_gpu(X[0], gnndatum->dev_local_feature);
       sampler->load_feature_gpu(&cuda_stream_list[0], ssg, X[0], gnndatum->dev_local_feature);
-      
+
       // sampler->load_label_gpu(target_lab, gnndatum->dev_local_label);
       sampler->load_label_gpu(&cuda_stream_list[0], ssg, target_lab, gnndatum->dev_local_label);
 
@@ -889,7 +884,7 @@ class GCN_GPU_NEIGHBOR_impl {
     }
   }
 
-  void saveW(std::string suffix="") {
+  void saveW(std::string suffix = "") {
     for (int i = 0; i < layers; ++i) {
       P[i]->save_W("/home/yuanh/neutron-sanzo/saved_modules", graph->config->dataset_name + suffix, i);
     }
@@ -900,7 +895,6 @@ class GCN_GPU_NEIGHBOR_impl {
       P[i]->load_W("/home/yuanh/neutron-sanzo/saved_modules", graph->config->dataset_name + suffix, i);
     }
   }
-
 
   void gater_cpu_cache_feature_and_trans_to_gpu() {
     long feat_dim = graph->gnnctx->layer_size[0];
@@ -977,7 +971,6 @@ class GCN_GPU_NEIGHBOR_impl {
     mark_cache_node(node_idx);
   }
 
-  
   void cache_sample(std::vector<int>& node_idx) {
     std::vector<int> node_sample_cnt(node_idx.size(), 0);
     int epochs = 1;
@@ -1005,9 +998,7 @@ class GCN_GPU_NEIGHBOR_impl {
     mark_cache_node(node_idx);
   }
 
-
-
-    double get_gpu_idle_mem() {
+  double get_gpu_idle_mem() {
     // store degree
     VertexId* outs_bak = new VertexId[graph->vertices];
     VertexId* ins_bak = new VertexId[graph->vertices];
@@ -1195,8 +1186,7 @@ class GCN_GPU_NEIGHBOR_impl {
             },
             tid);
       }
-    // std::cout << "here " <<std::endl;
-
+      // std::cout << "here " <<std::endl;
 
       for (int tid = 0; tid < pipelines; ++tid) {
         threads[tid].join();
@@ -1252,14 +1242,13 @@ class GCN_GPU_NEIGHBOR_impl {
     gater_cpu_cache_feature_and_trans_to_gpu();
   }
 
-    void empty_gpu_cache() {
+  void empty_gpu_cache() {
     for (int ti = 0; ti < 5; ++ti) {  // clear gpu cache memory
       c10::cuda::CUDACachingAllocator::emptyCache();
     }
   }
 
-
-void count_sample_hop_nodes(Sampler* sampler) {
+  void count_sample_hop_nodes(Sampler* sampler) {
     long tmp = 0;
     while (sampler->work_offset < sampler->work_range[1]) {
       auto ssg = sampler->subgraph;
@@ -1338,9 +1327,6 @@ void count_sample_hop_nodes(Sampler* sampler) {
     return rate_trans;
   }
 
-
-
-
   float run() {
     double pre_time = -get_time();
     if (graph->partition_id == 0) {
@@ -1401,7 +1387,7 @@ void count_sample_hop_nodes(Sampler* sampler) {
     eval_sampler->show_fanout("val sampler");
     eval_sampler->subgraph->show_fanout("val subgraph sampler");
     test_sampler = new Sampler(fully_rep_graph, test_nids, true);  // true mean full batch
-    test_sampler->update_fanout(graph->gnnctx->val_fanout);  // val not sample
+    test_sampler->update_fanout(graph->gnnctx->val_fanout);        // val not sample
     test_sampler->show_fanout("test sampler");
     test_sampler->subgraph->show_fanout("test subgraph sampler");
 
@@ -1467,7 +1453,6 @@ void count_sample_hop_nodes(Sampler* sampler) {
     }
     cache_init_time += get_time();
 
-
     gcn_run_time = 0;
     for (int i_i = 0; i_i < iterations; i_i++) {
       if (config_run_time > 0 && gcn_run_time >= config_run_time) {
@@ -1481,11 +1466,10 @@ void count_sample_hop_nodes(Sampler* sampler) {
         bool ret = train_sampler->update_batch_size_from_time(gcn_run_time);
         if (ret) eval_sampler->update_batch_size(train_sampler->batch_size);
 
-
         // load best parameter
         if (ret && graph->config->best_parameter > 0) {
           std::string suffix = "";
-          if (graph->config->sample_rate > 0) { // fanout
+          if (graph->config->sample_rate > 0) {  // fanout
             std::string tmp = std::to_string(graph->config->sample_rate);
             tmp.substr(0, tmp.find(".") + 2 + 1);
             suffix = "-" + std::to_string(graph->config->batch_size) + "sample-rate-" + tmp + ".pt";
@@ -1510,13 +1494,15 @@ void count_sample_hop_nodes(Sampler* sampler) {
       float val_loss = loss_epoch;
 
       float test_acc = EvalForward(test_sampler, 1);
-      
-      
+
       if (graph->partition_id == 0) {
         LOG_INFO(
-            "Epoch %03d train_loss %.3f train_acc %.3f val_loss %.3f val_acc %.3f test_acc %.3f train_time %.3f(sample %.3f trans %.3f graph %.3f nn %.3f) val_time %.3f, "
+            "Epoch %03d train_loss %.3f train_acc %.3f val_loss %.3f val_acc %.3f test_acc %.3f train_time %.3f(sample "
+            "%.3f trans %.3f graph %.3f nn %.3f) val_time %.3f, "
             "gcn_run_time %.3f) batch_size (%d, %d)",
-            i_i, train_loss, train_acc, val_loss, val_acc, test_acc, epoch_train_time, epoch_sample_time, epoch_trans_time, epoch_train_graph_time, epoch_train_nn_time, val_train_cost, gcn_run_time, train_sampler->batch_size, eval_sampler->batch_size);
+            i_i, train_loss, train_acc, val_loss, val_acc, test_acc, epoch_train_time, epoch_sample_time,
+            epoch_trans_time, epoch_train_graph_time, epoch_train_nn_time, val_train_cost, gcn_run_time,
+            train_sampler->batch_size, eval_sampler->batch_size);
       }
 
       if (val_acc > best_val_acc) {
@@ -1525,7 +1511,7 @@ void count_sample_hop_nodes(Sampler* sampler) {
         // save best parameter
         if (graph->config->best_parameter > 0) {
           std::string suffix = "";
-          if (graph->config->sample_rate > 0) { // fanout
+          if (graph->config->sample_rate > 0) {  // fanout
             std::string tmp = std::to_string(graph->config->sample_rate);
             tmp = tmp.substr(0, tmp.find(".") + 2 + 1);
             suffix = "-" + std::to_string(graph->config->batch_size) + "sample-rate-" + tmp + ".pt";
@@ -1563,7 +1549,6 @@ void count_sample_hop_nodes(Sampler* sampler) {
         if (ret) eval_sampler->update_batch_size(train_sampler->batch_size);
       }
     }
-
 
     delete active;
     return best_val_acc;

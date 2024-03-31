@@ -164,7 +164,6 @@ class InputInfo {
   int part_num;
   std::string part_algo;
   int part_dim;
-  
 
   float del_frac = 0;
   bool with_cuda;
@@ -178,7 +177,6 @@ class InputInfo {
   float cache_rate_end;
   float cache_rate_num;
   float cache_rate_start = 0;
-
 
   float threshold_trans = -1;
   float trans_threshold_start = 0;

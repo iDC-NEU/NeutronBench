@@ -829,7 +829,6 @@ struct Parameter : torch::nn::Module {
     W.set_data(W - g_t);
   }
 
-
   void learn_local_with_decay_Adam() {
     W_g.set_data(W);
     W_g = W_g * weight_decay;

@@ -1,0 +1,5 @@
+# for format-py.sh
+yapf==0.40.2
+codespell==2.2.6
+mypy==1.8.0
+ruff==0.3.1

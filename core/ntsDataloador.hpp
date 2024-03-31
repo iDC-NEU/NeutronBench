@@ -62,16 +62,16 @@ class GNNDatum {
     // local_feature = new ValueType[gnnctx->l_v_num * gnnctx->layer_size[0]];
     // local_feature =
     //     (ValueType *)cudaMallocPinned((long)(gnnctx->l_v_num) * (gnnctx->layer_size[0]) * sizeof(ValueType));
-    
+
     if (graph_->config->mode == "unified") {
       LOG_DEBUG("create unified memory for local_feature");
       cudaMallocManaged(&local_feature, (long)(gnnctx->l_v_num) * (gnnctx->layer_size[0]) * sizeof(ValueType));
       LOG_DEBUG("done: create unified memory for local_feature");
     } else {
       local_feature =
-        (ValueType *)cudaMallocPinned((long)(gnnctx->l_v_num) * (gnnctx->layer_size[0]) * sizeof(ValueType));
+          (ValueType *)cudaMallocPinned((long)(gnnctx->l_v_num) * (gnnctx->layer_size[0]) * sizeof(ValueType));
     }
-    
+
     // local_embedding =
     // (ValueType*)cudaMallocPinned((long)(gnnctx->l_v_num)*(gnnctx->layer_size[0])*sizeof(ValueType));
     local_label = new long[gnnctx->l_v_num * graph_->config->classes];
@@ -93,7 +93,6 @@ class GNNDatum {
     // dev_local_embedding = (ValueType*) getDevicePointer(local_embedding);
     move_bytes_in(dev_local_label, local_label, gnnctx->l_v_num * sizeof(long) * graph->config->classes);
   }
-
 
   void generate_gpu_data_unified() {
     dev_local_label = (long *)cudaMallocGPU(gnnctx->l_v_num * sizeof(long) * graph->config->classes);
@@ -155,7 +154,6 @@ class GNNDatum {
     assert(cnt0 + cnt1 + cnt2 == tmpN);
     LOG_DEBUG("local_mask: (%d %d %d) (%.1f %.1f %.1f)", cnt0, cnt1, cnt2, cnt0 * 1.0 / cnt2, cnt1 * 1.0 / cnt2, 1.0);
   }
-
 
   /**
    * @brief
@@ -394,8 +392,6 @@ class GNNDatum {
     //     local_mask[i] = 3;
     //   }
     // }
-
-
   }
 
   void readFeature_Label_Mask_OGB(std::string inputF, std::string inputL, std::string inputM) {

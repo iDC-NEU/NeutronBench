@@ -17,19 +17,23 @@ from ogb.nodeproppred import DglNodePropPredDataset
 import random
 import psutil
 
+
 def setup_seed(seed):
-     print('setup_seed', seed)
-     dgl.seed(seed)
-     dgl.random.seed(seed)
-     torch.manual_seed(seed)
-     torch.cuda.manual_seed_all(seed)
-     np.random.seed(seed)
-     random.seed(seed)
-     torch.backends.cudnn.deterministic = True
-    #  torch.backends.cudnn.benchmark = False
+    print('setup_seed', seed)
+    dgl.seed(seed)
+    dgl.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.backends.cudnn.deterministic = True
+
+
+#  torch.backends.cudnn.benchmark = False
 
 
 def show_time(func):
+
     @wraps(func)
     def with_time(*args, **kwargs):
         time_cost = time.time()
@@ -37,8 +41,10 @@ def show_time(func):
         time_cost = time.time() - time_cost
         func_name = func.__name__
         if time_cost > 3:
-            print("func {} is done, cost: {:.2f}s".format(func_name, time_cost))
+            print("func {} is done, cost: {:.2f}s".format(
+                func_name, time_cost))
         return ret
+
     return with_time
 
 
@@ -68,8 +74,6 @@ def get_partition_label_nodes(partition_nodes, label_mask):
     return partition_label_nodes
 
 
-
-
 def show_label_distributed(parts, train_mask, val_mask, test_mask):
     train_idx = torch.nonzero(train_mask).view(-1)
     val_idx = torch.nonzero(val_mask).view(-1)
@@ -79,9 +83,11 @@ def show_label_distributed(parts, train_mask, val_mask, test_mask):
     print('test distributed:', torch.bincount(parts[test_idx]).tolist())
 
 
-
 @show_time
-def get_partition_edges_inner_nodes(partition_nodes, rowptr, col, edge_nums=None): # 仅构造在partition nodes里面的边
+def get_partition_edges_inner_nodes(partition_nodes,
+                                    rowptr,
+                                    col,
+                                    edge_nums=None):  # 仅构造在partition nodes里面的边
     # (dst, src)
     rowptr = rowptr.tolist()
     col = col.tolist()
@@ -91,14 +97,13 @@ def get_partition_edges_inner_nodes(partition_nodes, rowptr, col, edge_nums=None
         edge_list = []
         for u in nodes.tolist():
             assert u in st_nodes
-            for v in col[rowptr[u]: rowptr[u + 1]]:
+            for v in col[rowptr[u]:rowptr[u + 1]]:
                 if v in st_nodes:
                     edge_list.append((u, v))
                 # else:
                 #     print(u, v)
         partition_edges.append(edge_list)
     return partition_edges
-
 
 
 @show_time
@@ -110,7 +115,7 @@ def get_partition_edges(partition_nodes, rowptr, col, edge_nums=None):
     for nodes in partition_nodes:
         edge_list = []
         for u in nodes:
-            edge_list += [(u.item(), v) for v in col[rowptr[u]: rowptr[u + 1]]]
+            edge_list += [(u.item(), v) for v in col[rowptr[u]:rowptr[u + 1]]]
         partition_edges.append(edge_list)
 
     # partition_edges_ = []
@@ -138,13 +143,15 @@ def get_partition_edges(partition_nodes, rowptr, col, edge_nums=None):
     return partition_edges
 
 
-
 @show_time
 def get_all_edges(partition_edges):
     assert isinstance(partition_edges, list)
     # [[[],[]],[[],[]], ...] (L_hop_edges)
     if isinstance(partition_edges[0][0], list):
-        return [edge for part in partition_edges for layer in part for edge in layer]
+        return [
+            edge for part in partition_edges for layer in part
+            for edge in layer
+        ]
     # [[], [], ...] (partition_edges or one_partiton_L_hop)
     elif isinstance(partition_edges[0], list):
         return [edge for part in partition_edges for edge in part]
@@ -181,27 +188,32 @@ def extract_dataset(args):
 
         if args.self_loop:
             time_stamp = time.time()
-            print('before add self loop has {} edges'.format(graph.num_edges()))
+            print('before add self loop has {} edges'.format(
+                graph.num_edges()))
             graph = dgl.remove_self_loop(graph)
             graph = dgl.add_self_loop(graph)
             # graph = dgl.to_bidirected(graph) # simple graph
             print('after add self loop has {} edges'.format(graph.num_edges()))
-            print("insert self loop cost {:.2f}s".format(
-                time.time() - time_stamp))
+            print("insert self loop cost {:.2f}s".format(time.time() -
+                                                         time_stamp))
 
         edges = graph.edges()
         edge_src = edges[0].numpy().reshape((-1, 1))
         edge_dst = edges[1].numpy().reshape((-1, 1))
         edges_list = np.hstack((edge_src, edge_dst))
 
-        print("nodes: {}, edges: {}, feature dims: {}, classess: {}, label nodes: {}({}/{}/{})"
-              .format(graph.number_of_nodes(), edges_list.shape,
-                      list(features.shape), len(np.unique(labels)),
-                      train_mask.sum() + test_mask.sum() + val_mask.sum(),
-                      train_mask.sum(), val_mask.sum(), test_mask.sum()))
+        print(
+            "nodes: {}, edges: {}, feature dims: {}, classess: {}, label nodes: {}({}/{}/{})"
+            .format(graph.number_of_nodes(), edges_list.shape,
+                    list(features.shape), len(np.unique(labels)),
+                    train_mask.sum() + test_mask.sum() + val_mask.sum(),
+                    train_mask.sum(), val_mask.sum(), test_mask.sum()))
         return edges_list, features, labels, train_mask, val_mask, test_mask, graph
 
-    elif dataset in ['CoraFull', 'Coauthor_cs', 'Coauthor_physics', 'AmazonCoBuy_computers', 'AmazonCoBuy_photo', 'computer']:
+    elif dataset in [
+            'CoraFull', 'Coauthor_cs', 'Coauthor_physics',
+            'AmazonCoBuy_computers', 'AmazonCoBuy_photo', 'computer'
+    ]:
         if dataset == 'CoraFull':
             data = CoraFullDataset()
         elif dataset == 'Coauthor_cs':
@@ -227,8 +239,8 @@ def extract_dataset(args):
             # graph = dgl.to_bidirected(graph)
             print('after add self loop has {} edges'.format(
                 len(graph.all_edges()[0])))
-            print("insert self loop cost {:.2f}s".format(
-                time.time() - time_stamp))
+            print("insert self loop cost {:.2f}s".format(time.time() -
+                                                         time_stamp))
 
         edges = graph.edges()
         edge_src = edges[0].numpy().reshape((-1, 1))
@@ -239,12 +251,13 @@ def extract_dataset(args):
         graph.ndata['train_mask'] = train_mask
         graph.ndata['val_mask'] = val_mask
         graph.ndata['test_mask'] = test_mask
-        
-        print("dataset: {} nodes: {} edges: {} feature dims: {} classess: {} label nodes: {}({}/{}/{})"
-              .format(dataset, num_nodes, edges_list.shape,
-                      list(features.shape), len(np.unique(labels)),
-                      train_mask.sum() + test_mask.sum() + val_mask.sum(),
-                      train_mask.sum(), val_mask.sum(), test_mask.sum()))
+
+        print(
+            "dataset: {} nodes: {} edges: {} feature dims: {} classess: {} label nodes: {}({}/{}/{})"
+            .format(dataset, num_nodes, edges_list.shape, list(features.shape),
+                    len(np.unique(labels)),
+                    train_mask.sum() + test_mask.sum() + val_mask.sum(),
+                    train_mask.sum(), val_mask.sum(), test_mask.sum()))
         return edges_list, features, labels, train_mask, val_mask, test_mask, graph
 
     elif dataset in ['ogbn-arxiv', 'ogbn-papers100M', 'ogbn-products']:
@@ -255,9 +268,10 @@ def extract_dataset(args):
         features = graph.ndata['feat']
 
         split_idx = data.get_idx_split()
-        train_nid, val_nid, test_nid = split_idx['train'], split_idx['valid'], split_idx['test']
+        train_nid, val_nid, test_nid = split_idx['train'], split_idx[
+            'valid'], split_idx['test']
         # print(len(train_nid) + len(val_nid) + len(test_nid))
-        
+
         train_mask = torch.zeros(graph.number_of_nodes(), dtype=bool)
         train_mask[train_nid] = True
         val_mask = torch.zeros(graph.number_of_nodes(), dtype=bool)
@@ -275,24 +289,25 @@ def extract_dataset(args):
                 graph = dgl.to_bidirected(graph)
             print('after add self loop has {} edges'.format(
                 len(graph.all_edges()[0])))
-            print("insert self loop cost {:.2f}s".format(
-                time.time() - time_stamp))
+            print("insert self loop cost {:.2f}s".format(time.time() -
+                                                         time_stamp))
         graph.ndata['feat'] = features
         graph.ndata['label'] = labels.reshape(-1)
         graph.ndata['train_mask'] = train_mask
         graph.ndata['val_mask'] = val_mask
         graph.ndata['test_mask'] = test_mask
-        
+
         edges = graph.edges()
         edge_src = edges[0].numpy().reshape((-1, 1))
         edge_dst = edges[1].numpy().reshape((-1, 1))
         edges_list = np.hstack((edge_src, edge_dst))
 
-        print("nodes: {}, edges: {}, feature dims: {}, classess: {}, label nodes: {}({}/{}/{})"
-              .format(graph.number_of_nodes(), edges_list.shape,
-                      list(features.shape), len(np.unique(labels)),
-                      train_mask.sum() + test_mask.sum() + val_mask.sum(),
-                      train_mask.sum(), val_mask.sum(), test_mask.sum()))
+        print(
+            "nodes: {}, edges: {}, feature dims: {}, classess: {}, label nodes: {}({}/{}/{})"
+            .format(graph.number_of_nodes(), edges_list.shape,
+                    list(features.shape), len(np.unique(labels)),
+                    train_mask.sum() + test_mask.sum() + val_mask.sum(),
+                    train_mask.sum(), val_mask.sum(), test_mask.sum()))
         return edges_list, features, labels, train_mask, val_mask, test_mask, graph
 
     elif dataset in ['flickr', 'yelp', 'ppi', 'ppi-large', 'amazon']:
@@ -317,8 +332,8 @@ def extract_dataset(args):
             graph = dgl.add_self_loop(graph)
             print('after add self loop has {} edges'.format(
                 len(graph.all_edges()[0])))
-            print("insert self loop cost {:.2f}s".format(
-                time.time() - time_stamp))
+            print("insert self loop cost {:.2f}s".format(time.time() -
+                                                         time_stamp))
 
         edges = graph.edges()
         edge_src = edges[0].numpy().reshape((-1, 1))
@@ -357,14 +372,16 @@ def extract_dataset(args):
             offset = min(class_map.values())
             is_multiclass = False
             for k, v in class_map.items():
-                class_arr[k][v-offset] = 1
+                class_arr[k][v - offset] = 1
             labels = np.where(class_arr)[1]
 
-        print("nodes: {}, edges: {}, feature dims: {}, classess: {}{}, label nodes: {}({}/{}/{})"
-              .format(num_nodes, num_edges, feats.shape, num_classes, '#' if is_multiclass else '',
-                      train_mask.sum() + test_mask.sum() + val_mask.sum(),
-                      train_mask.sum(), val_mask.sum(), test_mask.sum()))
-        
+        print(
+            "nodes: {}, edges: {}, feature dims: {}, classess: {}{}, label nodes: {}({}/{}/{})"
+            .format(num_nodes, num_edges, feats.shape, num_classes,
+                    '#' if is_multiclass else '',
+                    train_mask.sum() + test_mask.sum() + val_mask.sum(),
+                    train_mask.sum(), val_mask.sum(), test_mask.sum()))
+
         print(os.chdir(curr_dir))
         return edges_list, feats, labels, train_mask, val_mask, test_mask, graph
 
@@ -372,7 +389,8 @@ def extract_dataset(args):
         raise NotImplementedError
 
 
-def split_graph(graph, n_nodes, n_edges, features, labels, train_mask, val_mask, test_mask, fraction):
+def split_graph(graph, n_nodes, n_edges, features, labels, train_mask,
+                val_mask, test_mask, fraction):
     new_n_nodes = int(n_nodes * fraction)
     # check_type(graph, n_nodes, n_edges, features, labels, train_mask, val_mask, test_mask, fraction)
     remove_nodes_list = [x for x in range(new_n_nodes, n_nodes)]
@@ -405,16 +423,16 @@ def split_dataset(num_nodes, x=8, y=1, z=1):
     '''
     x: train nodes, y: val nodes, z: test nodes
     '''
-    train_mask = torch.tensor(
-        [False for i in range(num_nodes)], dtype=torch.bool)
-    val_mask = torch.tensor(
-        [False for i in range(num_nodes)], dtype=torch.bool)
-    test_mask = torch.tensor(
-        [False for i in range(num_nodes)], dtype=torch.bool)
+    train_mask = torch.tensor([False for i in range(num_nodes)],
+                              dtype=torch.bool)
+    val_mask = torch.tensor([False for i in range(num_nodes)],
+                            dtype=torch.bool)
+    test_mask = torch.tensor([False for i in range(num_nodes)],
+                             dtype=torch.bool)
     step = int(num_nodes / (x + y + z))
-    train_mask[: int(x * step)] = True
-    val_mask[int(x * step): int((x+y) * step)] = True
-    test_mask[int((x+y) * step):] = True
+    train_mask[:int(x * step)] = True
+    val_mask[int(x * step):int((x + y) * step)] = True
+    test_mask[int((x + y) * step):] = True
     assert (train_mask.sum() + val_mask.sum() + test_mask.sum() == num_nodes)
     return train_mask, val_mask, test_mask
 
@@ -429,14 +447,17 @@ def remask(node_num, mask_rate=None):
     test_mask = np.zeros(node_num, dtype=bool)
     node_ids = np.arange(node_num)
     np.random.shuffle(node_ids)
-    train_mask[node_ids[: train_num]] = True
-    val_mask[node_ids[train_num: train_num + val_num]] = True
+    train_mask[node_ids[:train_num]] = True
+    val_mask[node_ids[train_num:train_num + val_num]] = True
     test_mask[node_ids[train_num + val_num:]] = True
     return train_mask, val_mask, test_mask
 
 
-def generate_nts_dataset(dataset_name, partition_nodes, partition_edges, node_num, feature_dim, train_mask, val_mask, test_mask):
-    print('\ngenerate nts for', dataset_name, 'node_num:', node_num, 'feature_dim:', feature_dim)
+def generate_nts_dataset(dataset_name, partition_nodes, partition_edges,
+                         node_num, feature_dim, train_mask, val_mask,
+                         test_mask):
+    print('\ngenerate nts for', dataset_name, 'node_num:', node_num,
+          'feature_dim:', feature_dim)
     reorder_id = {}
     curr_id = 0
     for nodes in partition_nodes:
@@ -446,11 +467,13 @@ def generate_nts_dataset(dataset_name, partition_nodes, partition_edges, node_nu
     assert len(reorder_id) == curr_id == sum(
         [len(nodes) for nodes in partition_nodes])
 
-    reorder_partition_edges = [[(reorder_id[u], reorder_id[v]) for (
-        u, v) in edges] for edges in partition_edges]
+    reorder_partition_edges = [[(reorder_id[u], reorder_id[v])
+                                for (u, v) in edges]
+                               for edges in partition_edges]
 
     assert len(reorder_partition_edges) == len(partition_edges)
-    for (edges, reorder_edges) in zip(partition_edges, reorder_partition_edges):
+    for (edges, reorder_edges) in zip(partition_edges,
+                                      reorder_partition_edges):
         assert len(edges) == len(reorder_edges)
         for e1, e2 in zip(edges, reorder_edges):
             assert reorder_id[e1[0]] == e2[0] and reorder_id[e1[1]] == e2[1]
@@ -482,18 +505,22 @@ def generate_nts_dataset(dataset_name, partition_nodes, partition_edges, node_nu
     assert reorder_train_mask.sum() == train_mask.sum()
     assert reorder_val_mask.sum() == val_mask.sum()
     assert reorder_test_mask.sum() == test_mask.sum()
-    write_to_mask(f'./{dataset_name}/reorder.mask',
-                  reorder_train_mask, reorder_val_mask, reorder_test_mask)
+    write_to_mask(f'./{dataset_name}/reorder.mask', reorder_train_mask,
+                  reorder_val_mask, reorder_test_mask)
 
     # write faeture
     out_features = torch.ones((node_num, feature_dim))
     write_to_file(f'./{dataset_name}/reorder.featuretable',
-                  out_features, '%.2f', index=True)
+                  out_features,
+                  '%.2f',
+                  index=True)
 
     # write label
     out_features = torch.ones(node_num)
     write_to_file(f'./{dataset_name}/reorder.labeltable',
-                  out_features, '%.0f', index=True)
+                  out_features,
+                  '%.0f',
+                  index=True)
 
 
 def read_edgelist_from_file(filename):
@@ -506,10 +533,11 @@ def read_edgelist_from_file(filename):
         #     print(u, u)
 
         # edgelist = [(int(u), int(v)) for line in f.readlines() for u,v in line.strip('\n').split(' ')]
-        edgelist = [tuple(int(x) for x in line.strip('\n').split(' '))
-                    for line in f.readlines()]
+        edgelist = [
+            tuple(int(x) for x in line.strip('\n').split(' '))
+            for line in f.readlines()
+        ]
     return edgelist
-
 
 
 def create_dir(path=None):
@@ -521,8 +549,9 @@ def create_dir(path=None):
 def edge2bin(name, edges):
     edges = edges.flatten()
     with open(name, 'wb') as f:
-        buf = [int(edge).to_bytes(4, byteorder=sys.byteorder)
-               for edge in edges]
+        buf = [
+            int(edge).to_bytes(4, byteorder=sys.byteorder) for edge in edges
+        ]
         f.writelines(buf)
 
 
@@ -553,13 +582,13 @@ def write_to_file(name, data, format, index=False):
 
     if index:
         in_file = open(name, 'r')
-        out_file = open(name+'.temp', 'w')
+        out_file = open(name + '.temp', 'w')
         for i, line in enumerate(in_file):
             out_file.write(str(i) + ' ' + line)
         in_file.close()
         out_file.close()
         os.remove(name)
-        os.rename(name+'.temp', name)
+        os.rename(name + '.temp', name)
 
 
 @show_time
@@ -572,14 +601,22 @@ def write_multi_class_to_file(name, data, format, index=False):
             f.write(' '.join(str(x) for x in line) + '\n')
 
 
-
-def get_partition_result(parts, rowptr, col, num_parts, train_mask, val_mask, test_mask, algo='metis'):
+def get_partition_result(parts,
+                         rowptr,
+                         col,
+                         num_parts,
+                         train_mask,
+                         val_mask,
+                         test_mask,
+                         algo='metis'):
     print('\n####get_partition_result of', algo)
     # 每个分区node, train_nodes, val_nodes, test_nodes
     partition_nodes = get_partition_nodes(parts, num_parts)
-    partition_train_nodes = get_partition_label_nodes(partition_nodes, train_mask)
+    partition_train_nodes = get_partition_label_nodes(partition_nodes,
+                                                      train_mask)
     partition_val_nodes = get_partition_label_nodes(partition_nodes, val_mask)
-    partition_test_nodes = get_partition_label_nodes(partition_nodes, test_mask)
+    partition_test_nodes = get_partition_label_nodes(partition_nodes,
+                                                     test_mask)
 
     # 每个分区包含的边[[], []]
     partition_edges = get_partition_edges(partition_train_nodes, rowptr, col)
@@ -587,7 +624,8 @@ def get_partition_result(parts, rowptr, col, num_parts, train_mask, val_mask, te
     print(f'{algo} partition nodes:', [len(_) for _ in partition_nodes])
     print(f'{algo} partition edges:', [len(_) for _ in partition_edges])
     show_label_distributed(parts, train_mask, val_mask, test_mask)
-    return (partition_nodes, partition_edges, partition_train_nodes, partition_val_nodes, partition_test_nodes)
+    return (partition_nodes, partition_edges, partition_train_nodes,
+            partition_val_nodes, partition_test_nodes)
 
 
 def get_pagraph_partition_result(partition_nodes, rowptr, col, num_parts):
@@ -595,14 +633,17 @@ def get_pagraph_partition_result(partition_nodes, rowptr, col, num_parts):
     # 每个分区node, train_nodes, val_nodes, test_nodes
     # 每个分区包含的边[[], []]
     # partition_edges = get_partition_edges(partition_nodes, rowptr, col)
-    partition_edges = get_partition_edges_inner_nodes(partition_nodes, rowptr, col)
+    partition_edges = get_partition_edges_inner_nodes(partition_nodes, rowptr,
+                                                      col)
     print('pagraph partition edges:', [len(_) for _ in partition_edges])
     return partition_edges
 
 
-def get_ram_usage(): 
+def get_ram_usage():
     # Getting % usage of virtual_memory ( 3rd field)
-    print('RAM memory used {:.1f}%, {:.2f} (GB)'.format(psutil.virtual_memory()[2], psutil.virtual_memory()[3]/1000000000))
+    print('RAM memory used {:.1f}%, {:.2f} (GB)'.format(
+        psutil.virtual_memory()[2],
+        psutil.virtual_memory()[3] / 1000000000))
 
     # # Getting all memory using os.popen()
     # total_memory, used_memory, free_memory = map(int, os.popen('free -t -m').readlines()[-1].split()[1:])

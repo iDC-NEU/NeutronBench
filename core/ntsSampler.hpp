@@ -219,7 +219,8 @@ class Sampler {
   }
 
   void update_threads() {
-    if (whole_graph->graph_->config->threads > 0 && whole_graph->graph_->config->threads <= numa_num_configured_cpus()) {
+    if (whole_graph->graph_->config->threads > 0 &&
+        whole_graph->graph_->config->threads <= numa_num_configured_cpus()) {
       threads = whole_graph->graph_->config->threads;
     } else {
       threads = std::max(1, numa_num_configured_cpus() / 2 - 1);
@@ -527,7 +528,6 @@ class Sampler {
     }
   }
 
-
   ~Sampler() { clear_queue(); }
   bool has_rest_safe() {
     bool condition = false;
@@ -635,7 +635,6 @@ class Sampler {
   }
 
   void sample_one(int type = 0, bool phase = true) { sample_one(subgraph, type, phase); }
-
 
   void sample_one_with_dst(SampledSubgraph* ssg, int type = 0, bool phase = true) {
     assert(work_offset < work_range[1]);
@@ -776,38 +775,35 @@ class Sampler {
             }
             row_indices[pos++] = dst;
             sample_bits->set_bit(dst);
-            assert(pos == column_offset[id+1]);
+            assert(pos == column_offset[id + 1]);
           });
 
-          std::unordered_set<VertexId> check_sample_result;
-          VertexId all_node_num = sample_bits->get_size();
-          for(VertexId i_src=0;i_src<all_node_num;i_src+=64){
-              unsigned long word= sample_bits->data[WORD_OFFSET(i_src)];
-              VertexId vtx=i_src;
-              VertexId offset=0;
-              while(word != 0){
-                  if(word & 1){
-                      check_sample_result.insert(vtx + offset);
-                  }
-                  offset++;
-                  word = word >> 1;
-              }
+      std::unordered_set<VertexId> check_sample_result;
+      VertexId all_node_num = sample_bits->get_size();
+      for (VertexId i_src = 0; i_src < all_node_num; i_src += 64) {
+        unsigned long word = sample_bits->data[WORD_OFFSET(i_src)];
+        VertexId vtx = i_src;
+        VertexId offset = 0;
+        while (word != 0) {
+          if (word & 1) {
+            check_sample_result.insert(vtx + offset);
           }
+          offset++;
+          word = word >> 1;
+        }
+      }
 
-          bool all_dst_in = true;
-          for (auto u : csc_layer->dst()) {
-            if (check_sample_result.find(u) == check_sample_result.end()) {
-              all_dst_in = false;
-              break;
-            }
-          }
-          if (!all_dst_in)  {
-            std::cout << "all_dst_in false!" << std::endl;;
-            assert(false);
-          }
-
-
-
+      bool all_dst_in = true;
+      for (auto u : csc_layer->dst()) {
+        if (check_sample_result.find(u) == check_sample_result.end()) {
+          all_dst_in = false;
+          break;
+        }
+      }
+      if (!all_dst_in) {
+        std::cout << "all_dst_in false!" << std::endl;
+        assert(false);
+      }
 
       sample_processing_time += get_time();
       // LOG_DEBUG("sample_one layer %d processing done", i);
@@ -816,7 +812,7 @@ class Sampler {
       sample_post_time -= get_time();
       // ssg->sample_postprocessing();
       ssg->sample_postprocessing(sample_bits, i, node_idx);
-    
+
       sample_post_time += get_time();
       layer_time += get_time();
     }
@@ -843,7 +839,6 @@ class Sampler {
     // sample_weight_time += weight_time;
     sample_compute_weight += get_time();
   }
-
 
   void sample_one(SampledSubgraph* ssg, int type = 0, bool phase = true) {
     assert(work_offset < work_range[1]);
@@ -904,7 +899,7 @@ class Sampler {
 
       sample_init_co -= get_time();
       if (phase && whole_graph->graph_->config->sample_rate > 0) {  // use sample rate
-      // LOG_DEBUG("phase %d use sample rate", phase);
+                                                                    // LOG_DEBUG("phase %d use sample rate", phase);
         float sample_rate = whole_graph->graph_->config->sample_rate;
         // LOG_DEBUG("sample_rate %.3f", sample_rate);
         ssg->init_co(
@@ -988,18 +983,17 @@ class Sampler {
             ///////////// no sorted_idxs copy //////////////////
             int pos = column_offset[id];
             if (fanout_i < edge_nums) {
-            // whrong version
-            // if (edge_nums < fanout_i) {
-            //   std::unordered_set<size_t> sampled_idxs;
-            //   while (sampled_idxs.size() < edge_nums) {
-            //     sampled_idxs.insert(random_uniform_int(0, fanout_i - 1));
-            //   }  
-            //   for (auto& idx : sampled_idxs) {
-            //     row_indices[pos++] = whole_indices[whole_offset[dst] + idx];
-            //     sample_bits->set_bit(whole_indices[whole_offset[dst] + idx]);
-            //   }
+              // whrong version
+              // if (edge_nums < fanout_i) {
+              //   std::unordered_set<size_t> sampled_idxs;
+              //   while (sampled_idxs.size() < edge_nums) {
+              //     sampled_idxs.insert(random_uniform_int(0, fanout_i - 1));
+              //   }
+              //   for (auto& idx : sampled_idxs) {
+              //     row_indices[pos++] = whole_indices[whole_offset[dst] + idx];
+              //     sample_bits->set_bit(whole_indices[whole_offset[dst] + idx]);
+              //   }
               ////////////////////////////////////////////////////////////////
-
 
               std::unordered_set<size_t> sampled_idxs;
               while (sampled_idxs.size() < fanout_i) {
@@ -1009,7 +1003,6 @@ class Sampler {
                 row_indices[pos++] = whole_indices[whole_offset[dst] + idx];
                 sample_bits->set_bit(whole_indices[whole_offset[dst] + idx]);
               }
-
 
               // speed sample rate when use sample rate
               // std::unordered_set<size_t> sampled_idxs;
@@ -1038,11 +1031,9 @@ class Sampler {
               // sorted_idxs.insert(sorted_idxs.end(), sampled_idxs.begin(), sampled_idxs.end());
             } else {
               for (size_t i = 0; i < edge_nums; ++i) {
-
-
-            // } else {
-            //   for (size_t i = 0; i < fanout_i; ++i) {
-            //     // sorted_idxs.push_back(i);
+                // } else {
+                //   for (size_t i = 0; i < fanout_i; ++i) {
+                //     // sorted_idxs.push_back(i);
 
                 row_indices[pos++] = whole_indices[whole_offset[dst] + i];
                 sample_bits->set_bit(whole_indices[whole_offset[dst] + i]);
@@ -1086,7 +1077,7 @@ class Sampler {
       sample_post_time -= get_time();
       // ssg->sample_postprocessing();
       ssg->sample_postprocessing(sample_bits, i, node_idx);
-    
+
       sample_post_time += get_time();
       layer_time += get_time();
     }

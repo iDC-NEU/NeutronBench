@@ -114,8 +114,7 @@ class GCN_ASYNC_GPU_impl {
   // std::vector<int> batch_size_vec;
   ~GCN_ASYNC_GPU_impl() { delete active; }
 
-  GCN_ASYNC_GPU_impl(Graph<Empty>* graph_, int iterations_, bool process_local = false,
-                             bool process_overlap = false) {
+  GCN_ASYNC_GPU_impl(Graph<Empty>* graph_, int iterations_, bool process_local = false, bool process_overlap = false) {
     graph = graph_;
     iterations = iterations_;
 
@@ -1227,7 +1226,7 @@ class GCN_ASYNC_GPU_impl {
 
     // train_sampler = new Sampler(fully_rep_graph, train_nids);
     train_sampler = new Sampler(fully_rep_graph, train_nids, pipelines, false);
-    eval_sampler = new Sampler(fully_rep_graph, val_nids, true);  // true mean full batch
+    eval_sampler = new Sampler(fully_rep_graph, val_nids, true);   // true mean full batch
     test_sampler = new Sampler(fully_rep_graph, test_nids, true);  // true mean full batch
     // eval_sampler->update_fanout(-1);                            // val not sample
 
