@@ -81,6 +81,16 @@ python ./data/generate_nts_dataset.py --dataset ogbn-arxiv
 
 
 
+
+For graph datasets that lack ground-truth attributes, we randomly generate features and labels, and split the data into training (65%), validation (25%), and testing (10%) sets. 
+
+We provide [Google Drive link](https://drive.google.com/drive/folders/1rkvInbkz3vGFiqS64xDc8Nt7uEmhNqIi) for downloading the `Amazon`, `LiveJournal`, `Lj-large`, `Lj-links`, and `Enwiki-links` datasets.
+
+
+
+
+
+
 ## 🚀 Experiments
 
 > Data partitioning experiments
@@ -125,6 +135,26 @@ python ./exp/exp-diff-optim/exp-diff-pipe.py
 # gpu cache 
 python ./exp/exp-gpu-cache/exp-gpu-cache.py
 ```
+
+
+## 📜Reference
+
+If you find NeutronBench useful or relevant to your research, please cite our [paper](https://www.vldb.org/pvldb/vol17/p1241-yuan.pdf) as below:
+
+
+```bibtex
+@article{yuan2024comprehensive,
+  author       = {Hao Yuan and Yajiong Liu and Yanfeng Zhang and Xin Ai and Qiange Wang and Chaoyi Chen and Yu Gu and Ge Yu},
+  title        = {Comprehensive Evaluation of GNN Training Systems: A Data Management Perspective},
+  journal      = {Proc. VLDB Endow.},
+  volume       = {17},
+  number       = {6},
+  pages        = {1241--1254},
+  year         = {2024},
+  url          = {https://www.vldb.org/pvldb/vol17/p1241-yuan.pdf},
+}
+```
+
 
 ## 📬 Contact
 
