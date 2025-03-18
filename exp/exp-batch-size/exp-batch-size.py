@@ -139,8 +139,7 @@ def exp2(datasets, batch_sizes, run_times, log_path, lr_=0.01):
 
 
 if __name__ == '__main__':
-    create_dir('./build')
-    os.system('cd build && make -j $(nproc) && cd ..')
+    os.system('cd ../build && make -j $(nproc) && cd -')
 
     batch_sizes = {
         'ogbn-arxiv':
@@ -156,7 +155,8 @@ if __name__ == '__main__':
         'ogbn-products': 300,
     }
 
-    # datasets = ['reddit', 'ogbn-products']
-    datasets = []
+    datasets = ['reddit', 'ogbn-products']
     # exp2(datasets, batch_sizes, run_times, '../log/batch-size-nts-old-adam', 0.001)
+
+    create_dir('./log')
     exp2(datasets, batch_sizes, run_times, './log', 0.001)
